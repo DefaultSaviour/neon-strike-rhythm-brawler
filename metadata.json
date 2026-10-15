@@ -1,0 +1,6 @@
+{
+  "name": "Neon Strike: Rhythm Brawler",
+  "description": "High-octane synthwave rhythm brawler featuring neon vector combat, 20+ chain-combo martial arts animations, custom music audio analysis, and precision timing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
