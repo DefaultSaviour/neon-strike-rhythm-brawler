@@ -1075,7 +1075,6 @@ class AudioEngine {
     const notes: BeatNote[] = [];
     let sameLaneStreak = 0;
     let lastGroundLane: 'left' | 'right' = 'right';
-    let aerialCount = 0;
 
     for (let idx = 0; idx < lockedBeats.length; idx++) {
       const b = lockedBeats[idx];
@@ -1084,15 +1083,13 @@ class AudioEngine {
       let lane: Lane = 'left';
       let enemyType: 'brawler' | 'speeder' | 'ronin' = 'brawler';
       let pitchCategory: BeatNote['pitchCategory'] = 'kick';
-      let aerialOrigin: 'left' | 'right' | 'center' | undefined = undefined;
       const band: FrequencyBand = b.kind === 'kick' ? 'sub' : b.kind === 'bass' ? 'bass' : 'high';
 
       if (band === 'high' || b.source === 'treble_melody') {
-        // Highs swoop in from the air (Jump / Air Strike threats!)
+        // Highs move down the vertical conveyor (Hurdles you must jump over!)
         lane = 'air';
         enemyType = 'speeder';
         pitchCategory = 'lead';
-        aerialOrigin = aerialCount++ % 2 === 0 ? 'left' : 'right';
       } else if (b.source === 'sub_bass' || dtPrev < 0.26) {
         // Rolling bassline syncopation
         lane = lastGroundLane === 'left' ? 'right' : 'left';
@@ -1138,7 +1135,6 @@ class AudioEngine {
         enemyType,
         pitchCategory,
         band,
-        aerialOrigin,
       });
     }
 

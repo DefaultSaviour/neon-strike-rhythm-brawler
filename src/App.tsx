@@ -359,15 +359,15 @@ export default function App() {
                 <div className="p-2 rounded bg-cyan-950/20 border border-cyan-500/30">
                   <div className="text-cyan-400 font-bold flex items-center gap-1.5 mb-1">
                     <span className="w-2 h-2 rounded-full bg-[#00e5ff] shadow-[0_0_6px_#00e5ff]" />
-                    <span>Highs (Sky Dive)</span>
+                    <span>Highs (Hurdles)</span>
                   </div>
                   <div className="text-[10px] text-cyan-300 font-mono leading-tight">
                     Jump: [↑] / [W]
                   </div>
                   <div className="text-[10px] text-cyan-200/80 mt-1 space-y-0.5">
-                    <div>1. Speeder <span className="text-slate-500">(low)</span></div>
-                    <div>2. Wraith <span className="text-slate-500">(mid)</span></div>
-                    <div>3. Seraph <span className="text-slate-500">(high)</span></div>
+                    <div>1. Pulse Barrier <span className="text-slate-500">(low)</span></div>
+                    <div>2. Laser Hurdle <span className="text-slate-500">(mid)</span></div>
+                    <div>3. Plasma Gate <span className="text-slate-500">(high)</span></div>
                   </div>
                 </div>
               </div>
@@ -391,7 +391,7 @@ export default function App() {
                   <span className="px-2.5 py-1 rounded bg-amber-950/80 border border-amber-400 text-amber-300 font-bold">
                     [SPACE] · [ANY KEY] · [TAP]
                   </span>
-                  <span className="text-amber-200">One-Button Strike (Auto-Targets Ground & Air)</span>
+                  <span className="text-amber-200">One-Button Strike (Auto-Targets Ground & Hurdles)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 font-bold">
@@ -418,7 +418,7 @@ export default function App() {
                   <span className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400 text-cyan-300 font-bold">
                     [↑] / [W]
                   </span>
-                  <span className="text-cyan-200">Jump / Air</span>
+                  <span className="text-cyan-200">Jump Hurdle</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-pink-400 font-bold">

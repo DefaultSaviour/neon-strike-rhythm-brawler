@@ -81,7 +81,10 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       // 2. Horizon Visualizer
       drawHorizonVisualizer(ctx, width, horizonY);
 
-      // 3. Dual Converging Conveyor Floors (Left moves Right -> Pit <- Right moves Left)
+      // 3. Third Vertical Conveyor (Top down to player, for Jump Hurdles)
+      drawVerticalConveyor(ctx, centerX, groundY, conveyorOffset);
+
+      // 4. Dual Converging Conveyor Floors (Left moves Right -> Pit <- Right moves Left)
       drawConvergingConveyors(
         ctx,
         centerX,
@@ -331,6 +334,99 @@ function drawConvergingConveyors(
   ctx.restore();
 }
 
+// THIRD VERTICAL CONVEYOR: Vertical conveyor lane coming straight down from the top to the player
+function drawVerticalConveyor(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  groundY: number,
+  conveyorOffset: number
+) {
+  const laneW = 86;
+  const leftX = centerX - laneW / 2;
+  const rightX = centerX + laneW / 2;
+  const topY = 0;
+  const bottomY = groundY + 12;
+
+  ctx.save();
+
+  // 1. Vertical Conveyor Belt Surface Gradient
+  const laneGrad = ctx.createLinearGradient(leftX, 0, rightX, 0);
+  laneGrad.addColorStop(0, '#070b20');
+  laneGrad.addColorStop(0.5, '#0c1334');
+  laneGrad.addColorStop(1, '#070b20');
+  ctx.fillStyle = laneGrad;
+  ctx.fillRect(leftX, topY, laneW, bottomY - topY);
+
+  // 2. Vertical Glowing Neon Guide Rails
+  ctx.strokeStyle = '#00f3ff';
+  ctx.shadowColor = '#00f3ff';
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 2.5;
+
+  // Left vertical rail
+  ctx.beginPath();
+  ctx.moveTo(leftX, topY);
+  ctx.lineTo(leftX, bottomY);
+  // Right vertical rail
+  ctx.moveTo(rightX, topY);
+  ctx.lineTo(rightX, bottomY);
+  ctx.stroke();
+
+  // White inner rail accents
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.0;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(leftX, topY);
+  ctx.lineTo(leftX, bottomY);
+  ctx.moveTo(rightX, topY);
+  ctx.lineTo(rightX, bottomY);
+  ctx.stroke();
+
+  // 3. Downward-moving chevrons (vvvvv) synchronized with conveyorOffset!
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0, 243, 255, 0.28)';
+  ctx.lineWidth = 2.2;
+  const stepDist = 50;
+
+  for (let y = topY - stepDist + conveyorOffset; y < bottomY - 15; y += stepDist) {
+    if (y >= topY && y <= bottomY - 15) {
+      // Downward pointing chevron vvv
+      ctx.beginPath();
+      ctx.moveTo(leftX + 16, y - 10);
+      ctx.lineTo(centerX, y + 6);
+      ctx.lineTo(rightX - 16, y - 10);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // 4. Hurdle Jump Zone Threshold Bar (Right across the vertical conveyor at player feet level)
+  ctx.save();
+  ctx.strokeStyle = '#00f3ff';
+  ctx.shadowColor = '#00f3ff';
+  ctx.shadowBlur = 14;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(leftX - 4, groundY);
+  ctx.lineTo(rightX + 4, groundY);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.2;
+  ctx.shadowBlur = 0;
+  ctx.stroke();
+
+  // "▲ JUMP ▲" indicator glow at the base
+  ctx.fillStyle = 'rgba(0, 243, 255, 0.7)';
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('▲ JUMP ▲', centerX, groundY + 10);
+  ctx.restore();
+
+  ctx.restore();
+}
+
 // CENTRAL ABYSS PIT: Deep incinerator void behind/beneath the player where debris falls
 function drawCentralPit(
   ctx: CanvasRenderingContext2D,
@@ -372,16 +468,6 @@ function drawCentralPit(
   ctx.moveTo(pitRight, pitTopY);
   ctx.lineTo(pitRight, pitBottomY);
   ctx.stroke();
-
-  // Grate teeth in the pit
-  ctx.strokeStyle = 'rgba(255, 230, 0, 0.35)';
-  ctx.lineWidth = 1.5;
-  for (let y = pitTopY + 20; y < pitBottomY; y += 18) {
-    ctx.beginPath();
-    ctx.moveTo(pitLeft + 6, y);
-    ctx.lineTo(pitRight - 6, y);
-    ctx.stroke();
-  }
 
   // Incinerator glow at bottom of the pit
   const glow = ctx.createRadialGradient(
@@ -434,6 +520,9 @@ function drawTacticalStrikeZones(
   const rightEnemyInRange = engine.enemies.some(
     (e) => !e.defeated && e.lane === 'right' && Math.abs(e.targetTime - nowTime) < 0.22
   );
+  const airEnemyInRange = engine.enemies.some(
+    (e) => !e.defeated && e.lane === 'air' && Math.abs(e.targetTime - nowTime) < 0.22
+  );
 
   ctx.save();
 
@@ -471,6 +560,29 @@ function drawTacticalStrikeZones(
   ctx.ellipse(rightX, groundY + 8, 22, 8, 0, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Center Vertical Hurdle Jump Threshold
+  const airAlpha = airEnemyInRange ? 1.0 : 0.45;
+  ctx.strokeStyle = `rgba(0, 243, 255, ${airAlpha})`;
+  ctx.shadowColor = '#00f3ff';
+  ctx.shadowBlur = airEnemyInRange ? 22 : 8;
+  ctx.lineWidth = airEnemyInRange ? 3.5 : 2;
+
+  ctx.beginPath();
+  ctx.moveTo(centerX - 43, groundY);
+  ctx.lineTo(centerX + 43, groundY);
+  ctx.stroke();
+
+  if (airEnemyInRange) {
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 14;
+    ctx.font = '900 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('▲ JUMP! ▲', centerX, groundY - 14);
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
@@ -501,9 +613,9 @@ function drawFloorShadowsAndReflections(
   ctx.ellipse(centerX, groundY + 10, 36, 10, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Full-size enemy ground shadows
+  // Full-size enemy ground shadows (ground enemies only)
   for (const enemy of engine.enemies) {
-    if (enemy.defeated || Math.abs(enemy.x) > window.innerWidth / 2 + 60) continue;
+    if (enemy.defeated || enemy.lane === 'air' || Math.abs(enemy.x) > window.innerWidth / 2 + 60) continue;
 
     const posX = centerX + enemy.x;
     if (Math.abs(enemy.x) < pitRadius) continue; // don't draw shadow over empty pit
@@ -592,6 +704,19 @@ function drawDebrisPieces(
       ctx.moveTo(-p.size * 0.5, 0);
       ctx.lineTo(p.size * 0.5, 0);
       ctx.stroke();
+    } else if (p.shapeType === 'barrier_beam') {
+      // Shattered laser hurdle horizontal beam
+      ctx.strokeStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 14;
+      ctx.lineWidth = 3.6;
+      ctx.beginPath();
+      ctx.moveTo(-p.size * 0.5, 0);
+      ctx.lineTo(p.size * 0.5, 0);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
     } else {
       // Geometric sharp shard
       ctx.beginPath();
@@ -608,7 +733,81 @@ function drawDebrisPieces(
   ctx.restore();
 }
 
-// FULL-SIZED CYBER ENEMIES: 3 Frequency Bands (Sub, Bass, High) x 3 Tiers (Low, Mid, High Hz)
+// NEON HURDLE RECTANGLE: Obstacles on the third vertical conveyor that the player jumps over!
+function drawVerticalHurdleRectangle(
+  ctx: CanvasRenderingContext2D,
+  enemy: Enemy,
+  color: string,
+  accent: string,
+  tier: EnemyTier
+) {
+  const hurdleW = 82;
+  const hurdleH = 20;
+  const halfW = hurdleW / 2;
+  const halfH = hurdleH / 2;
+  const y = enemy.y; // Linear vertical coordinate down the conveyor
+
+  ctx.save();
+  ctx.translate(0, y);
+
+  // 1. Vertical Motion Trails (streaming straight up the vertical conveyor lane)
+  ctx.save();
+  ctx.strokeStyle = colorWithAlpha(color, 0.35);
+  ctx.lineWidth = 2.0;
+  ctx.beginPath();
+  ctx.moveTo(-halfW + 12, -halfH);
+  ctx.lineTo(-halfW + 12, -halfH - 28);
+  ctx.moveTo(0, -halfH);
+  ctx.lineTo(0, -halfH - 42);
+  ctx.moveTo(halfW - 12, -halfH);
+  ctx.lineTo(halfW - 12, -halfH - 28);
+  ctx.stroke();
+  ctx.restore();
+
+  // 2. Hurdle Outer Rectangle with Neon Glow
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = tier === 3 ? 24 : 16;
+  ctx.lineWidth = 3.2;
+
+  // Semi-transparent laser plasma fill
+  ctx.fillStyle = colorWithAlpha(color, 0.25);
+  ctx.beginPath();
+  ctx.roundRect(-halfW, -halfH, hurdleW, hurdleH, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  // 3. Bright White Laser Core Line
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.6;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(-halfW + 8, 0);
+  ctx.lineTo(halfW - 8, 0);
+  ctx.stroke();
+
+  // 4. Lateral High-Voltage Emitter Nodes (left and right power caps)
+  ctx.fillStyle = accent;
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 12;
+  ctx.fillRect(-halfW - 3, -halfH - 2, 6, hurdleH + 4);
+  ctx.fillRect(halfW - 3, -halfH - 2, 6, hurdleH + 4);
+
+  // 5. Upward Jump Instruction Glyph [ ▲ JUMP ▲ ]
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.font = '900 10px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('▲ JUMP ▲', 0, 0);
+
+  ctx.restore();
+  ctx.restore();
+}
+
+// FULL-SIZED CYBER ENEMIES: Ground conveyor fighters on Left and Right
 function drawFullSizedEnemies(
   ctx: CanvasRenderingContext2D,
   centerX: number,
@@ -621,15 +820,21 @@ function drawFullSizedEnemies(
   for (const enemy of engine.enemies) {
     if (enemy.defeated || Math.abs(enemy.x) > window.innerWidth / 2 + 120) continue;
 
-    const posX = enemy.x;
-    const dir = enemy.lane === 'left' ? 1 : -1;
-    const phase = enemy.animPhase;
-
     const { band, tier } = resolveBandTier(enemy);
     const style = getEnemyStyle(band, tier);
     const mainColor = enemy.color || style.color;
     const accent = style.accent;
     const scale = style.scale;
+
+    // AIR LANE: Draw sleek neon hurdle rectangles to jump over!
+    if (enemy.lane === 'air') {
+      drawVerticalHurdleRectangle(ctx, enemy, mainColor, accent, tier);
+      continue;
+    }
+
+    const posX = enemy.x;
+    const dir = enemy.lane === 'left' ? 1 : -1;
+    const phase = enemy.animPhase;
 
     // Cyber ghost trail
     if (enemy.trailHistory.length > 0) {

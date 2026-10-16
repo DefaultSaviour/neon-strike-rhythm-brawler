@@ -290,11 +290,11 @@ export const HUD: React.FC<HUDProps> = ({
               <span className="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono">
                 [←] / [A]
               </span>
-              <span className="hidden sm:inline">Ground Left</span>
+              <span className="hidden sm:inline">Strike Left</span>
             </div>
           </div>
 
-          {/* Center Jump / Air Strike Zone */}
+          {/* Center Jump Over Hurdle Zone */}
           <div
             onPointerDown={handleAirDown}
             className={`flex-[1.2] flex flex-col justify-end items-center pb-8 border-x border-cyan-400/20 cursor-pointer select-none transition-colors ${
@@ -305,7 +305,7 @@ export const HUD: React.FC<HUDProps> = ({
               <span className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/60 text-[10px] font-mono font-black text-cyan-300">
                 [↑] / [W]
               </span>
-              <span>Jump Air Strike</span>
+              <span>Jump Hurdle</span>
             </div>
           </div>
 
@@ -317,7 +317,7 @@ export const HUD: React.FC<HUDProps> = ({
             }`}
           >
             <div className="flex items-center gap-1.5 opacity-60 text-pink-400 text-xs font-bold tracking-widest uppercase">
-              <span className="hidden sm:inline">Ground Right</span>
+              <span className="hidden sm:inline">Strike Right</span>
               <span className="px-2 py-1 rounded bg-pink-950/80 border border-pink-500/40 text-[10px] font-mono">
                 [→] / [D]
               </span>

@@ -33,7 +33,6 @@ export interface BeatNote {
   band?: FrequencyBand;
   tier?: EnemyTier;
   color?: string;
-  aerialOrigin?: 'left' | 'right' | 'center';
 }
 
 export interface Track {
@@ -59,7 +58,7 @@ export interface DebrisPiece {
   angle: number;
   vAngle: number;
   color: string;
-  shapeType: 'head' | 'chest' | 'arm' | 'leg' | 'blade' | 'shard';
+  shapeType: 'head' | 'chest' | 'arm' | 'leg' | 'blade' | 'shard' | 'barrier_beam';
   size: number;
   points?: Array<{ x: number; y: number }>;
   landed: boolean;
@@ -86,7 +85,6 @@ export interface Enemy {
   deathTime?: number;
   animPhase: number;
   trailHistory: Array<{ x: number; y: number; alpha: number }>;
-  aerialOrigin?: 'left' | 'right' | 'center';
 }
 
 export interface Particle {

@@ -138,7 +138,7 @@ export class GameEngine {
         spawnTime: Math.max(0, note.time - this.approachDuration),
         speed: 1.0,
         x: note.lane === 'left' ? -999 : note.lane === 'right' ? 999 : 0,
-        y: note.lane === 'air' ? -250 : 0,
+        y: note.lane === 'air' ? -480 : 0,
         color,
         enemyType: note.enemyType,
         pitchCategory: note.pitchCategory,
@@ -147,7 +147,6 @@ export class GameEngine {
         defeated: false,
         animPhase: Math.random() * Math.PI * 2,
         trailHistory: [],
-        aerialOrigin: note.aerialOrigin,
       };
     });
 
@@ -301,11 +300,11 @@ export class GameEngine {
     this.isAttacking = true;
     this.attackDirection = lane;
     this.attackStartTime = performance.now();
-    this.attackDuration = currentMove.durationMs;
+    this.attackDuration = lane === 'air' ? Math.max(220, currentMove.durationMs) : currentMove.durationMs;
     this.lastAttackPose = getOrientedPose(currentMove.pose, lane);
 
     const targetX = lane === 'left' ? -this.hitLineOffset : lane === 'right' ? this.hitLineOffset : 0;
-    const targetY = lane === 'air' ? -55 : 0;
+    const targetY = 0;
     this.judgements.push({
       id: this.nextJudgementId++,
       text: judgement,
@@ -342,6 +341,33 @@ export class GameEngine {
 
     // Explosive knockback speed and fragment count scales with combo count
     const comboBoost = 1.0 + Math.min(3.8, this.scoreState.combo * 0.12);
+
+    if (enemy.lane === 'air') {
+      // Barrier hurdle shatter: glowing horizontal laser shards & energy fragments!
+      const count = 12 + Math.min(16, Math.floor(this.scoreState.combo * 0.4));
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.random() - 0.5) * Math.PI * 1.8 - Math.PI * 0.5;
+        const speed = (220 + Math.random() * 380) * power * comboBoost;
+        this.debris.push({
+          id: this.nextDebrisId++,
+          x: hitX + (Math.random() - 0.5) * 60,
+          y: hitY + (Math.random() - 0.5) * 16,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 80,
+          angle: Math.random() * Math.PI * 2,
+          vAngle: (Math.random() - 0.5) * 20,
+          color: enemy.color,
+          shapeType: i % 3 === 0 ? 'barrier_beam' : 'shard',
+          size: i % 3 === 0 ? 18 + Math.random() * 14 : 7 + Math.random() * 7,
+          landed: false,
+          fallingInPit: false,
+          alpha: 1.0,
+          life: 0,
+          maxLife: 2.8,
+        });
+      }
+      return;
+    }
 
     // Core constituent body parts of the enemy
     const pieces: Array<{
@@ -524,15 +550,8 @@ export class GameEngine {
       const t = timeRemaining / this.approachDuration;
 
       if (enemy.lane === 'air') {
-        const originX =
-          enemy.aerialOrigin === 'left'
-            ? -halfWidth * 0.65
-            : enemy.aerialOrigin === 'right'
-            ? halfWidth * 0.65
-            : 0;
-        enemy.x = originX * t;
-        // Swoop down from sky (-240px) to player head level (-55px) with graceful swoop arc
-        enemy.y = -55 - 190 * t - 30 * Math.sin(Math.max(0, Math.min(1, t)) * Math.PI);
+        enemy.x = 0; // Directly down the center vertical conveyor track!
+        enemy.y = -460 * t; // Straight vertical linear descent from top down to the jump hurdle line (y = 0)
       } else {
         const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
         const spawnX = enemy.lane === 'left' ? -halfWidth - 80 : halfWidth + 80;
