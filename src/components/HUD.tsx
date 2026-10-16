@@ -6,7 +6,10 @@ import { Pause, RotateCcw, Volume2, Music } from 'lucide-react';
 interface HUDProps {
   track: Track | null;
   scoreState: GameScoreState;
+  oneButtonMode?: boolean;
+  onToggleOneButtonMode?: () => void;
   onStrike: (lane: Lane) => void;
+  onOneButtonStrike?: () => void;
   onPause: () => void;
   onRestart: () => void;
   onOpenSelect: () => void;
@@ -15,7 +18,10 @@ interface HUDProps {
 export const HUD: React.FC<HUDProps> = ({
   track,
   scoreState,
+  oneButtonMode = false,
+  onToggleOneButtonMode,
   onStrike,
+  onOneButtonStrike,
   onPause,
   onRestart,
   onOpenSelect,
@@ -23,6 +29,7 @@ export const HUD: React.FC<HUDProps> = ({
   const [playbackTime, setPlaybackTime] = useState(0);
   const [leftActive, setLeftActive] = useState(false);
   const [rightActive, setRightActive] = useState(false);
+  const [singleActive, setSingleActive] = useState(false);
 
   useEffect(() => {
     let animId: number;
@@ -94,6 +101,17 @@ export const HUD: React.FC<HUDProps> = ({
     setTimeout(() => setRightActive(false), 90);
   };
 
+  const handleSingleDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setSingleActive(true);
+    if (onOneButtonStrike) {
+      onOneButtonStrike();
+    } else {
+      onStrike('left');
+    }
+    setTimeout(() => setSingleActive(false), 90);
+  };
+
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10">
       {/* Top Header & Song Progress */}
@@ -117,6 +135,23 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onToggleOneButtonMode && (
+              <button
+                onClick={onToggleOneButtonMode}
+                className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  oneButtonMode
+                    ? 'bg-amber-400/20 border-amber-400 text-amber-300 shadow-[0_0_8px_rgba(255,230,0,0.35)]'
+                    : 'bg-slate-900/80 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:border-cyan-400'
+                }`}
+                title="Toggle One-Button Mode (Auto-targets nearest beat enemy)"
+              >
+                <span>Mode:</span>
+                <span className={oneButtonMode ? 'text-amber-300 font-black' : 'text-cyan-400 font-semibold'}>
+                  {oneButtonMode ? '1-Button' : '2-Button'}
+                </span>
+              </button>
+            )}
+
             <button
               onClick={onRestart}
               className="p-1.5 rounded bg-slate-900/80 border border-slate-700/80 hover:border-pink-500 hover:text-pink-400 transition-colors cursor-pointer"
@@ -145,6 +180,24 @@ export const HUD: React.FC<HUDProps> = ({
             className="h-full bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-300 transition-all duration-100 shadow-[0_0_10px_rgba(0,243,255,0.8)]"
             style={{ width: `${progressRatio * 100}%` }}
           />
+        </div>
+
+        {/* Acoustic Frequency Band Legend */}
+        <div className="flex items-center justify-center gap-3 sm:gap-6 text-[10px] tracking-wider uppercase font-mono font-semibold text-slate-400 select-none py-0.5">
+          <div className="flex items-center gap-1.5" title="Sub & Kicks (36-145 Hz) • Titan, Breaker, Rammer">
+            <span className="w-2 h-2 rounded-full bg-[#ff1744] shadow-[0_0_8px_#ff1744]" />
+            <span className="text-[#ff8a80]">Sub / Kick</span>
+          </div>
+          <span className="text-slate-700">·</span>
+          <div className="flex items-center gap-1.5" title="Bassline (105-300 Hz) • Warlord, Ronin, Acid Dancer">
+            <span className="w-2 h-2 rounded-full bg-[#d84dff] shadow-[0_0_8px_#d84dff]" />
+            <span className="text-[#e1c4ff]">Bassline</span>
+          </div>
+          <span className="text-slate-700">·</span>
+          <div className="flex items-center gap-1.5" title="Highs & Leads (800-6500 Hz) • Speeder, Wraith, Seraph">
+            <span className="w-2 h-2 rounded-full bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]" />
+            <span className="text-[#a5f3fc]">Highs</span>
+          </div>
         </div>
 
         {/* Dynamic In-Game HUD: Score, Combo, Grade */}
@@ -199,38 +252,56 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       </div>
 
-      {/* Split Touch Zones for Mobile / Touch Screen */}
-      <div className="w-full flex-1 flex pointer-events-auto mt-6">
-        {/* Left Strike Zone */}
-        <div
-          onPointerDown={handleLeftDown}
-          className={`flex-1 flex flex-col justify-end pb-8 pl-6 border-r border-cyan-500/10 cursor-pointer select-none transition-colors ${
-            leftActive ? 'bg-cyan-500/15' : 'hover:bg-cyan-500/5'
-          }`}
-        >
-          <div className="flex items-center gap-2 opacity-50 text-cyan-400 text-xs font-bold tracking-widest uppercase">
-            <span className="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono">
-              [←] or [A]
-            </span>
-            <span>Strike Left</span>
+      {/* Touch Strike Zones for Mobile / Touch Screen */}
+      {oneButtonMode ? (
+        <div className="w-full flex-1 flex pointer-events-auto mt-6">
+          <div
+            onPointerDown={handleSingleDown}
+            className={`w-full flex-1 flex flex-col justify-end items-center pb-8 border-t border-amber-500/20 cursor-pointer select-none transition-colors ${
+              singleActive ? 'bg-amber-400/20' : 'hover:bg-amber-400/5'
+            }`}
+          >
+            <div className="flex items-center gap-3 text-amber-300 text-xs font-bold tracking-widest uppercase bg-slate-950/80 px-4 py-2 rounded-full border border-amber-400/50 shadow-[0_0_15px_rgba(255,230,0,0.3)]">
+              <span className="px-2.5 py-1 rounded bg-amber-950/80 border border-amber-400/80 text-[11px] font-mono font-black text-amber-300">
+                [SPACE] · [TAP ANYWHERE]
+              </span>
+              <span>One-Button Strike (Auto-Targets Nearest Beat)</span>
+            </div>
           </div>
         </div>
+      ) : (
+        <div className="w-full flex-1 flex pointer-events-auto mt-6">
+          {/* Left Strike Zone */}
+          <div
+            onPointerDown={handleLeftDown}
+            className={`flex-1 flex flex-col justify-end pb-8 pl-6 border-r border-cyan-500/10 cursor-pointer select-none transition-colors ${
+              leftActive ? 'bg-cyan-500/15' : 'hover:bg-cyan-500/5'
+            }`}
+          >
+            <div className="flex items-center gap-2 opacity-50 text-cyan-400 text-xs font-bold tracking-widest uppercase">
+              <span className="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono">
+                [←] or [A]
+              </span>
+              <span>Strike Left</span>
+            </div>
+          </div>
 
-        {/* Right Strike Zone */}
-        <div
-          onPointerDown={handleRightDown}
-          className={`flex-1 flex flex-col justify-end pb-8 pr-6 items-end border-l border-pink-500/10 cursor-pointer select-none transition-colors ${
-            rightActive ? 'bg-pink-500/15' : 'hover:bg-pink-500/5'
-          }`}
-        >
-          <div className="flex items-center gap-2 opacity-50 text-pink-400 text-xs font-bold tracking-widest uppercase">
-            <span>Strike Right</span>
-            <span className="px-2 py-1 rounded bg-pink-950/80 border border-pink-500/40 text-[10px] font-mono">
-              [→] or [D]
-            </span>
+          {/* Right Strike Zone */}
+          <div
+            onPointerDown={handleRightDown}
+            className={`flex-1 flex flex-col justify-end pb-8 pr-6 items-end border-l border-pink-500/10 cursor-pointer select-none transition-colors ${
+              rightActive ? 'bg-pink-500/15' : 'hover:bg-pink-500/5'
+            }`}
+          >
+            <div className="flex items-center gap-2 opacity-50 text-pink-400 text-xs font-bold tracking-widest uppercase">
+              <span>Strike Right</span>
+              <span className="px-2 py-1 rounded bg-pink-950/80 border border-pink-500/40 text-[10px] font-mono">
+                [→] or [D]
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

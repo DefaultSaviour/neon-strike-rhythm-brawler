@@ -32,6 +32,7 @@ export default function App() {
     latencyOffsetMs: 0,
     scanlines: true,
     screenShake: 'subtle',
+    oneButtonMode: false,
   });
 
   const callbacksRef = useRef({
@@ -62,7 +63,11 @@ export default function App() {
   useEffect(() => {
     const loadSavedAudio = async () => {
       try {
-        const stored = await audioStorage.loadAllCustomTracks(audioEngine.getAudioContext());
+        await audioEngine.preloadTrackAudio(PRELOADED_TRACKS[0]);
+        const stored = await audioStorage.loadAllCustomTracks(
+          audioEngine.getAudioContext(),
+          (buf) => audioEngine.analyzeAudioBuffer(buf)
+        );
         if (stored.length > 0) {
           setCustomTracks(stored);
         }
@@ -118,6 +123,12 @@ export default function App() {
     }
   }, [gameStatus, engine]);
 
+  const handleOneButtonStrike = useCallback(() => {
+    if (gameStatus === 'PLAYING') {
+      engine.handleOneButtonInput();
+    }
+  }, [gameStatus, engine]);
+
   // Pause / Resume
   const handleTogglePause = useCallback(() => {
     if (gameStatus === 'PLAYING') {
@@ -129,39 +140,85 @@ export default function App() {
     }
   }, [gameStatus, engine, selectedTrack]);
 
+  const handleUpdateSettings = (newSettings: Partial<AudioSettings>) => {
+    engine.saveSettings(newSettings);
+    setAudioSettings({ ...engine.settings });
+  };
+
+  const handleToggleOneButtonMode = useCallback(() => {
+    handleUpdateSettings({ oneButtonMode: !audioSettings.oneButtonMode });
+  }, [audioSettings.oneButtonMode]);
+
   // Keyboard controls listener (Optimized for minimal input latency)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is inside an input field
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
 
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ') {
-        e.preventDefault();
-        handleStrike('left');
-      } else if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'KeyE') {
-        e.preventDefault();
-        handleStrike('right');
-      } else if (e.code === 'KeyR') {
+      if (e.code === 'KeyR') {
         e.preventDefault();
         handleRestart();
-      } else if (e.code === 'Space' || e.code === 'Escape') {
-        e.preventDefault();
-        if (gameStatus === 'PLAYING' || gameStatus === 'PAUSED') {
-          handleTogglePause();
-        } else if (gameStatus === 'MENU') {
-          handleStartGame();
+        return;
+      }
+
+      if (audioSettings.oneButtonMode) {
+        // ONE-BUTTON COMBAT MODE
+        if (e.code === 'Escape' || e.code === 'KeyP') {
+          e.preventDefault();
+          if (gameStatus === 'PLAYING' || gameStatus === 'PAUSED') {
+            handleTogglePause();
+          }
+        } else if (
+          e.code === 'Space' ||
+          e.code === 'Enter' ||
+          e.code === 'KeyA' ||
+          e.code === 'KeyD' ||
+          e.code === 'KeyF' ||
+          e.code === 'KeyJ' ||
+          e.code === 'ArrowLeft' ||
+          e.code === 'ArrowRight' ||
+          e.code === 'ArrowDown' ||
+          e.code === 'ArrowUp'
+        ) {
+          e.preventDefault();
+          if (gameStatus === 'PLAYING') {
+            handleOneButtonStrike();
+          } else if (gameStatus === 'MENU') {
+            handleStartGame();
+          } else if (gameStatus === 'PAUSED') {
+            handleTogglePause();
+          }
+        }
+      } else {
+        // STANDARD 2-BUTTON COMBAT MODE
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ') {
+          e.preventDefault();
+          handleStrike('left');
+        } else if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'KeyE') {
+          e.preventDefault();
+          handleStrike('right');
+        } else if (e.code === 'Space' || e.code === 'Escape' || e.code === 'KeyP') {
+          e.preventDefault();
+          if (gameStatus === 'PLAYING' || gameStatus === 'PAUSED') {
+            handleTogglePause();
+          } else if (gameStatus === 'MENU') {
+            handleStartGame();
+          }
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameStatus, handleStrike, handleRestart, handleTogglePause, handleStartGame]);
-
-  const handleUpdateSettings = (newSettings: Partial<AudioSettings>) => {
-    engine.saveSettings(newSettings);
-    setAudioSettings({ ...engine.settings });
-  };
+  }, [
+    gameStatus,
+    audioSettings.oneButtonMode,
+    handleStrike,
+    handleOneButtonStrike,
+    handleRestart,
+    handleTogglePause,
+    handleStartGame,
+  ]);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#060713] text-slate-100 select-none">
@@ -173,7 +230,10 @@ export default function App() {
         <HUD
           track={selectedTrack}
           scoreState={scoreState}
+          oneButtonMode={audioSettings.oneButtonMode}
+          onToggleOneButtonMode={handleToggleOneButtonMode}
           onStrike={handleStrike}
+          onOneButtonStrike={handleOneButtonStrike}
           onPause={handleTogglePause}
           onRestart={handleRestart}
           onOpenSelect={() => {
@@ -196,13 +256,30 @@ export default function App() {
               </span>
             </div>
 
-            <button
-              onClick={() => setShowTrackSelect(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-700 hover:border-cyan-400 text-xs text-slate-300 hover:text-cyan-300 transition-colors cursor-pointer"
-            >
-              <Music className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Track Library / Custom Audio</span>
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={handleToggleOneButtonMode}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all cursor-pointer ${
+                  audioSettings.oneButtonMode
+                    ? 'bg-amber-400/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(255,230,0,0.35)]'
+                    : 'bg-slate-900/80 border-slate-700 hover:border-cyan-400 text-slate-300 hover:text-cyan-300'
+                }`}
+                title="Toggle between 1-Button Mode (Auto-targets nearest beat) and 2-Button Mode (Left/Right)"
+              >
+                <span>Control Mode:</span>
+                <span className={audioSettings.oneButtonMode ? 'text-amber-300 font-black' : 'text-cyan-400'}>
+                  {audioSettings.oneButtonMode ? '1-Button Mode (ON)' : '2-Button Mode'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setShowTrackSelect(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-700 hover:border-cyan-400 text-xs text-slate-300 hover:text-cyan-300 transition-colors cursor-pointer"
+              >
+                <Music className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Track Library / Custom Audio</span>
+              </button>
+            </div>
           </div>
 
           {/* Central Logo & Start */}
@@ -238,10 +315,63 @@ export default function App() {
               </button>
             </div>
 
+            {/* Acoustic Threat Intel Matrix: 3 Bands x 3 Tiers */}
+            <div className="mt-4 w-full max-w-xl p-3 rounded-lg border border-slate-800 bg-slate-950/60 text-left text-xs">
+              <div className="text-[10px] font-mono uppercase font-bold tracking-widest text-slate-500 mb-2">
+                Acoustic Frequency Threat Matrix (Enemy Variants)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+                <div className="p-2 rounded bg-red-950/20 border border-red-500/30">
+                  <div className="text-red-400 font-bold flex items-center gap-1.5 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-[#ff1744] shadow-[0_0_6px_#ff1744]" />
+                    <span>Sub / Kick</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 leading-tight">
+                    36–145 Hz
+                  </div>
+                  <div className="text-[10px] text-red-200/80 mt-1 space-y-0.5">
+                    <div>1. Titan <span className="text-slate-500">(low)</span></div>
+                    <div>2. Breaker <span className="text-slate-500">(mid)</span></div>
+                    <div>3. Rammer <span className="text-slate-500">(high)</span></div>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded bg-purple-950/20 border border-purple-500/30">
+                  <div className="text-purple-400 font-bold flex items-center gap-1.5 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-[#d84dff] shadow-[0_0_6px_#d84dff]" />
+                    <span>Bassline</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 leading-tight">
+                    105–300 Hz
+                  </div>
+                  <div className="text-[10px] text-purple-200/80 mt-1 space-y-0.5">
+                    <div>1. Warlord <span className="text-slate-500">(low)</span></div>
+                    <div>2. Ronin <span className="text-slate-500">(mid)</span></div>
+                    <div>3. Acid Dancer <span className="text-slate-500">(high)</span></div>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded bg-cyan-950/20 border border-cyan-500/30">
+                  <div className="text-cyan-400 font-bold flex items-center gap-1.5 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-[#00e5ff] shadow-[0_0_6px_#00e5ff]" />
+                    <span>Highs / Lead</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 leading-tight">
+                    800–6500 Hz
+                  </div>
+                  <div className="text-[10px] text-cyan-200/80 mt-1 space-y-0.5">
+                    <div>1. Speeder <span className="text-slate-500">(low)</span></div>
+                    <div>2. Wraith <span className="text-slate-500">(mid)</span></div>
+                    <div>3. Seraph <span className="text-slate-500">(high)</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Big Start Button */}
             <button
               onClick={() => handleStartGame()}
-              className="mt-8 px-10 py-4 rounded-xl bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-300 text-black font-black text-lg tracking-wider shadow-[0_0_30px_rgba(0,243,255,0.6)] hover:shadow-[0_0_40px_rgba(255,0,127,0.8)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 cursor-pointer"
+              className="mt-6 px-10 py-4 rounded-xl bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-300 text-black font-black text-lg tracking-wider shadow-[0_0_30px_rgba(0,243,255,0.6)] hover:shadow-[0_0_40px_rgba(255,0,127,0.8)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 cursor-pointer"
             >
               <Play className="w-5 h-5 fill-current" />
               <span>ENGAGE COMBAT</span>
@@ -249,25 +379,50 @@ export default function App() {
           </div>
 
           {/* Controls Instruction Bar */}
-          <div className="w-full max-w-2xl bg-slate-950/80 border border-slate-800/80 rounded-lg p-3 flex flex-wrap items-center justify-around gap-4 text-xs text-slate-400 font-mono">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-cyan-400 font-bold">
-                [←] or [A]
-              </span>
-              <span>Strike Left</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-pink-400 font-bold">
-                [→] or [D]
-              </span>
-              <span>Strike Right</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 font-bold">
-                [R]
-              </span>
-              <span>Restart</span>
-            </div>
+          <div className="w-full max-w-2xl bg-slate-950/80 border border-slate-800/80 rounded-lg p-3 flex flex-wrap items-center justify-around gap-4 text-xs font-mono">
+            {audioSettings.oneButtonMode ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded bg-amber-950/80 border border-amber-400 text-amber-300 font-bold">
+                    [SPACE] · [ANY KEY] · [TAP]
+                  </span>
+                  <span className="text-amber-200">One-Button Strike (Auto-Targets)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 font-bold">
+                    [ESC]
+                  </span>
+                  <span className="text-slate-400">Pause</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 font-bold">
+                    [R]
+                  </span>
+                  <span className="text-slate-400">Restart</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-cyan-400 font-bold">
+                    [←] or [A]
+                  </span>
+                  <span className="text-slate-400">Strike Left</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-pink-400 font-bold">
+                    [→] or [D]
+                  </span>
+                  <span className="text-slate-400">Strike Right</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 font-bold">
+                    [R]
+                  </span>
+                  <span className="text-slate-400">Restart</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -334,17 +489,20 @@ export default function App() {
           onSelectTrack={(t) => {
             setSelectedTrack(t);
           }}
+          onPlayTrack={(t) => {
+            setSelectedTrack(t);
+            setShowTrackSelect(false);
+            handleStartGame(t);
+          }}
           onTrackAdded={handleTrackAdded}
           onTrackDeleted={handleTrackDeleted}
           onUpdateSettings={handleUpdateSettings}
           onClose={() => {
             setShowTrackSelect(false);
-            if (gameStatus === 'MENU' || gameStatus === 'PAUSED') {
-              handleStartGame(selectedTrack);
-            }
           }}
         />
       )}
     </div>
   );
 }
+

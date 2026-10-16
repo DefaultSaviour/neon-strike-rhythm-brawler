@@ -1,8 +1,9 @@
-import { Track, BeatNote } from '../types/game';
+﻿import { Track, BeatNote } from '../types/game';
 
-const DB_NAME = 'neon_strike_audio_db_v1';
+const DB_NAME = 'neon_strike_audio_db_v2';
 const STORE_NAME = 'custom_tracks';
 const DB_VERSION = 1;
+export const CURRENT_ANALYSIS_VERSION = 3;
 
 interface StoredTrackData {
   id: string;
@@ -15,6 +16,7 @@ interface StoredTrackData {
   notes: BeatNote[];
   audioArrayBuffer: ArrayBuffer;
   createdAt: number;
+  analysisVersion?: number;
 }
 
 class AudioStorage {
@@ -51,6 +53,7 @@ class AudioStorage {
       notes: track.notes,
       audioArrayBuffer: arrayBuffer,
       createdAt: Date.now(),
+      analysisVersion: CURRENT_ANALYSIS_VERSION,
     };
 
     return new Promise((resolve, reject) => {
@@ -63,7 +66,11 @@ class AudioStorage {
   }
 
   // Load all custom tracks from IndexedDB forever across sessions
-  public async loadAllCustomTracks(audioCtx: AudioContext): Promise<Track[]> {
+  // Automatically upgrades beat charts if a newer bassline analysis version exists
+  public async loadAllCustomTracks(
+    audioCtx: AudioContext,
+    reanalyzeBuffer?: (audioBuffer: AudioBuffer) => { bpm: number; notes: BeatNote[]; description: string }
+  ): Promise<Track[]> {
     try {
       const db = await this.getDB();
       const storedList: StoredTrackData[] = await new Promise((resolve, reject) => {
@@ -83,15 +90,40 @@ class AudioStorage {
           const bufferCopy = item.audioArrayBuffer.slice(0);
           const audioBuffer = await audioCtx.decodeAudioData(bufferCopy);
 
+          let bpm = item.bpm;
+          let notes = item.notes;
+          let description = item.description;
+
+          if (reanalyzeBuffer && item.analysisVersion !== CURRENT_ANALYSIS_VERSION) {
+            const upgraded = reanalyzeBuffer(audioBuffer);
+            bpm = upgraded.bpm;
+            notes = upgraded.notes;
+            description = upgraded.description;
+
+            const updatedTrack: Track = {
+              id: item.id,
+              title: item.title,
+              artist: item.artist,
+              bpm,
+              difficulty: 'Custom',
+              duration: item.duration,
+              description,
+              notes,
+              isCustom: true,
+              audioBuffer,
+            };
+            await this.saveCustomTrack(updatedTrack, item.audioArrayBuffer);
+          }
+
           loadedTracks.push({
             id: item.id,
             title: item.title,
             artist: item.artist,
-            bpm: item.bpm,
+            bpm,
             difficulty: 'Custom',
             duration: item.duration,
-            description: item.description,
-            notes: item.notes,
+            description,
+            notes,
             isCustom: true,
             audioBuffer,
           });
@@ -121,3 +153,4 @@ class AudioStorage {
 }
 
 export const audioStorage = new AudioStorage();
+

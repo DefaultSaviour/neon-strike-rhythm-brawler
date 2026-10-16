@@ -9,6 +9,7 @@ interface TrackSelectModalProps {
   settings: AudioSettings;
   customTracks: Track[];
   onSelectTrack: (track: Track) => void;
+  onPlayTrack?: (track: Track) => void;
   onTrackAdded: (track: Track) => void;
   onTrackDeleted: (trackId: string) => void;
   onUpdateSettings: (settings: Partial<AudioSettings>) => void;
@@ -21,6 +22,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
   settings,
   customTracks,
   onSelectTrack,
+  onPlayTrack,
   onTrackAdded,
   onTrackDeleted,
   onUpdateSettings,
@@ -196,8 +198,12 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onSelectTrack(track);
-                          onClose();
+                          if (onPlayTrack) {
+                            onPlayTrack(track);
+                          } else {
+                            onSelectTrack(track);
+                            onClose();
+                          }
                         }}
                         className={`px-4 py-2 rounded font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                           isSelected
@@ -370,6 +376,39 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
                 <div className="text-[11px] text-slate-500">
                   Adjust this if you are using Bluetooth headphones or if audio feels delayed relative to on-screen hits.
                 </div>
+              </div>
+
+              {/* One-Button Combat Mode Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-lg bg-slate-900/60 border border-amber-500/30">
+                <div className="flex flex-col pr-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-100 text-xs">One-Button Mode</span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase border ${
+                        settings.oneButtonMode
+                          ? 'bg-amber-950 border-amber-500/60 text-amber-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      {settings.oneButtonMode ? 'ON (1-Button)' : 'OFF (2-Button)'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-1 leading-snug">
+                    Strike with a single input ([SPACE], screen tap, or any key). Auto-detects and targets the nearest incoming enemy in either lane.
+                  </span>
+                </div>
+                <button
+                  onClick={() => onUpdateSettings({ oneButtonMode: !settings.oneButtonMode })}
+                  className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer shrink-0 ${
+                    settings.oneButtonMode ? 'bg-amber-400 shadow-[0_0_10px_rgba(255,230,0,0.5)]' : 'bg-slate-700'
+                  }`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full bg-black transition-transform ${
+                      settings.oneButtonMode ? 'translate-x-6' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* Screen Shake Control */}

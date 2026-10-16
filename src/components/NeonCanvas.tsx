@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { GameEngine } from '../game/gameEngine';
 import { Point2D, DebrisPiece } from '../types/game';
 import { ATTACK_MOVES, getMoveForCombo } from '../game/animations';
+import { getEnemyStyle, resolveBandTier } from '../game/enemyStyles';
 import { audioEngine } from '../audio/audioEngine';
 
 interface NeonCanvasProps {
@@ -142,6 +143,17 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
 };
 
 // --- RENDER HELPERS ---
+
+
+function colorWithAlpha(hex: string, alpha: number): string {
+  if (hex.startsWith('#') && hex.length === 7) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex;
+}
 
 function drawAtmosphereAndSun(
   ctx: CanvasRenderingContext2D,
@@ -504,10 +516,7 @@ function drawFloorShadowsAndReflections(
       groundY + 10,
       35
     );
-    eShadow.addColorStop(
-      0,
-      enemy.color === '#ffe600' ? 'rgba(255, 230, 0, 0.55)' : 'rgba(255, 0, 127, 0.55)'
-    );
+    eShadow.addColorStop(0, colorWithAlpha(enemy.color, 0.55));
     eShadow.addColorStop(0.6, 'rgba(0, 0, 0, 0.35)');
     eShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
@@ -599,7 +608,7 @@ function drawDebrisPieces(
   ctx.restore();
 }
 
-// FULL-SIZED CYBER ENEMIES: The exact same scale as the player (Height ~118px)!
+// FULL-SIZED CYBER ENEMIES: 3 Frequency Bands (Sub, Bass, High) x 3 Tiers (Low, Mid, High Hz)
 function drawFullSizedEnemies(
   ctx: CanvasRenderingContext2D,
   centerX: number,
@@ -610,31 +619,43 @@ function drawFullSizedEnemies(
   ctx.translate(centerX, groundY);
 
   for (const enemy of engine.enemies) {
-    if (enemy.defeated || Math.abs(enemy.x) > window.innerWidth / 2 + 100) continue;
+    if (enemy.defeated || Math.abs(enemy.x) > window.innerWidth / 2 + 120) continue;
 
     const posX = enemy.x;
     const dir = enemy.lane === 'left' ? 1 : -1;
     const phase = enemy.animPhase;
 
+    const { band, tier } = resolveBandTier(enemy);
+    const style = getEnemyStyle(band, tier);
+    const mainColor = enemy.color || style.color;
+    const accent = style.accent;
+    const scale = style.scale;
+
     // Cyber ghost trail
     if (enemy.trailHistory.length > 0) {
       for (let t = 0; t < enemy.trailHistory.length; t++) {
         const tr = enemy.trailHistory[t];
-        const trailAlpha = ((t + 1) / enemy.trailHistory.length) * 0.22;
+        const trailAlpha = ((t + 1) / enemy.trailHistory.length) * 0.24;
         ctx.save();
         ctx.globalAlpha = trailAlpha;
-        ctx.strokeStyle = enemy.color;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(tr.x - 12, -50, 24, 118);
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 2.2;
+        ctx.strokeRect(tr.x - 12 * scale, -52 * scale, 24 * scale, 120 * scale);
         ctx.restore();
       }
     }
 
     ctx.save();
     ctx.translate(posX, 0);
-    ctx.strokeStyle = enemy.color;
-    ctx.shadowColor = enemy.color;
-    ctx.shadowBlur = 16;
+
+    // Anchor scaling so feet remain on the conveyor ground level (y = 68)
+    ctx.translate(0, 68);
+    ctx.scale(scale, scale);
+    ctx.translate(0, -68);
+
+    ctx.strokeStyle = mainColor;
+    ctx.shadowColor = mainColor;
+    ctx.shadowBlur = band === 'high' && tier === 3 ? 24 : 16;
     ctx.lineWidth = 3.6;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -646,9 +667,11 @@ function drawFullSizedEnemies(
       ctx.stroke();
     };
 
-    // --- ENEMY 1: FULL-SIZE BRAWLER (Heavy Hunched Sprint, Spiked Armor, Bass Motifs) ---
-    if (enemy.enemyType === 'brawler') {
-      const bob = Math.abs(Math.sin(phase)) * 6;
+    // =========================================================================
+    // GROUP 1: SUB / KICK (Heavy Juggernauts: Crimson, Lava Red, Blood Orange)
+    // =========================================================================
+    if (band === 'sub') {
+      const bob = Math.abs(Math.sin(phase)) * 6.5;
       const legStride = Math.sin(phase) * 22;
       const armStride = Math.cos(phase) * 26;
 
@@ -656,37 +679,124 @@ function drawFullSizedEnemies(
       const chestY = -22 - bob;
       const pelvisY = 8 - bob * 0.5;
 
-      // Heavy hunched head
+      // Heavy Hunched Head
       ctx.beginPath();
-      ctx.arc(dir * 12, headY, 8.5, 0, Math.PI * 2);
+      ctx.arc(dir * 12, headY, tier === 1 ? 10 : 8.5, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Glowing crimson eye slit
+      // Glowing Visor / Eye Slit
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(dir * 16, headY - 2, 5, 3);
 
-      // Muscular spine
+      // --- TIER VARIATIONS (Sub/Kick) ---
+      if (tier === 1) {
+        // TIER 1: TITAN (Deep Sub 36-65Hz) - Massive Horned Juggernaut
+        // Upward forward-curving cyber battle horns
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 3.8;
+        drawBone(dir * 10, headY - 8, dir * 26, headY - 24);
+        drawBone(dir * 26, headY - 24, dir * 36, headY - 18);
+        drawBone(dir * 4, headY - 8, dir * 18, headY - 20);
+        ctx.restore();
+
+        // Heavy shoulder pauldrons
+        drawBone(dir * 6, chestY - 8, dir * 20, chestY - 6);
+        drawBone(dir * 20, chestY - 6, dir * 24, chestY + 6);
+        drawBone(-dir * 6, chestY - 8, -dir * 16, chestY - 4);
+
+        // Chest Reactor Plate
+        ctx.fillStyle = mainColor;
+        ctx.fillRect(dir * 4, chestY - 4, 8, 8);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(dir * 6, chestY - 2, 4, 4);
+
+        // Stomping Foot Quake Ring when lead foot impacts (phase near 0 or PI)
+        if (bob < 1.5) {
+          ctx.save();
+          ctx.strokeStyle = accent;
+          ctx.shadowColor = mainColor;
+          ctx.shadowBlur = 10;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(dir * 28 + legStride, 68, 14, 4, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else if (tier === 2) {
+        // TIER 2: BREAKER (Core Kick 65-110Hz) - Pneumatic Piston Brawler
+        // Spiked dorsal vertebrae fins along the spine
+        for (let s = 0; s < 3; s++) {
+          const sy = chestY + s * 9;
+          drawBone(-dir * 2, sy, -dir * (12 + s * 2), sy - 7);
+        }
+        // Forearm Pneumatic Piston Spike (slides dynamically with stride)
+        const pistonExt = Math.sin(phase * 1.5) * 8;
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 3.2;
+        drawBone(dir * 54 + armStride, chestY + 2, dir * (68 + pistonExt) + armStride, chestY - 3);
+        ctx.restore();
+      } else {
+        // TIER 3: RAMMER (Upper Kick/Transient 110-145Hz) - Forward Battering Ram
+        // Curved Molten Ram Horns
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 4;
+        drawBone(dir * 14, headY - 4, dir * 30, headY + 4);
+        drawBone(dir * 30, headY + 4, dir * 28, headY + 14);
+        ctx.restore();
+
+        // Arm-Mounted Battering Shield
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = mainColor;
+        ctx.shadowBlur = 16;
+        ctx.lineWidth = 4.2;
+        ctx.beginPath();
+        ctx.moveTo(dir * 46 + armStride, chestY - 16);
+        ctx.lineTo(dir * 64 + armStride, chestY + 2);
+        ctx.lineTo(dir * 46 + armStride, chestY + 18);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+
+        // Molten Back Rocket Flame Trails
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = mainColor;
+        ctx.shadowBlur = 16;
+        ctx.lineWidth = 2.5;
+        drawBone(-dir * 8, chestY - 4, -dir * (35 + Math.random() * 12), chestY - 4 + (Math.random() - 0.5) * 6);
+        drawBone(-dir * 8, chestY + 4, -dir * (30 + Math.random() * 12), chestY + 4 + (Math.random() - 0.5) * 6);
+        ctx.restore();
+      }
+
+      // Muscular Spine
       drawBone(dir * 10, chestY, 0, pelvisY);
 
-      // Massive spiked lead punch arm
+      // Lead Punch Arm
       drawBone(dir * 6, chestY, dir * 28 + armStride, chestY + 6);
       drawBone(dir * 28 + armStride, chestY + 6, dir * 54 + armStride, chestY + 2);
-      // Cyber knuckle spike
       drawBone(dir * 54 + armStride, chestY + 2, dir * 65 + armStride, chestY - 4);
 
-      // Trailing punch arm
+      // Trailing Arm
       drawBone(-dir * 4, chestY, -dir * 18 - armStride, chestY + 10);
       drawBone(-dir * 18 - armStride, chestY + 10, -dir * 36 - armStride, chestY + 18);
 
-      // Stomping running legs (Firmly planted on ground at y = 68!)
-      // Lead leg
+      // Stomping Running Legs (planted on ground at y = 68)
       drawBone(0, pelvisY, dir * 22 + legStride, 38);
       drawBone(dir * 22 + legStride, 38, dir * 28 + legStride, 68);
-      // Rear leg
       drawBone(0, pelvisY, -dir * 22 - legStride, 34);
       drawBone(-dir * 22 - legStride, 34, -dir * 32 - legStride, 68);
 
-      // White core highlights
+      // Core white accent highlight
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.3;
       ctx.shadowBlur = 0;
@@ -695,65 +805,173 @@ function drawFullSizedEnemies(
       drawBone(0, pelvisY, dir * 22 + legStride, 38);
     }
 
-    // --- ENEMY 2: FULL-SIZE RONIN (Cyber Samurai, Low Glide with Full Katana Dragging on Conveyor) ---
-    else if (enemy.enemyType === 'ronin') {
-      const bob = Math.sin(phase) * 2;
+    // =========================================================================
+    // GROUP 2: BASSLINE (Cyber Samurai & Blade Dancers: Violet, Magenta, Acid Pink)
+    // =========================================================================
+    else if (band === 'bass') {
+      const bob = Math.sin(phase * 1.2) * 2.5;
       const headY = -48 + bob;
       const chestY = -22 + bob;
       const pelvisY = 8;
 
-      // Ronin Hat / Helmet (Conical Cyber-Kasa)
-      ctx.beginPath();
-      ctx.moveTo(dir * 18, headY - 4);
-      ctx.lineTo(0, headY - 14);
-      ctx.lineTo(-dir * 18, headY - 4);
-      ctx.closePath();
-      ctx.stroke();
-
-      // Head
-      ctx.beginPath();
-      ctx.arc(0, headY, 8, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Gold Ocular Visor Slit
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(dir > 0 ? 2 : -7, headY - 1, 6, 2.5);
-
-      // Flowing black-and-gold cyber haori cape
-      const capeWave = Math.sin(phase * 1.5) * 12;
-      ctx.beginPath();
-      ctx.moveTo(-dir * 8, chestY);
-      ctx.lineTo(-dir * 38, chestY + 15 + capeWave);
-      ctx.lineTo(-dir * 62, chestY + 38 + capeWave * 1.3);
-      ctx.stroke();
-
       // Spine
       drawBone(0, chestY, 0, pelvisY);
 
-      // FULL LENGTH GLOWING KATANA: Tip dragging on the conveyor runway kicking up sparks!
-      ctx.save();
-      ctx.strokeStyle = '#ffe600';
-      ctx.shadowColor = '#ffe600';
-      ctx.shadowBlur = 20;
-      ctx.lineWidth = 3.2;
-      // Sword grip from hand
-      drawBone(dir * 16, chestY + 8, dir * 55, 68);
-      // Sword tip spark on conveyor
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(dir * 55, 68, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      if (tier === 1) {
+        // TIER 1: WARLORD (Deep Rolling Bass 105-150Hz) - Armored Shogun with Odachi
+        // Horned Kabuto War Crest
+        ctx.beginPath();
+        ctx.moveTo(dir * 20, headY - 4);
+        ctx.lineTo(0, headY - 18);
+        ctx.lineTo(-dir * 20, headY - 4);
+        ctx.closePath();
+        ctx.stroke();
 
-      // Lead arm holding katana
-      drawBone(dir * 6, chestY, dir * 16, chestY + 4);
-      drawBone(dir * 16, chestY + 4, dir * 28, chestY + 14);
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 3.2;
+        // Crescent Kuwagata Horns on Crest
+        drawBone(0, headY - 18, dir * 16, headY - 30);
+        drawBone(0, headY - 18, -dir * 16, headY - 30);
+        ctx.restore();
 
-      // Trailing counter-balance arm
-      drawBone(-dir * 6, chestY, -dir * 22, chestY - 2);
-      drawBone(-dir * 22, chestY - 2, -dir * 35, chestY - 14);
+        // Head & Demon Mempo Face Visor
+        ctx.beginPath();
+        ctx.arc(0, headY, 8.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(dir > 0 ? 3 : -8, headY - 2, 6, 3);
 
-      // Gliding ninja stance legs (Firmly on conveyor ground at y = 68!)
+        // Double Sashimono War-Flags fluttering from back
+        const flagWave = Math.sin(phase * 1.4) * 8;
+        drawBone(-dir * 6, chestY, -dir * 12, headY - 28);
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = mainColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-dir * 28 + flagWave, headY - 26, 16, 26);
+        ctx.restore();
+
+        // GIANT CURVED ODACHI (Heavy Great-Sword dragging along runway)
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 22;
+        ctx.lineWidth = 4.2;
+        drawBone(dir * 16, chestY + 8, dir * 68, 68);
+        // Heavy dragging blade spark shower
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(dir * 68, 68, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        for (let sp = 0; sp < 4; sp++) {
+          drawBone(dir * 68, 68, dir * (68 - Math.random() * 22), 68 - Math.random() * 18);
+        }
+        ctx.restore();
+
+        // Arms holding greatsword
+        drawBone(dir * 6, chestY, dir * 16, chestY + 4);
+        drawBone(dir * 16, chestY + 4, dir * 28, chestY + 12);
+        drawBone(-dir * 6, chestY, -dir * 14, chestY + 4);
+        drawBone(-dir * 14, chestY + 4, dir * 14, chestY + 8);
+      } else if (tier === 2) {
+        // TIER 2: RONIN (Mid-Bass Groove 150-220Hz) - Classic Cyber Kasa Samurai
+        // Ronin Conical Cyber-Kasa Hat
+        ctx.beginPath();
+        ctx.moveTo(dir * 18, headY - 4);
+        ctx.lineTo(0, headY - 14);
+        ctx.lineTo(-dir * 18, headY - 4);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, headY, 8, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Gold Visor Slit
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(dir > 0 ? 2 : -7, headY - 1, 6, 2.5);
+
+        // Flowing Cyber Haori Cape
+        const capeWave = Math.sin(phase * 1.5) * 12;
+        ctx.beginPath();
+        ctx.moveTo(-dir * 8, chestY);
+        ctx.lineTo(-dir * 38, chestY + 15 + capeWave);
+        ctx.lineTo(-dir * 62, chestY + 38 + capeWave * 1.3);
+        ctx.stroke();
+
+        // Katana dragging with conveyor spark
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 3.2;
+        drawBone(dir * 16, chestY + 8, dir * 55, 68);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(dir * 55, 68, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        drawBone(dir * 6, chestY, dir * 16, chestY + 4);
+        drawBone(dir * 16, chestY + 4, dir * 28, chestY + 14);
+        drawBone(-dir * 6, chestY, -dir * 22, chestY - 2);
+        drawBone(-dir * 22, chestY - 2, -dir * 35, chestY - 14);
+      } else {
+        // TIER 3: ACID DANCER (Upper/Acid Synth Riffs 220-300Hz) - Dual Reverse-Blade Kunoichi
+        // Sleek Ninja Cowl
+        ctx.beginPath();
+        ctx.moveTo(dir * 14, headY - 2);
+        ctx.lineTo(0, headY - 12);
+        ctx.lineTo(-dir * 12, headY - 6);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, headY, 7.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Neon Lime Visor
+        ctx.fillStyle = accent;
+        ctx.fillRect(dir > 0 ? 2 : -7, headY - 1, 6, 2.5);
+
+        // Undulating Energy Ribbon Streamers
+        for (let r = 0; r < 2; r++) {
+          const rWave = Math.sin(phase * 2 + r * 1.5) * 14;
+          ctx.save();
+          ctx.strokeStyle = r === 0 ? mainColor : accent;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-dir * 6, headY + r * 6);
+          ctx.lineTo(-dir * 34, headY + 10 + rWave);
+          ctx.lineTo(-dir * 65, headY + 22 + rWave * 1.4);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // DUAL REVERSE-GRIP ACID SCYTHE BLADES
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = 3.4;
+        // Lead hand reverse blade (sweeps downward forward)
+        drawBone(dir * 30, chestY + 4, dir * 54, chestY - 12);
+        drawBone(dir * 54, chestY - 12, dir * 44, chestY - 22);
+        // Trailing hand reverse blade (sweeps upward backward)
+        drawBone(-dir * 26, chestY + 8, -dir * 48, chestY - 14);
+        drawBone(-dir * 48, chestY - 14, -dir * 38, chestY - 24);
+        ctx.restore();
+
+        drawBone(dir * 6, chestY, dir * 20, chestY + 2);
+        drawBone(dir * 20, chestY + 2, dir * 30, chestY + 4);
+        drawBone(-dir * 6, chestY, -dir * 18, chestY + 4);
+        drawBone(-dir * 18, chestY + 4, -dir * 26, chestY + 8);
+      }
+
+      // Gliding ninja stance legs (planted on ground at y = 68)
       drawBone(0, pelvisY, dir * 18, 38);
       drawBone(dir * 18, 38, dir * 28, 68);
       drawBone(0, pelvisY, -dir * 22, 38);
@@ -767,54 +985,172 @@ function drawFullSizedEnemies(
       drawBone(0, pelvisY, dir * 18, 38);
     }
 
-    // --- ENEMY 3: FULL-SIZE SPEEDER (Jet Roller with Twin Plasma Arm Blades & Foot Thrusters) ---
+    // =========================================================================
+    // GROUP 3: HIGH (Plasma Jets, Wraiths & Seraphs: Cyan, Mint, Prismatic White)
+    // =========================================================================
     else {
-      const bob = Math.sin(phase * 1.8) * 2;
+      const bob = Math.sin(phase * 1.8) * 2.2;
       const headY = -46 + bob;
       const chestY = -20 + bob;
       const pelvisY = 8;
 
-      // Aerodynamic Speed Visor
-      ctx.beginPath();
-      ctx.moveTo(dir * 20, headY);
-      ctx.lineTo(-dir * 12, headY - 10);
-      ctx.lineTo(-dir * 14, headY + 8);
-      ctx.closePath();
-      ctx.stroke();
+      if (tier === 1) {
+        // TIER 1: SPEEDER (Snare / Lower Highs 800-1800Hz) - Jet Roller with Forearm Blades
+        // Aerodynamic Speed Visor
+        ctx.beginPath();
+        ctx.moveTo(dir * 20, headY);
+        ctx.lineTo(-dir * 12, headY - 10);
+        ctx.lineTo(-dir * 14, headY + 8);
+        ctx.closePath();
+        ctx.stroke();
 
-      // Spine
-      drawBone(dir * 4, chestY, -dir * 2, pelvisY);
+        drawBone(dir * 4, chestY, -dir * 2, pelvisY);
 
-      // Dual forward plasma blades on forearms
-      ctx.save();
-      ctx.strokeStyle = '#00f3ff';
-      ctx.shadowColor = '#00f3ff';
-      ctx.shadowBlur = 18;
-      ctx.lineWidth = 3.5;
-      drawBone(dir * 24, chestY - 2, dir * 55, chestY - 2);
-      ctx.restore();
+        // Dual forward plasma blades on forearms
+        ctx.save();
+        ctx.strokeStyle = mainColor;
+        ctx.shadowColor = mainColor;
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = 3.5;
+        drawBone(dir * 24, chestY - 2, dir * 55, chestY - 2);
+        ctx.restore();
 
-      drawBone(dir * 6, chestY, dir * 24, chestY - 2);
-      drawBone(-dir * 4, chestY, -dir * 20, chestY + 8);
-      drawBone(-dir * 20, chestY + 8, -dir * 32, chestY + 16);
+        drawBone(dir * 6, chestY, dir * 24, chestY - 2);
+        drawBone(-dir * 4, chestY, -dir * 20, chestY + 8);
+        drawBone(-dir * 20, chestY + 8, -dir * 32, chestY + 16);
 
-      // Roller legs planted on conveyor (y = 68)
-      drawBone(-dir * 2, pelvisY, dir * 18, 38);
-      drawBone(dir * 18, 38, dir * 25, 68);
-      drawBone(-dir * 2, pelvisY, -dir * 20, 38);
-      drawBone(-dir * 20, 38, -dir * 28, 68);
+        // Roller legs planted on conveyor (y = 68)
+        drawBone(-dir * 2, pelvisY, dir * 18, 38);
+        drawBone(dir * 18, 38, dir * 25, 68);
+        drawBone(-dir * 2, pelvisY, -dir * 20, 38);
+        drawBone(-dir * 20, 38, -dir * 28, 68);
 
-      // JET BOOSTER FLAMES shooting backward from boots
-      ctx.save();
-      ctx.strokeStyle = '#00f3ff';
-      ctx.shadowColor = '#00f3ff';
-      ctx.shadowBlur = 14;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(-dir * 28, 66);
-      ctx.lineTo(-dir * 55 - Math.random() * 15, 66 + (Math.random() - 0.5) * 5);
-      ctx.stroke();
-      ctx.restore();
+        // Jet booster flames shooting backward from boots
+        ctx.save();
+        ctx.strokeStyle = mainColor;
+        ctx.shadowColor = mainColor;
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 2.5;
+        drawBone(-dir * 28, 66, -dir * (55 + Math.random() * 15), 66 + (Math.random() - 0.5) * 5);
+        ctx.restore();
+      } else if (tier === 2) {
+        // TIER 2: WRAITH (Sharp Claps / Leads 1800-3500Hz) - Hovering Plasma Phantom with Wings
+        // Sleek aerodynamic helmet
+        ctx.beginPath();
+        ctx.arc(dir * 6, headY, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(dir * 10, headY - 2, 5, 2.5);
+
+        // Spine
+        drawBone(dir * 4, chestY, -dir * 2, pelvisY);
+
+        // Twin Swept-Back Cyber Energy Wings on Back
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = mainColor;
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = 3.4;
+        drawBone(0, chestY - 6, -dir * 36, chestY - 32);
+        drawBone(-dir * 36, chestY - 32, -dir * 48, chestY - 14);
+        drawBone(0, chestY - 2, -dir * 32, chestY - 10);
+        ctx.restore();
+
+        // Twin crackling plasma claws
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 16;
+        ctx.lineWidth = 2.8;
+        drawBone(dir * 20, chestY + 2, dir * 44, chestY - 6);
+        drawBone(dir * 44, chestY - 6, dir * 54, chestY - 4);
+        drawBone(-dir * 16, chestY + 4, -dir * 34, chestY + 12);
+        ctx.restore();
+
+        drawBone(dir * 4, chestY, dir * 20, chestY + 2);
+        drawBone(-dir * 4, chestY, -dir * 16, chestY + 4);
+
+        // Hover-skate posture (feet floating 6px above ground with anti-grav glow discs)
+        drawBone(-dir * 2, pelvisY, dir * 16, 36);
+        drawBone(dir * 16, 36, dir * 22, 62);
+        drawBone(-dir * 2, pelvisY, -dir * 18, 36);
+        drawBone(-dir * 18, 36, -dir * 26, 62);
+
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 16;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(dir * 22, 65, 8, 2.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(-dir * 26, 65, 8, 2.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // TIER 3: SERAPH (Screaming Hyper Leads / Treble 3500-6500Hz) - Radiant Angel of Light
+        // Sleek Crested Helmet
+        ctx.beginPath();
+        ctx.arc(dir * 4, headY, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(dir * 8, headY - 2, 6, 3);
+
+        // Rotating Radiant Cyber-Halo / Crown above head
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(dir * 4, headY - 14, 14, 4.5, phase * 0.4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // Spine
+        drawBone(dir * 4, chestY, -dir * 2, pelvisY);
+
+        // Quad Radiant Geometric Plasma Wing Fins (pulsing outward)
+        const wingPulse = Math.sin(phase * 2) * 5;
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 24;
+        ctx.lineWidth = 3.6;
+        // Upper high swept wings
+        drawBone(0, chestY - 8, -dir * (42 + wingPulse), chestY - 42);
+        drawBone(-dir * (42 + wingPulse), chestY - 42, -dir * (58 + wingPulse), chestY - 26);
+        // Lower swept wings
+        drawBone(0, chestY, -dir * (38 + wingPulse), chestY - 14);
+        drawBone(-dir * (38 + wingPulse), chestY - 14, -dir * (52 + wingPulse), chestY + 4);
+        ctx.restore();
+
+        // Orbiting Beam Sabers hovering near hands
+        ctx.save();
+        ctx.strokeStyle = '#ffffff';
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 22;
+        ctx.lineWidth = 3.8;
+        drawBone(dir * 22, chestY + 2, dir * 56, chestY - 16);
+        drawBone(-dir * 18, chestY + 4, -dir * 44, chestY + 18);
+        ctx.restore();
+
+        drawBone(dir * 4, chestY, dir * 22, chestY + 2);
+        drawBone(-dir * 4, chestY, -dir * 18, chestY + 4);
+
+        // Radiant gliding legs planted on conveyor (y = 68)
+        drawBone(-dir * 2, pelvisY, dir * 16, 36);
+        drawBone(dir * 16, 36, dir * 24, 68);
+        drawBone(-dir * 2, pelvisY, -dir * 18, 36);
+        drawBone(-dir * 18, 36, -dir * 26, 68);
+
+        // Blinding white spark particles around Seraph
+        for (let sp = 0; sp < 2; sp++) {
+          const spx = (Math.random() - 0.5) * 40;
+          const spy = chestY + (Math.random() - 0.5) * 40;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(spx, spy, 2.5, 2.5);
+        }
+      }
 
       // White core
       ctx.strokeStyle = '#ffffff';

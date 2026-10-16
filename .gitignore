@@ -1,6 +1,8 @@
 node_modules/
 build/
 dist/
+dist_unity_webgl/
+dist_unity_windows/
 coverage/
 .DS_Store
 *.log
@@ -8,3 +10,15 @@ coverage/
 !.env.example
 
 .aistudio/
+
+# Unity generated
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Bb]uild/
+unity/[Bb]uilds/
+unity/[Ll]ogs/
+unity/[Uu]ser[Ss]ettings/
+unity/MemoryCaptures/
+*.unitypackage
+

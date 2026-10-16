@@ -1,0 +1,64 @@
+# Neon Strike - Agents & Feature Registry
+
+## Completed Features Checklist
+- [x] **Acoustic Frequency Band Color Mapping**:
+  - Sub / Kick (~36–145 Hz): Red / Crimson / Orange palette.
+  - Bassline (~105–300 Hz): Purple / Magenta / Acid Pink palette.
+  - Highs (~800–6500 Hz): Cyan / Mint / Plasma White palette.
+- [x] **Cool 9-Variant Enemy Roster (3 bands x 3 Hz extreme tiers)**:
+  - **Sub / Kick**:
+    - Tier 1 (Low): **Titan** (1.15x scale, heavy crimson armor, ram horns, stomp shockwaves).
+    - Tier 2 (Mid): **Breaker** (1.0x scale, red breach visor, piston gauntlets).
+    - Tier 3 (High): **Rammer** (0.96x scale, blaze orange wedge shield with grinding sparks).
+  - **Bassline**:
+    - Tier 1 (Low): **Warlord** (1.08x scale, deep purple kabuto crest, sashimono battle banner).
+    - Tier 2 (Mid): **Ronin** (1.0x scale, magenta cyber-kasa hat, dual sparking odachi katanas).
+    - Tier 3 (High): **Acid Dancer** (0.95x scale, acid-pink/lime techno ninja, reverse scythes & undulating laser ribbons).
+  - **Highs**:
+    - Tier 1 (Low): **Speeder** (0.98x scale, cyan roller-blade speedster with jet exhaust booster flames).
+    - Tier 2 (Mid): **Wraith** (1.0x scale, mint hover-phantom with swept energy wings and plasma claws).
+    - Tier 3 (High): **Seraph** (1.0x scale, plasma-white celestial drone with rotating halo, quad wings & orbital sabers).
+- [x] **Default Song & Beat Tracker Upgrade**:
+  - Set default track to *Eargasm* (150 BPM) by defaultsaviour.
+  - Removed old default tracks.
+  - In-place Radix-2 FFT spectral analysis assigning notes dynamically to sub, bass, and high bands with spectral centroid tertiles.
+  - Dynamic kick tracking & changing bassline adaptation across song sections.
+- [x] **In-Game HUD & Main Menu Acoustic Guide**:
+  - HUD acoustic frequency band indicators (`Sub/Kick`, `Bassline`, `Highs`).
+  - Main menu Acoustic Threat Matrix showcasing all 9 enemy variants and frequency ranges.
+- [x] **Zero-Freeze Hit Detection (Removed 45ms Pause)**:
+  - Removed the `45ms` freeze-frame hitch on PERFECT hits that caused visual micro-stutter and audio desynchronization during rapid streams.
+  - Visual animations and enemy conveyor movement now run butter-smooth and stay 100% synchronized with the Web Audio hardware clock.
+- [x] **Dynamic Song Audio Hit Impact (+25% Volume Surge)**:
+  - Completely replaced the synthetic sine beep hit sound with an instantaneous dynamic +25% song volume surge on impact.
+  - The hit sound is now literally the song itself punching 25% louder right on the beat, mastered with a studio Web Audio DynamicsCompressor to prevent digital clipping while maximizing punch.
+- [x] **5-Track Official Soundtrack by defaultsaviour**:
+  - `Eargasm` (150 BPM, Hard, 190s)
+  - `Eargasm 2` (150 BPM, Hard, 220s)
+  - `Eargasm 3` (150 BPM, Hard, 189s)
+  - `Eargasm 4` (200 BPM, Hard, 195s)
+  - `Eargasm 5` (136 BPM, Medium, 199s)
+  - Added to `PRELOADED_TRACKS`, dynamically charted via Radix-2 FFT spectral analysis, selectable from the Track Library modal.
+- [x] **One-Button Combat Mode Toggle**:
+  - Seamless toggle between 2-Button Mode (`[←]/[A]` and `[→]/[D]`) and 1-Button Mode (`[SPACE]`, tap anywhere, or any key).
+  - Implemented `handleOneButtonInput()` in `GameEngine`: auto-detects and targets the nearest incoming beat enemy across both lanes, automatically striking in the correct direction.
+  - Added toggle controls in Main Menu marquee, in-game HUD header, and Settings modal.
+  - Automatically switches HUD touch zone to a unified full-width strike bar.
+  - Persisted across sessions in `localStorage`.
+- [x] **Sleek 24-Move Martial Arts Combat & Combo-Tier Visuals**:
+  - Restored the sleek 24-move martial arts / cyber-brawler combat animation system across 5 tiers (Basic, Advanced, Aerial, Cyber/Master, Finisher).
+  - Maintained crisp, clean wireframe aesthetics with zero screen-clutter.
+  - Dynamic combo visual VFX:
+    - Combo 6+: Ground neon pulse aura ring.
+    - Combo 16+: Cyber ghost afterimages on strike.
+    - Combo 30+: Crackling overdrive lightning arcs.
+    - Combo 50+: Radiant dual plasma angel wings.
+    - Razor blade slash arcs accurately bounded to strike zones.
+- [x] **Unity 6 WebGL Port & Architecture**:
+  - Built full C# Unity 6 project located in [`unity/`](file:///c:/Users/wee_c/.gemini/antigravity/neon-strike-rhythm-brawler/unity).
+  - Sample-accurate hardware audio synchronization with `AudioSettings.dspTime` in `AudioSyncEngine.cs`.
+  - Dynamic +25% volume surge on impact (zero synthetic beeps).
+  - 9-Variant acoustic enemy roster (Sub/Kick, Bassline, Highs) with procedural models and shatter particle explosions in `EnemyController.cs`.
+  - 1-Button auto-targeting & 2-Button combat modes in `RhythmCombatManager.cs`.
+  - All 5 *Eargasm* tracks by defaultsaviour compiled into WebGL build.
+  - Exported WebGL build to [`dist_unity_webgl/`](file:///c:/Users/wee_c/.gemini/antigravity/neon-strike-rhythm-brawler/dist_unity_webgl) and served locally on `http://localhost:3000/`.

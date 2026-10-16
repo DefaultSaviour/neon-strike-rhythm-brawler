@@ -13,6 +13,7 @@ import {
 } from '../types/game';
 import { ATTACK_MOVES, IDLE_POSE, getOrientedPose, lerpPose, getMoveForCombo } from './animations';
 import { audioEngine } from '../audio/audioEngine';
+import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -57,6 +58,7 @@ export class GameEngine {
     latencyOffsetMs: 0,
     scanlines: true,
     screenShake: 'subtle',
+    oneButtonMode: false,
   };
 
   private callbacks: GameEngineCallbacks;
@@ -64,6 +66,7 @@ export class GameEngine {
   private approachDuration: number = 1.35;
   private nextJudgementId: number = 1;
   private nextDebrisId: number = 1;
+  private songSession: number = 0;
 
   constructor(callbacks: GameEngineCallbacks) {
     this.callbacks = callbacks;
@@ -88,9 +91,10 @@ export class GameEngine {
     } catch {}
   }
 
-  public startSong(track: Track) {
+  public async startSong(track: Track) {
+    const session = ++this.songSession;
     this.track = track;
-    this.isRunning = true;
+    this.isRunning = false;
     this.enemies = [];
     this.particles = [];
     this.debris = [];
@@ -100,6 +104,12 @@ export class GameEngine {
     this.currentPose = { ...IDLE_POSE };
     this.screenShake = 0;
     this.freezeFrameMs = 0;
+    audioEngine.stop();
+
+    // Bundled tracks are charted from their audio on first play
+    await audioEngine.prepareTrack(track);
+    if (session !== this.songSession) return;
+    this.isRunning = true;
 
     this.scoreState = {
       score: 0,
@@ -117,12 +127,8 @@ export class GameEngine {
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
 
     this.enemies = track.notes.map((note, index) => {
-      const color =
-        note.enemyType === 'ronin'
-          ? '#ffe600'
-          : note.enemyType === 'speeder'
-          ? '#00f3ff'
-          : '#ff007f';
+      const { band, tier } = resolveBandTier(note);
+      const color = getEnemyStyle(band, tier).color;
 
       return {
         id: `enemy_${index}_${note.time}`,
@@ -135,6 +141,8 @@ export class GameEngine {
         color,
         enemyType: note.enemyType,
         pitchCategory: note.pitchCategory,
+        band,
+        tier,
         defeated: false,
         animPhase: Math.random() * Math.PI * 2,
         trailHistory: [],
@@ -147,12 +155,18 @@ export class GameEngine {
   }
 
   public stop() {
+    this.songSession++;
     this.isRunning = false;
     audioEngine.stop();
   }
 
   public handleInput(lane: Lane) {
     if (!this.isRunning || !this.track) return;
+
+    if (this.settings.oneButtonMode) {
+      this.handleOneButtonInput();
+      return;
+    }
 
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
@@ -181,6 +195,37 @@ export class GameEngine {
     }
   }
 
+  public handleOneButtonInput() {
+    if (!this.isRunning || !this.track) return;
+
+    const audioTime = audioEngine.getPlaybackTime();
+    const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
+
+    // In One-Button Mode, search across both lanes for the nearest beat enemy
+    const candidates = this.enemies.filter((e) => !e.defeated);
+
+    if (candidates.length === 0) {
+      this.triggerMiss(this.attackDirection || 'left');
+      return;
+    }
+
+    candidates.sort(
+      (a, b) => Math.abs(a.targetTime - effectiveTime) - Math.abs(b.targetTime - effectiveTime)
+    );
+    const closest = candidates[0];
+    const delta = Math.abs(closest.targetTime - effectiveTime);
+
+    if (delta <= 0.080) {
+      this.hitEnemy(closest, 'PERFECT', closest.lane);
+    } else if (delta <= 0.160) {
+      this.hitEnemy(closest, 'GOOD', closest.lane);
+    } else if (delta <= 0.250) {
+      this.hitEnemy(closest, 'OK', closest.lane);
+    } else {
+      this.triggerMiss(closest.lane);
+    }
+  }
+
   private hitEnemy(enemy: Enemy, judgement: TimingJudgementType, lane: Lane) {
     enemy.defeated = true;
     enemy.deathTime = performance.now();
@@ -199,7 +244,6 @@ export class GameEngine {
 
     if (judgement === 'PERFECT') {
       this.scoreState.perfectCount++;
-      this.freezeFrameMs = 45;
     } else if (judgement === 'GOOD') {
       this.scoreState.goodCount++;
     } else {
@@ -218,7 +262,7 @@ export class GameEngine {
 
     this.callbacks.onScoreUpdate({ ...this.scoreState });
     this.callbacks.onJudgement(judgement, this.scoreState.combo);
-    audioEngine.playHitSound(judgement);
+    audioEngine.playHitSound(judgement, enemy.band);
 
     // Moves progress from basic martial arts -> acrobatic -> superhuman -> god-tier finishers!
     if (judgement === 'PERFECT' || judgement === 'GOOD') {
@@ -298,7 +342,7 @@ export class GameEngine {
       // Signature weapon / armor piece
       {
         shapeType: 'blade',
-        size: enemy.enemyType === 'ronin' ? 32 : 18,
+        size: enemy.band === 'bass' ? 32 : 18,
         offsetY: -5,
       },
       // Cyber armor shards
@@ -432,11 +476,6 @@ export class GameEngine {
   public update(deltaTimeSec: number, canvasWidth: number) {
     if (!this.isRunning || !this.track) return;
 
-    if (this.freezeFrameMs > 0) {
-      this.freezeFrameMs -= deltaTimeSec * 1000;
-      return;
-    }
-
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
     const halfWidth = canvasWidth / 2;
@@ -454,7 +493,7 @@ export class GameEngine {
       enemy.x = hitX + (spawnX - hitX) * t;
 
       const bpm = this.track?.bpm || 120;
-      const strideRate = (bpm / 60) * Math.PI * 2 * (enemy.enemyType === 'speeder' ? 1.4 : 1.0);
+      const strideRate = (bpm / 60) * Math.PI * 2 * (enemy.band === 'high' && enemy.tier === 1 ? 1.4 : 1.0);
       enemy.animPhase += deltaTimeSec * strideRate;
 
       if (Math.abs(enemy.x) < halfWidth + 20) {

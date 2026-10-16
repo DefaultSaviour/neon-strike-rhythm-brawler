@@ -4,6 +4,12 @@
 
 export type Lane = 'left' | 'right';
 
+/** Acoustic frequency band a beat was detected in */
+export type FrequencyBand = 'sub' | 'bass' | 'high';
+
+/** 1 = lowest end of the band's Hz range, 3 = highest end */
+export type EnemyTier = 1 | 2 | 3;
+
 export type TimingJudgementType = 'PERFECT' | 'GOOD' | 'OK' | 'MISS';
 
 export interface FloatingJudgement {
@@ -22,6 +28,8 @@ export interface BeatNote {
   lane: Lane;
   enemyType: 'brawler' | 'speeder' | 'ronin';
   pitchCategory?: 'bass' | 'treble' | 'kick' | 'snare' | 'lead';
+  band?: FrequencyBand;
+  tier?: EnemyTier;
   color?: string;
 }
 
@@ -36,6 +44,7 @@ export interface Track {
   notes: BeatNote[];
   isCustom?: boolean;
   audioBuffer?: AudioBuffer;
+  audioUrl?: string;
 }
 
 export interface DebrisPiece {
@@ -68,6 +77,8 @@ export interface Enemy {
   color: string;
   enemyType: 'brawler' | 'speeder' | 'ronin';
   pitchCategory?: 'bass' | 'treble' | 'kick' | 'snare' | 'lead';
+  band: FrequencyBand;
+  tier: EnemyTier;
   defeated: boolean;
   deathTime?: number;
   animPhase: number;
@@ -156,4 +167,5 @@ export interface AudioSettings {
   latencyOffsetMs: number;
   scanlines: boolean;
   screenShake: 'none' | 'subtle' | 'normal';
+  oneButtonMode: boolean;
 }
