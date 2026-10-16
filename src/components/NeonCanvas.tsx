@@ -640,13 +640,13 @@ function drawFullSizedEnemies(
         ctx.globalAlpha = trailAlpha;
         ctx.strokeStyle = mainColor;
         ctx.lineWidth = 2.2;
-        ctx.strokeRect(tr.x - 12 * scale, -52 * scale, 24 * scale, 120 * scale);
+        ctx.strokeRect(tr.x - 12 * scale, (tr.y || 0) - 52 * scale, 24 * scale, 120 * scale);
         ctx.restore();
       }
     }
 
     ctx.save();
-    ctx.translate(posX, 0);
+    ctx.translate(posX, enemy.y || 0);
 
     // Anchor scaling so feet remain on the conveyor ground level (y = 68)
     ctx.translate(0, 68);
@@ -1204,7 +1204,33 @@ function drawPlayer(
   }
 
   ctx.save();
-  ctx.translate(centerX, groundY);
+  const isAirAttack = engine.isAttacking && engine.attackDirection === 'air';
+  const jumpProgress = isAirAttack
+    ? Math.sin(
+        Math.min(
+          1,
+          (performance.now() - engine.attackStartTime) / Math.max(1, engine.attackDuration)
+        ) * Math.PI
+      )
+    : 0;
+  const playerOffsetY = -jumpProgress * 70; // Leaps 70px skyward!
+  ctx.translate(centerX, groundY + playerOffsetY);
+
+  // Jump takeoff booster flames shooting downward
+  if (jumpProgress > 0.15) {
+    ctx.save();
+    ctx.strokeStyle = '#00f3ff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(pose.leftFoot.x, pose.leftFoot.y);
+    ctx.lineTo(pose.leftFoot.x + (Math.random() - 0.5) * 8, pose.leftFoot.y + 22 + Math.random() * 15);
+    ctx.moveTo(pose.rightFoot.x, pose.rightFoot.y);
+    ctx.lineTo(pose.rightFoot.x + (Math.random() - 0.5) * 8, pose.rightFoot.y + 22 + Math.random() * 15);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // 1. GOD-TIER RADIANT PLASMA WINGS (Combo 50+)
   if (combo >= 50) {

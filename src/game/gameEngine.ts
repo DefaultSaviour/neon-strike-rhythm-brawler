@@ -2,6 +2,7 @@ import {
   Track,
   Enemy,
   Lane,
+  AttackDirection,
   TimingJudgementType,
   FloatingJudgement,
   Particle,
@@ -29,7 +30,7 @@ export class GameEngine {
   public judgements: FloatingJudgement[] = [];
   public currentPose: SkeletonPose = { ...IDLE_POSE };
   public isAttacking: boolean = false;
-  public attackDirection: Lane = 'right';
+  public attackDirection: AttackDirection = 'right';
   public currentMoveIndex: number = 0;
   public attackStartTime: number = 0;
   public attackDuration: number = 180;
@@ -136,8 +137,8 @@ export class GameEngine {
         targetTime: note.time,
         spawnTime: Math.max(0, note.time - this.approachDuration),
         speed: 1.0,
-        x: note.lane === 'left' ? -999 : 999,
-        y: 0,
+        x: note.lane === 'left' ? -999 : note.lane === 'right' ? 999 : 0,
+        y: note.lane === 'air' ? -250 : 0,
         color,
         enemyType: note.enemyType,
         pitchCategory: note.pitchCategory,
@@ -146,6 +147,7 @@ export class GameEngine {
         defeated: false,
         animPhase: Math.random() * Math.PI * 2,
         trailHistory: [],
+        aerialOrigin: note.aerialOrigin,
       };
     });
 
@@ -205,7 +207,8 @@ export class GameEngine {
     const candidates = this.enemies.filter((e) => !e.defeated);
 
     if (candidates.length === 0) {
-      this.triggerMiss(this.attackDirection || 'left');
+      const fallbackLane: Lane = this.attackDirection === 'both' ? 'left' : (this.attackDirection || 'left');
+      this.triggerMiss(fallbackLane);
       return;
     }
 
@@ -215,12 +218,37 @@ export class GameEngine {
     const closest = candidates[0];
     const delta = Math.abs(closest.targetTime - effectiveTime);
 
-    if (delta <= 0.080) {
-      this.hitEnemy(closest, 'PERFECT', closest.lane);
-    } else if (delta <= 0.160) {
-      this.hitEnemy(closest, 'GOOD', closest.lane);
-    } else if (delta <= 0.250) {
-      this.hitEnemy(closest, 'OK', closest.lane);
+    if (delta <= 0.250) {
+      const judgement: TimingJudgementType = delta <= 0.080 ? 'PERFECT' : delta <= 0.160 ? 'GOOD' : 'OK';
+
+      // Hit primary nearest enemy
+      this.hitEnemy(closest, judgement, closest.lane);
+
+      // Hit any simultaneous overlapping chord notes arriving within 75ms (e.g. Ground + Air or Left + Right)
+      const simultaneous = candidates.filter(
+        (e) =>
+          !e.defeated &&
+          e !== closest &&
+          Math.abs(e.targetTime - closest.targetTime) <= 0.075 &&
+          Math.abs(e.targetTime - effectiveTime) <= 0.250
+      );
+
+      for (const extra of simultaneous) {
+        this.hitEnemy(extra, judgement, extra.lane);
+      }
+
+      if (simultaneous.length > 0) {
+        const hasAir = closest.lane === 'air' || simultaneous.some((e) => e.lane === 'air');
+        const hasGround = closest.lane !== 'air' || simultaneous.some((e) => e.lane !== 'air');
+        if (hasAir && hasGround) {
+          this.attackDirection = 'air';
+        } else if (
+          closest.lane !== 'air' &&
+          simultaneous.some((e) => e.lane !== 'air' && e.lane !== closest.lane)
+        ) {
+          this.attackDirection = 'both';
+        }
+      }
     } else {
       this.triggerMiss(closest.lane);
     }
@@ -276,12 +304,13 @@ export class GameEngine {
     this.attackDuration = currentMove.durationMs;
     this.lastAttackPose = getOrientedPose(currentMove.pose, lane);
 
-    const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
+    const targetX = lane === 'left' ? -this.hitLineOffset : lane === 'right' ? this.hitLineOffset : 0;
+    const targetY = lane === 'air' ? -55 : 0;
     this.judgements.push({
       id: this.nextJudgementId++,
       text: judgement,
       x: targetX,
-      y: -65 - Math.random() * 20,
+      y: targetY - 65 - Math.random() * 20,
       color: judgement === 'PERFECT' ? '#00f3ff' : judgement === 'GOOD' ? '#ff007f' : '#ffe600',
       createdAt: performance.now(),
       scale: judgement === 'PERFECT' ? 1.4 : judgement === 'GOOD' ? 1.2 : 1.0,
@@ -289,10 +318,10 @@ export class GameEngine {
     });
 
     // SPAWN EXPLODING CONSTITUENT GEOMETRIC SHAPES (Knocked harder with high combo!)
-    this.spawnEnemyDebrisExplosion(enemy, targetX, judgement);
+    this.spawnEnemyDebrisExplosion(enemy, targetX, judgement, targetY);
 
     // Spawn sparks and shockwave ring
-    this.spawnHitParticles(targetX, 0, lane, judgement, enemy.color);
+    this.spawnHitParticles(targetX, targetY, lane, judgement, enemy.color);
 
     const remaining = this.enemies.filter((e) => !e.defeated);
     if (remaining.length === 0) {
@@ -301,8 +330,14 @@ export class GameEngine {
   }
 
   // Explode enemy into its basic geometric vector pieces (Knocked harder with higher combos!)
-  private spawnEnemyDebrisExplosion(enemy: Enemy, hitX: number, judgement: TimingJudgementType) {
-    const dirSign = enemy.lane === 'left' ? -1 : 1;
+  private spawnEnemyDebrisExplosion(
+    enemy: Enemy,
+    hitX: number,
+    judgement: TimingJudgementType,
+    hitY: number = 0
+  ) {
+    const dirSign =
+      enemy.lane === 'left' ? -1 : enemy.lane === 'right' ? 1 : Math.random() > 0.5 ? 1 : -1;
     const power = judgement === 'PERFECT' ? 1.4 : judgement === 'GOOD' ? 1.1 : 0.85;
 
     // Explosive knockback speed and fragment count scales with combo count
@@ -388,7 +423,7 @@ export class GameEngine {
       this.debris.push({
         id: this.nextDebrisId++,
         x: hitX + (Math.random() - 0.5) * 20,
-        y: p.offsetY,
+        y: hitY + p.offsetY,
         vx,
         vy,
         angle: Math.random() * Math.PI * 2,
@@ -413,12 +448,13 @@ export class GameEngine {
     this.callbacks.onJudgement('MISS', 0);
     audioEngine.playSwingSound();
 
-    const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
+    const targetX = lane === 'left' ? -this.hitLineOffset : lane === 'right' ? this.hitLineOffset : 0;
+    const targetY = lane === 'air' ? -95 : -55;
     this.judgements.push({
       id: this.nextJudgementId++,
       text: 'MISS',
       x: targetX,
-      y: -55,
+      y: targetY,
       color: '#ff2a5f',
       createdAt: performance.now(),
       scale: 1.0,
@@ -487,10 +523,22 @@ export class GameEngine {
       const timeRemaining = enemy.targetTime - effectiveTime;
       const t = timeRemaining / this.approachDuration;
 
-      const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      const spawnX = enemy.lane === 'left' ? -halfWidth - 80 : halfWidth + 80;
-
-      enemy.x = hitX + (spawnX - hitX) * t;
+      if (enemy.lane === 'air') {
+        const originX =
+          enemy.aerialOrigin === 'left'
+            ? -halfWidth * 0.65
+            : enemy.aerialOrigin === 'right'
+            ? halfWidth * 0.65
+            : 0;
+        enemy.x = originX * t;
+        // Swoop down from sky (-240px) to player head level (-55px) with graceful swoop arc
+        enemy.y = -55 - 190 * t - 30 * Math.sin(Math.max(0, Math.min(1, t)) * Math.PI);
+      } else {
+        const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
+        const spawnX = enemy.lane === 'left' ? -halfWidth - 80 : halfWidth + 80;
+        enemy.x = hitX + (spawnX - hitX) * t;
+        enemy.y = 0;
+      }
 
       const bpm = this.track?.bpm || 120;
       const strideRate = (bpm / 60) * Math.PI * 2 * (enemy.band === 'high' && enemy.tier === 1 ? 1.4 : 1.0);

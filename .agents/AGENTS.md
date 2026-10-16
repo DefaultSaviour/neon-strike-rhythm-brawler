@@ -62,3 +62,12 @@
   - 1-Button auto-targeting & 2-Button combat modes in `RhythmCombatManager.cs`.
   - All 5 *Eargasm* tracks by defaultsaviour compiled into WebGL build.
   - Exported WebGL build to [`dist_unity_webgl/`](file:///c:/Users/wee_c/.gemini/antigravity/neon-strike-rhythm-brawler/dist_unity_webgl) and served locally on `http://localhost:3000/`.
+- [x] **Vertical Jump / Air Strike Axis & Multi-Input Chord Overlaps**:
+  - Highs (~800–6500 Hz: Speeder, Wraith, Seraph) now swoop in from the upper sky as aerial dive-bombing threats (`lane: 'air'`).
+  - Sub / Kick (~36–145 Hz) and Bassline (~105–300 Hz) remain grounded on the conveyor lines (`lane: 'left'` & `'right'`).
+  - Added vertical Jump / Air Strike input: `[↑] / [W]` triggers skyward soaring Dragon Uppercut / Mid-Air Flash Kick with vertical rocket thruster flames.
+  - Concurrent chord overlaps:
+    - Simultaneous Ground + Air chords (`[W+A]` or `[W+D]`): Leaping diagonal air slash + ground shockwave clearing air and ground threats simultaneously.
+    - Simultaneous Left + Right chords (`[A+D]`): Double-sided split cleave clearing both ground sides.
+  - One-Button mode automatically clears all overlapping ground + air notes in a single unified combo strike.
+  - Added center Jump / Air Strike touch zone on mobile HUD.

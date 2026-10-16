@@ -1048,8 +1048,11 @@ class AudioEngine {
     }
 
     highCandidates.sort((a, b) => b.val - a.val);
+    const addedHighTimes: number[] = [];
     for (const hc of highCandidates) {
-      if (lockedBeats.every((b) => Math.abs(hc.time - b.time) >= hc.minDist)) {
+      // Highs only need distance spacing from other Highs (allowing them to overlap with ground kicks/bass!)
+      if (addedHighTimes.every((ht) => Math.abs(hc.time - ht) >= 0.26)) {
+        addedHighTimes.push(hc.time);
         lockedBeats.push({
           frame: hc.frame,
           time: hc.time,
@@ -1071,7 +1074,8 @@ class AudioEngine {
     // 6. Acoustic & Phrase-Aware Lane Choreography
     const notes: BeatNote[] = [];
     let sameLaneStreak = 0;
-    let lastLane: Lane = 'right';
+    let lastGroundLane: 'left' | 'right' = 'right';
+    let aerialCount = 0;
 
     for (let idx = 0; idx < lockedBeats.length; idx++) {
       const b = lockedBeats[idx];
@@ -1080,16 +1084,23 @@ class AudioEngine {
       let lane: Lane = 'left';
       let enemyType: 'brawler' | 'speeder' | 'ronin' = 'brawler';
       let pitchCategory: BeatNote['pitchCategory'] = 'kick';
+      let aerialOrigin: 'left' | 'right' | 'center' | undefined = undefined;
+      const band: FrequencyBand = b.kind === 'kick' ? 'sub' : b.kind === 'bass' ? 'bass' : 'high';
 
-      if (b.source === 'treble_melody') {
-        lane = 'right';
-        enemyType = idx % 2 === 0 ? 'speeder' : 'ronin';
-        pitchCategory = 'treble';
+      if (band === 'high' || b.source === 'treble_melody') {
+        // Highs swoop in from the air (Jump / Air Strike threats!)
+        lane = 'air';
+        enemyType = 'speeder';
+        pitchCategory = 'lead';
+        aerialOrigin = aerialCount++ % 2 === 0 ? 'left' : 'right';
       } else if (b.source === 'sub_bass' || dtPrev < 0.26) {
-        lane = lastLane === 'left' ? 'right' : 'left';
+        // Rolling bassline syncopation
+        lane = lastGroundLane === 'left' ? 'right' : 'left';
         enemyType = lane === 'right' ? 'speeder' : 'brawler';
         pitchCategory = 'bass';
+        lastGroundLane = lane;
       } else {
+        // Ground Sub/Kick downbeat
         const prevH = idx > 0 ? lockedBeats[idx - 1].highN : b.highN;
         const nextH = idx + 1 < lockedBeats.length ? lockedBeats[idx + 1].highN : b.highN;
         const hasBackbeatSnap = b.highN > (prevH + nextH) * 0.55 && b.highN > 0.28;
@@ -1097,13 +1108,13 @@ class AudioEngine {
 
         lane = hasBackbeatSnap || isUpperBassRiff ? 'right' : 'left';
 
-        if (lane === lastLane) {
+        if (lane === lastGroundLane) {
           sameLaneStreak++;
           if (
             sameLaneStreak >= 2 &&
             (b.highN > 0.2 || b.bassN > b.kickN * 0.85 || sameLaneStreak >= 3)
           ) {
-            lane = lastLane === 'left' ? 'right' : 'left';
+            lane = lastGroundLane === 'left' ? 'right' : 'left';
             sameLaneStreak = 0;
           }
         } else {
@@ -1117,21 +1128,17 @@ class AudioEngine {
           enemyType = hasBackbeatSnap || b.kind === 'kick' ? 'ronin' : 'speeder';
           pitchCategory = hasBackbeatSnap ? 'snare' : 'bass';
         }
-      }
 
-      if (lane === lastLane) {
-        sameLaneStreak++;
-      } else {
-        sameLaneStreak = 1;
+        lastGroundLane = lane;
       }
-      lastLane = lane;
 
       notes.push({
         time: Number(b.time.toFixed(3)),
         lane,
         enemyType,
         pitchCategory,
-        band: b.kind === 'kick' ? 'sub' : b.kind === 'bass' ? 'bass' : 'high',
+        band,
+        aerialOrigin,
       });
     }
 

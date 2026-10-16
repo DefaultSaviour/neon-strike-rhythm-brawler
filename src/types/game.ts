@@ -2,7 +2,9 @@
  * Game types and state definitions for Neon Strike: Rhythm Brawler
  */
 
-export type Lane = 'left' | 'right';
+export type Lane = 'left' | 'right' | 'air';
+
+export type AttackDirection = 'left' | 'right' | 'air' | 'both';
 
 /** Acoustic frequency band a beat was detected in */
 export type FrequencyBand = 'sub' | 'bass' | 'high';
@@ -31,6 +33,7 @@ export interface BeatNote {
   band?: FrequencyBand;
   tier?: EnemyTier;
   color?: string;
+  aerialOrigin?: 'left' | 'right' | 'center';
 }
 
 export interface Track {
@@ -83,6 +86,7 @@ export interface Enemy {
   deathTime?: number;
   animPhase: number;
   trailHistory: Array<{ x: number; y: number; alpha: number }>;
+  aerialOrigin?: 'left' | 'right' | 'center';
 }
 
 export interface Particle {

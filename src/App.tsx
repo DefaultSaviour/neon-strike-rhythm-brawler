@@ -190,19 +190,24 @@ export default function App() {
           }
         }
       } else {
-        // STANDARD 2-BUTTON COMBAT MODE
+        // STANDARD 3-AXIS COMBAT MODE (Left, Right, Jump/Air)
         if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ') {
           e.preventDefault();
           handleStrike('left');
         } else if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'KeyE') {
           e.preventDefault();
           handleStrike('right');
-        } else if (e.code === 'Space' || e.code === 'Escape' || e.code === 'KeyP') {
+        } else if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyK' || e.code === 'Space') {
+          e.preventDefault();
+          if (gameStatus === 'PLAYING') {
+            handleStrike('air');
+          } else if (gameStatus === 'MENU') {
+            handleStartGame();
+          }
+        } else if (e.code === 'Escape' || e.code === 'KeyP') {
           e.preventDefault();
           if (gameStatus === 'PLAYING' || gameStatus === 'PAUSED') {
             handleTogglePause();
-          } else if (gameStatus === 'MENU') {
-            handleStartGame();
           }
         }
       }
@@ -354,10 +359,10 @@ export default function App() {
                 <div className="p-2 rounded bg-cyan-950/20 border border-cyan-500/30">
                   <div className="text-cyan-400 font-bold flex items-center gap-1.5 mb-1">
                     <span className="w-2 h-2 rounded-full bg-[#00e5ff] shadow-[0_0_6px_#00e5ff]" />
-                    <span>Highs / Lead</span>
+                    <span>Highs (Sky Dive)</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 leading-tight">
-                    800–6500 Hz
+                  <div className="text-[10px] text-cyan-300 font-mono leading-tight">
+                    Jump: [↑] / [W]
                   </div>
                   <div className="text-[10px] text-cyan-200/80 mt-1 space-y-0.5">
                     <div>1. Speeder <span className="text-slate-500">(low)</span></div>
@@ -379,14 +384,14 @@ export default function App() {
           </div>
 
           {/* Controls Instruction Bar */}
-          <div className="w-full max-w-2xl bg-slate-950/80 border border-slate-800/80 rounded-lg p-3 flex flex-wrap items-center justify-around gap-4 text-xs font-mono">
+          <div className="w-full max-w-2xl bg-slate-950/80 border border-slate-800/80 rounded-lg p-3 flex flex-wrap items-center justify-around gap-3 text-xs font-mono">
             {audioSettings.oneButtonMode ? (
               <>
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded bg-amber-950/80 border border-amber-400 text-amber-300 font-bold">
                     [SPACE] · [ANY KEY] · [TAP]
                   </span>
-                  <span className="text-amber-200">One-Button Strike (Auto-Targets)</span>
+                  <span className="text-amber-200">One-Button Strike (Auto-Targets Ground & Air)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 font-bold">
@@ -403,23 +408,35 @@ export default function App() {
               </>
             ) : (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-cyan-400 font-bold">
-                    [←] or [A]
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-400 font-bold">
+                    [←] / [A]
                   </span>
-                  <span className="text-slate-400">Strike Left</span>
+                  <span className="text-slate-400">Left</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-pink-400 font-bold">
-                    [→] or [D]
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400 text-cyan-300 font-bold">
+                    [↑] / [W]
                   </span>
-                  <span className="text-slate-400">Strike Right</span>
+                  <span className="text-cyan-200">Jump / Air</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 font-bold">
-                    [R]
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-pink-400 font-bold">
+                    [→] / [D]
                   </span>
-                  <span className="text-slate-400">Restart</span>
+                  <span className="text-slate-400">Right</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-400/60 text-amber-300 font-bold">
+                    [W+A] · [W+D] · [A+D]
+                  </span>
+                  <span className="text-amber-200/90">Dual Chords</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-bold">
+                    [ESC]
+                  </span>
+                  <span className="text-slate-500">Pause</span>
                 </div>
               </>
             )}
