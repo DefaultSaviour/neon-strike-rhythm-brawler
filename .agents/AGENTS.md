@@ -62,3 +62,10 @@
   - 1-Button auto-targeting & 2-Button combat modes in `RhythmCombatManager.cs`.
   - All 5 *Eargasm* tracks by defaultsaviour compiled into WebGL build.
   - Exported WebGL build to [`dist_unity_webgl/`](file:///c:/Users/wee_c/.gemini/antigravity/neon-strike-rhythm-brawler/dist_unity_webgl) and served locally on `http://localhost:3000/`.
+- [x] **Combat Feel, Visual Scaling & Precision Music Sync Upgrades**:
+  - **Dynamic Screen Scaling (`src/game/layout.ts`)**: Arena and fighter dimensions scale responsively to viewport so combat fills ~1/3 of the screen height instead of a thin strip.
+  - **Precision Audio Clock (`src/audio/songClock.ts`)**: Sample-accurate clock subtracting audio hardware output latency. Eliminated kick/bass ~15ms charting offset.
+  - **Input Timestamp Precision**: Inputs judged strictly by browser event hardware timestamp, ignoring OS key auto-repeat. Fixed enemy breach timing to match OK window.
+  - **Combat Feel & Animation**: Snap/hold/recover strikes with lunge, hit-stop, camera punch, beat-locked idle bounce & footsteps, enemy lean-in, and white hit-flash. Queued enemies dimmed; timing rings with EARLY/LATE labels.
+  - **Rigid-Body Debris Physics (`src/game/debrisPhysics.ts`)**: Anatomy-based skeletal rigid bodies with bounce, spin, friction, conveyor belt drag, and abyss pit physics.
+  - **54 Unit Tests**: Comprehensive Vitest test suite covering timing, clock, beat grid, detection accuracy, layout, motion, and debris physics.
