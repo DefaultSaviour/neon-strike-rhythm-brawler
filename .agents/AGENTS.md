@@ -75,3 +75,8 @@
   - **In-Key Musical Hit Tone (`src/audio/hitTone.ts`)**: Pitch-analyzed notes trigger a short synth pluck shifted into a bright octave, staying musically in key. Hit feedback modes: `tone + boost`, `tone`, `boost`, `off`.
   - **Atmospheric Synthwave Depth Backdrop**: Elevated horizon, perspective ground grid, distant skyline silhouettes, dimmed sun, and haze.
   - **73 Unit Tests**: Vitest suite expanded to 73 tests covering hit tones, enemy motion cycles, and layout horizon.
+- [x] **Front-Facing Hands-Up Pose & Beat Pump**:
+  - **Front-On Hands-Up Stance (`src/game/enemyMotion.ts`)**: Hands-up motion style now directly faces the camera with feet apart and arms flanking the head.
+  - **On-Beat Body Dip & Pump**: Rhythmic dipping on every beat where knees and elbows bend outward in sync with the rhythm, straightening between beats.
+  - **Front-Facing Visual Accessories (`src/components/enemyArt.ts`)**: Center-aligned visors, mirrored horns, pauldrons, and energy wings; hides back-mounted capes/jets for clean silhouettes.
+  - **75 Unit Tests**: Vitest suite expanded to 75 tests covering front-facing pose symmetry and on-beat limb bending.
