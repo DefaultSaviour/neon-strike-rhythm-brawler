@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { GameScoreState, Track, HighScoreRecord } from '../types/game';
+import type { DeathReport } from '../game/timing';
 import { RotateCcw, Music, Trophy, Flame, Target } from 'lucide-react';
 
 interface GameOverModalProps {
@@ -16,6 +17,8 @@ interface GameOverModalProps {
   /** Latency offset suggested from this run's hits, or null if not enough data */
   suggestedLatencyOffsetMs?: number | null;
   onApplyLatencyOffset?: (offsetMs: number) => void;
+  /** Why the run ended, when an enemy got through */
+  deathReport?: DeathReport | null;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -29,6 +32,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   currentLatencyOffsetMs = 0,
   suggestedLatencyOffsetMs = null,
   onApplyLatencyOffset,
+  deathReport = null,
 }) => {
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
   // Freeze the suggestion when the screen opens: once applied, the setting
@@ -109,10 +113,16 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             {cleared ? 'Track Cleared' : 'Defeated'}
           </div>
           <div className="text-xs text-slate-400 mt-1">
-            {cleared
-              ? 'Flawless rhythm execution'
-              : 'An enemy breached your strike line! Restart from beginning.'}
+            {cleared ? 'Flawless rhythm execution' : 'An enemy breached your strike line!'}
           </div>
+          {!cleared && deathReport && (
+            <div className="mt-3 px-3 py-2 rounded-lg bg-red-950/40 border border-red-500/40 text-sm text-slate-200">
+              <div className="font-bold text-red-300">
+                Killed by a {deathReport.enemyName} on the {deathReport.lane.toUpperCase()}.
+              </div>
+              <div className="mt-0.5">{deathReport.reason}</div>
+            </div>
+          )}
         </div>
 
         {/* Grade Badge */}

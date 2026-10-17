@@ -78,3 +78,68 @@ export function suggestLatencyOffsetMs(
   const rounded = Math.round(suggested / 5) * 5;
   return Math.max(-300, Math.min(300, rounded));
 }
+
+/** One button press the player made (song time), and what it did. */
+export interface PressRecord {
+  time: number;
+  /** Lane pressed (one-button mode: the lane it struck toward) */
+  lane: Lane;
+  /** Name of the enemy it hit, or undefined if it was a MISS */
+  hitEnemyName?: string;
+}
+
+export interface DeathReport {
+  enemyName: string;
+  lane: Lane;
+  /** One plain-English sentence on what went wrong */
+  reason: string;
+}
+
+/** How far before/after an enemy's beat we look for the press meant for it. */
+const DEATH_LOOKBACK = 0.6;
+
+const sideName = (lane: Lane) => lane.toUpperCase();
+const ms = (sec: number) => `${Math.round(Math.abs(sec) * 1000)} ms`;
+
+/**
+ * Explain why an enemy got through, from the player's recent presses.
+ * Checks, in order: a press on the right side that was too early/late, a
+ * press on the right side that hit a different enemy first, a press on the
+ * wrong side, and finally no press at all.
+ */
+export function explainDeath(
+  enemy: { name: string; lane: Lane; targetTime: number },
+  presses: readonly PressRecord[],
+  oneButtonMode = false
+): DeathReport {
+  const near = presses.filter(
+    (p) => p.time >= enemy.targetTime - DEATH_LOOKBACK && p.time <= enemy.targetTime + BREACH_LATE_SEC
+  );
+  const closest = (list: PressRecord[]) =>
+    list.reduce<PressRecord | null>(
+      (best, p) => (!best || Math.abs(p.time - enemy.targetTime) < Math.abs(best.time - enemy.targetTime) ? p : best),
+      null
+    );
+  const base = { enemyName: enemy.name, lane: enemy.lane };
+
+  const sameSide = near.filter((p) => oneButtonMode || p.lane === enemy.lane);
+  const missed = closest(sameSide.filter((p) => !p.hitEnemyName));
+  if (missed) {
+    const off = missed.time - enemy.targetTime;
+    return { ...base, reason: `You pressed ${ms(off)} too ${off < 0 ? 'early' : 'late'}.` };
+  }
+
+  const usedOnOther = closest(sameSide.filter((p) => p.hitEnemyName));
+  if (usedOnOther) {
+    return { ...base, reason: `Your press hit the ${usedOnOther.hitEnemyName} just ahead of it, so this one got through.` };
+  }
+
+  const wrongSide = closest(near.filter((p) => p.lane !== enemy.lane && !p.hitEnemyName));
+  if (wrongSide) {
+    const off = wrongSide.time - enemy.targetTime;
+    const when = Math.abs(off) < 0.005 ? 'right on time' : `${ms(off)} ${off < 0 ? 'before' : 'after'} it arrived`;
+    return { ...base, reason: `You pressed ${sideName(wrongSide.lane)} ${when}. Wrong side.` };
+  }
+
+  return { ...base, reason: "You didn't press for it." };
+}

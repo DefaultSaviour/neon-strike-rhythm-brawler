@@ -13,7 +13,7 @@ import {
 import { ATTACK_MOVES, IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
-import { BREACH_LATE_SEC, judgeOffset, pickTarget, suggestLatencyOffsetMs } from './timing';
+import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
 import { DebrisPiece, DebrisWorld, shatterEnemy, stepDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
@@ -24,7 +24,8 @@ import { buildForBand, DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, enemyPose } fr
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
-  onGameOver: (score: GameScoreState, cleared: boolean) => void;
+  /** `death` explains what went wrong when the run ended because an enemy got through. */
+  onGameOver: (score: GameScoreState, cleared: boolean, death?: DeathReport) => void;
   onJudgement: (judgement: TimingJudgementType, combo: number) => void;
 }
 
@@ -64,6 +65,8 @@ export class GameEngine {
   public approachDuration: number = 1.35;
   /** Press-minus-beat timing error (s) of every successful hit this song */
   public hitOffsets: number[] = [];
+  /** The player's last few presses, used to explain a death */
+  private recentPresses: PressRecord[] = [];
 
   public scoreState: GameScoreState = {
     score: 0,
@@ -143,6 +146,7 @@ export class GameEngine {
     this.debris = [];
     this.judgements = [];
     this.hitOffsets = [];
+    this.recentPresses = [];
     this.currentMoveIndex = 0;
     this.isAttacking = false;
     this.strikeActive = false;
@@ -250,6 +254,7 @@ export class GameEngine {
 
     const time = this.pressTime(eventTimeStamp);
     const target = pickTarget(this.enemies, time, lane);
+    this.recordPress(time, lane, target);
     if (!target) {
       this.triggerMiss(lane);
       return;
@@ -263,11 +268,22 @@ export class GameEngine {
 
     const time = this.pressTime(eventTimeStamp);
     const target = pickTarget(this.enemies, time, null);
+    this.recordPress(time, target?.lane ?? this.attackDirection ?? 'left', target);
     if (!target) {
       this.triggerMiss(this.attackDirection || 'left');
       return;
     }
     this.hitEnemy(target, time - target.targetTime, target.lane);
+  }
+
+  /** Remember a press (and what it hit) for a few seconds, to explain a death. */
+  private recordPress(time: number, lane: Lane, target: Enemy | null) {
+    this.recentPresses.push({
+      time,
+      lane,
+      hitEnemyName: target ? getEnemyStyle(target.band, target.tier).name : undefined,
+    });
+    this.recentPresses = this.recentPresses.filter((p) => p.time > time - 3);
   }
 
   /** Latency offset (ms) suggested from this song's hits, or null if there weren't enough. */
@@ -533,7 +549,7 @@ export class GameEngine {
       enemy.animPhase = beatPos * speed + (enemy.stepOffset ?? 0);
 
       if (timeRemaining < -BREACH_LATE_SEC) {
-        this.triggerPlayerDeath();
+        this.triggerPlayerDeath(enemy);
         return;
       }
     }
@@ -637,8 +653,13 @@ export class GameEngine {
     }
   }
 
-  private triggerPlayerDeath() {
+  private triggerPlayerDeath(killer: Enemy) {
     this.isRunning = false;
+    const report = explainDeath(
+      { name: getEnemyStyle(killer.band, killer.tier).name, lane: killer.lane, targetTime: killer.targetTime },
+      this.recentPresses,
+      this.settings.oneButtonMode
+    );
     audioEngine.stop();
     audioEngine.playDeathSound();
     this.screenShake = 20;
@@ -661,7 +682,7 @@ export class GameEngine {
     }
 
     setTimeout(() => {
-      this.callbacks.onGameOver(this.scoreState, false);
+      this.callbacks.onGameOver(this.scoreState, false, report);
     }, 700);
   }
 

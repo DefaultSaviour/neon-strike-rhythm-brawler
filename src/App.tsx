@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { GameEngine } from './game/gameEngine';
+import type { DeathReport } from './game/timing';
 import { Track, GameStatus, GameScoreState, HighScoreRecord, Lane, AudioSettings } from './types/game';
 import { PRELOADED_TRACKS, audioEngine } from './audio/audioEngine';
 import { audioStorage } from './utils/audioStorage';
@@ -27,6 +28,7 @@ export default function App() {
   const [highScores, setHighScores] = useState<Record<string, HighScoreRecord>>({});
   const [showTrackSelect, setShowTrackSelect] = useState(false);
   const [clearedOutcome, setClearedOutcome] = useState(false);
+  const [deathReport, setDeathReport] = useState<DeathReport | null>(null);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>({
     volume: 0.8,
     sfxVolume: 0.9,
@@ -40,7 +42,8 @@ export default function App() {
 
   const callbacksRef = useRef({
     onScoreUpdate: (score: GameScoreState) => setScoreState(score),
-    onGameOver: (score: GameScoreState, cleared: boolean) => {
+    onGameOver: (score: GameScoreState, cleared: boolean, death?: DeathReport) => {
+      setDeathReport(death ?? null);
       setScoreState(score);
       setClearedOutcome(cleared);
       setGameStatus(cleared ? 'CLEARED' : 'GAME_OVER');
@@ -53,7 +56,7 @@ export default function App() {
   const engine = useMemo(() => {
     return new GameEngine({
       onScoreUpdate: (s) => callbacksRef.current.onScoreUpdate(s),
-      onGameOver: (s, c) => callbacksRef.current.onGameOver(s, c),
+      onGameOver: (s, c, d) => callbacksRef.current.onGameOver(s, c, d),
       onJudgement: (j, c) => callbacksRef.current.onJudgement(j, c),
     });
   }, []);
@@ -489,6 +492,7 @@ export default function App() {
       {(gameStatus === 'GAME_OVER' || gameStatus === 'CLEARED') && (
         <GameOverModal
           cleared={clearedOutcome}
+          deathReport={deathReport}
           track={selectedTrack}
           scoreState={scoreState}
           highScoreRecord={engine.getHighScore(selectedTrack.id)}

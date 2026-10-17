@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '../audio/audioEngine';
 import { GameEngine } from './gameEngine';
 import { BeatNote, TimingJudgementType, Track } from '../types/game';
+import type { DeathReport } from './timing';
 
 /**
  * Drives the real GameEngine with a fake song clock, pressing keys at exact
@@ -18,9 +19,13 @@ function makeTrack(notes: Array<[number, 'left' | 'right']>): Track {
 async function play(notes: Array<[number, 'left' | 'right']>) {
   const judgements: TimingJudgementType[] = [];
   let gameOver = false;
+  let death: DeathReport | undefined;
   const engine = new GameEngine({
     onScoreUpdate: () => {},
-    onGameOver: () => (gameOver = true),
+    onGameOver: (_s, _c, d) => {
+      gameOver = true;
+      death = d;
+    },
     onJudgement: (j) => judgements.push(j),
   });
   engine.settings.latencyOffsetMs = 0;
@@ -36,7 +41,7 @@ async function play(notes: Array<[number, 'left' | 'right']>) {
     advanceTo(t);
     engine.handleInput(lane);
   };
-  return { engine, judgements, press, advanceTo, isOver: () => gameOver };
+  return { engine, judgements, press, advanceTo, isOver: () => gameOver, death: () => death };
 }
 
 beforeEach(() => {
@@ -101,5 +106,34 @@ describe('presses on the beat always count', () => {
     const g = await play([[2, 'left']]);
     g.press(2, 'right');
     expect(g.judgements).toEqual(['MISS']);
+  });
+});
+
+describe('when an enemy gets through, the game says why', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('names the enemy and how early the press was', async () => {
+    const g = await play([[3, 'right']]);
+    g.press(2.788, 'right'); // 212ms early: outside the window, so a MISS
+    g.advanceTo(3.3); // enemy breaks through
+    vi.runAllTimers();
+    expect(g.isOver()).toBe(true);
+    expect(g.death()).toEqual({ enemyName: 'Breaker', lane: 'right', reason: 'You pressed 212 ms too early.' });
+  });
+
+  it('spots a press on the wrong side', async () => {
+    const g = await play([[3, 'left']]);
+    g.press(3.0, 'right');
+    g.advanceTo(3.3);
+    vi.runAllTimers();
+    expect(g.death()?.reason).toMatch(/You pressed RIGHT .* Wrong side\./);
+  });
+
+  it('says when there was no press at all', async () => {
+    const g = await play([[3, 'left']]);
+    g.advanceTo(3.3);
+    vi.runAllTimers();
+    expect(g.death()?.reason).toBe("You didn't press for it.");
   });
 });
