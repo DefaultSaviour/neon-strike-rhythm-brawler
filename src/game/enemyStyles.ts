@@ -8,6 +8,8 @@ export interface EnemyStyle {
   accent: string;
   /** Render scale relative to the player */
   scale: number;
+  /** Limb thickness multiplier: heavies are chunky, highs are slim */
+  limbScale: number;
 }
 
 /**
@@ -21,19 +23,19 @@ export interface EnemyStyle {
  */
 export const ENEMY_STYLES: Record<FrequencyBand, Record<EnemyTier, EnemyStyle>> = {
   sub: {
-    1: { name: 'Titan', color: '#ff1744', accent: '#ff8a80', scale: 1.15 },
-    2: { name: 'Breaker', color: '#ff3d5a', accent: '#ffd0d8', scale: 1.0 },
-    3: { name: 'Rammer', color: '#ff6a2b', accent: '#ffd180', scale: 0.96 },
+    1: { name: 'Titan', color: '#ff1744', accent: '#ff8a80', scale: 1.15, limbScale: 1.3 },
+    2: { name: 'Breaker', color: '#ff3d5a', accent: '#ffd0d8', scale: 1.0, limbScale: 1.2 },
+    3: { name: 'Rammer', color: '#ff6a2b', accent: '#ffd180', scale: 0.96, limbScale: 1.2 },
   },
   bass: {
-    1: { name: 'Warlord', color: '#9d4dff', accent: '#e1c4ff', scale: 1.08 },
-    2: { name: 'Ronin', color: '#d84dff', accent: '#ffe600', scale: 1.0 },
-    3: { name: 'Acid Dancer', color: '#ff4fd8', accent: '#b6ff3d', scale: 0.95 },
+    1: { name: 'Warlord', color: '#9d4dff', accent: '#e1c4ff', scale: 1.08, limbScale: 1.1 },
+    2: { name: 'Ronin', color: '#d84dff', accent: '#ffe600', scale: 1.0, limbScale: 1.0 },
+    3: { name: 'Acid Dancer', color: '#ff4fd8', accent: '#b6ff3d', scale: 0.95, limbScale: 0.95 },
   },
   high: {
-    1: { name: 'Speeder', color: '#00e5ff', accent: '#ffffff', scale: 0.98 },
-    2: { name: 'Wraith', color: '#3dffb0', accent: '#d0fff0', scale: 1.0 },
-    3: { name: 'Seraph', color: '#c8f8ff', accent: '#7df9ff', scale: 1.0 },
+    1: { name: 'Speeder', color: '#00e5ff', accent: '#ffffff', scale: 0.98, limbScale: 0.9 },
+    2: { name: 'Wraith', color: '#3dffb0', accent: '#d0fff0', scale: 1.0, limbScale: 0.9 },
+    3: { name: 'Seraph', color: '#c8f8ff', accent: '#7df9ff', scale: 1.0, limbScale: 0.9 },
   },
 };
 

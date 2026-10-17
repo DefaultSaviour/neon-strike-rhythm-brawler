@@ -10,6 +10,7 @@ import { HIT_WINDOWS } from '../game/timing';
 import { Enemy } from '../types/game';
 import { buildForBand, enemyPose } from '../game/enemyMotion';
 import { drawEnemyArt } from './enemyArt';
+import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
 interface NeonCanvasProps {
   engine: GameEngine;
@@ -552,50 +553,31 @@ function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     const presence = 0.4 + 0.6 * p.heat;
     ctx.globalAlpha = Math.max(0, p.alpha) * presence;
 
-    // Fresh pieces glow white-hot and cool down to the enemy's colour.
-    const color = heatColor(p.color, p.heat * 0.85);
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 8 + p.heat * 14;
+    // Same solid-neon look as the bodies they came from. Fresh pieces glow
+    // white-hot and cool down to the enemy's colour.
+    const outline = heatColor(p.color, p.heat * 0.85);
+    const glow = 8 + p.heat * 14;
+    const fill = bodyFill(p.color);
 
     if (p.shape === 'circle') {
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
-      ctx.stroke();
+      neonHead(ctx, { x: 0, y: 0 }, p.radius, { color: outline, glow });
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(p.radius * 0.1, -1.5, p.radius * 0.7, 2.5); // visor
+      ctx.fillRect(p.radius * 0.1, -1.5, p.radius * 0.7, 3); // visor
     } else if (p.shape === 'segment') {
-      ctx.lineWidth = p.radius * 2;
-      ctx.beginPath();
-      ctx.moveTo(-p.halfLength, 0);
-      ctx.lineTo(p.halfLength, 0);
-      ctx.stroke();
-      // Bright core, plus glowing cut ends while hot
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = Math.max(0.6, p.radius * 0.6);
-      ctx.stroke();
+      neonLimb(ctx, { x: -p.halfLength, y: 0 }, { x: p.halfLength, y: 0 }, p.radius * 2, outline, fill, glow);
       if (p.heat > 0.05) {
+        // Freshly cut ends glow
         ctx.fillStyle = colorWithAlpha('#fff6c0', p.heat);
+        ctx.shadowColor = '#fff6c0';
+        ctx.shadowBlur = 10 * p.heat;
         ctx.beginPath();
-        ctx.arc(-p.halfLength, 0, p.radius * 1.4, 0, Math.PI * 2);
-        ctx.arc(p.halfLength, 0, p.radius * 1.4, 0, Math.PI * 2);
+        ctx.arc(-p.halfLength, 0, p.radius * 1.05, 0, Math.PI * 2);
+        ctx.arc(p.halfLength, 0, p.radius * 1.05, 0, Math.PI * 2);
         ctx.fill();
       }
     } else {
-      const s = p.halfLength;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(-s, -s * 0.5);
-      ctx.lineTo(s, 0);
-      ctx.lineTo(-s * 0.5, s);
-      ctx.closePath();
-      ctx.globalAlpha = Math.max(0, p.alpha) * presence * 0.35;
-      ctx.fill();
-      ctx.globalAlpha = Math.max(0, p.alpha) * presence;
-      ctx.stroke();
+      const sz = p.halfLength;
+      neonShape(ctx, [{ x: -sz, y: -sz * 0.5 }, { x: sz, y: 0 }, { x: -sz * 0.5, y: sz }], outline, glow);
     }
 
     ctx.restore();
@@ -668,20 +650,6 @@ function drawEnemyFigure(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: Ga
     // Wind-up: enemies lean in over the last moments before their beat.
     const timeLeft = enemy.targetTime - engine.songTime;
     const lean = opts.flash ? 0 : dir * 0.14 * smoothstep(0.32, 0, timeLeft);
-
-    // Cyber ghost trail
-    if (!opts.flash && enemy.trailHistory.length > 0) {
-      for (let t = 0; t < enemy.trailHistory.length; t++) {
-        const tr = enemy.trailHistory[t];
-        const trailAlpha = ((t + 1) / enemy.trailHistory.length) * 0.24;
-        ctx.save();
-        ctx.globalAlpha = trailAlpha;
-        ctx.strokeStyle = mainColor;
-        ctx.lineWidth = 2.2;
-        ctx.strokeRect(tr.x - 12 * scale, -52 * scale, 24 * scale, 120 * scale);
-        ctx.restore();
-      }
-    }
 
     ctx.save();
     ctx.translate(posX, 0);
@@ -850,121 +818,64 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.restore();
   }
 
-  // 5. Blade Slash Arc
-  if (pose.bladeSlash && engine.strikeActive) {
-    const slash = pose.bladeSlash;
-    ctx.save();
-    ctx.strokeStyle = slash.color;
-    ctx.shadowColor = slash.color;
-    ctx.shadowBlur = 25;
-    ctx.lineWidth = 4.2;
-
-    ctx.beginPath();
-    ctx.moveTo(slash.start.x, slash.start.y);
-    const midX = (slash.start.x + slash.end.x) / 2;
-    const midY = (slash.start.y + slash.end.y) / 2 + slash.curveOffset;
-    ctx.quadraticCurveTo(midX, midY, slash.end.x, slash.end.y);
-    ctx.stroke();
-
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.8;
-    ctx.shadowBlur = 0;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 6. Flowing Cyber Scarf
+  // 6. Flowing Cyber Scarf (behind the body)
   if (pose.scarf && pose.scarf.length > 1) {
-    ctx.save();
-    ctx.strokeStyle = combo >= 30 ? '#ffe600' : '#ff007f';
-    ctx.shadowColor = combo >= 30 ? '#ffe600' : '#ff007f';
-    ctx.shadowBlur = 18;
-    ctx.lineWidth = 3.2;
-    ctx.lineCap = 'round';
-
-    ctx.beginPath();
-    ctx.moveTo(pose.scarf[0].x, pose.scarf[0].y);
-    for (let i = 1; i < pose.scarf.length; i++) {
-      ctx.lineTo(pose.scarf[i].x, pose.scarf[i].y);
+    const scarfColor = combo >= 30 ? '#ffe600' : '#ff007f';
+    const pts = [pose.head, ...pose.scarf];
+    for (let i = 1; i < pts.length; i++) {
+      // Tapers from the neck to the tip
+      neonLimb(ctx, pts[i - 1], pts[i], 5 - i * 0.8, scarfColor, bodyFill(scarfColor), 14);
     }
-    ctx.stroke();
-
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.3;
-    ctx.shadowBlur = 0;
-    ctx.stroke();
-    ctx.restore();
   }
 
-  // 7. Cyber Skeleton Bones & Joints (Glow scales with combo!)
+  // 7. Solid neon body (outline colour and glow rise with the combo).
+  // The left limbs lead in every attack pose, so they're drawn in front.
+  drawNeonBody(
+    ctx,
+    {
+      head: pose.head,
+      chest: pose.chest,
+      pelvis: pose.pelvis,
+      nearShoulder: pose.leftShoulder,
+      nearElbow: pose.leftElbow,
+      nearHand: pose.leftHand,
+      farShoulder: pose.rightShoulder,
+      farElbow: pose.rightElbow,
+      farHand: pose.rightHand,
+      nearHip: pose.leftHip,
+      nearKnee: pose.leftKnee,
+      nearFoot: pose.leftFoot,
+      farHip: pose.rightHip,
+      farKnee: pose.rightKnee,
+      farFoot: pose.rightFoot,
+    },
+    { color: glowColor, glow: glowBlur, shoulderHalf: 12, waistHalf: 6.5, limbScale: 1 }
+  );
+  neonHead(ctx, pose.head, 9, { color: glowColor, glow: glowBlur });
+
+  // Visor
   ctx.save();
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur = glowBlur;
-  ctx.lineWidth = 3.8;
-  ctx.strokeStyle = glowColor;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  const drawBone = (p1: Point2D, p2: Point2D) => {
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.stroke();
-  };
-
-  drawBone(pose.chest, pose.pelvis);
-  drawBone(pose.chest, pose.leftShoulder);
-  drawBone(pose.leftShoulder, pose.leftElbow);
-  drawBone(pose.leftElbow, pose.leftHand);
-  drawBone(pose.chest, pose.rightShoulder);
-  drawBone(pose.rightShoulder, pose.rightElbow);
-  drawBone(pose.rightElbow, pose.rightHand);
-  drawBone(pose.pelvis, pose.leftHip);
-  drawBone(pose.leftHip, pose.leftKnee);
-  drawBone(pose.leftKnee, pose.leftFoot);
-  drawBone(pose.pelvis, pose.rightHip);
-  drawBone(pose.rightHip, pose.rightKnee);
-  drawBone(pose.rightKnee, pose.rightFoot);
-
-  // Head
-  ctx.beginPath();
-  ctx.arc(pose.head.x, pose.head.y, 8.5, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Cyber Visor
-  ctx.strokeStyle = combo >= 30 ? '#ffffff' : '#ffe600';
-  ctx.shadowColor = combo >= 30 ? '#ffffff' : '#ffe600';
-  ctx.lineWidth = 2.8;
+  const visorColor = combo >= 30 ? '#ffffff' : '#ffe600';
   const visorDir = engine.attackDirection === 'left' ? -1 : 1;
-  ctx.beginPath();
-  ctx.moveTo(pose.head.x - 3 * visorDir, pose.head.y - 1);
-  ctx.lineTo(pose.head.x + 10 * visorDir, pose.head.y - 1);
-  ctx.stroke();
+  ctx.fillStyle = visorColor;
+  ctx.shadowColor = visorColor;
+  ctx.shadowBlur = 10;
+  ctx.fillRect(visorDir > 0 ? pose.head.x - 1 : pose.head.x - 9, pose.head.y - 2.5, 10, 3.5);
 
-  // Chest Reactor Core (Pulses intensely with combo and bass)
-  const corePulse = 3.5 + audioEngine.bassMeter * 3.5 + Math.min(3, combo * 0.1);
+  // Chest reactor core (pulses with the bass and the combo)
+  const corePulse = 2.5 + audioEngine.bassMeter * 2.5 + Math.min(2.5, combo * 0.08);
   ctx.fillStyle = '#ffffff';
   ctx.shadowColor = glowColor;
   ctx.shadowBlur = glowBlur * 0.8;
   ctx.beginPath();
-  ctx.arc(pose.chest.x, pose.chest.y, corePulse, 0, Math.PI * 2);
+  ctx.arc(pose.chest.x, pose.chest.y + 4, corePulse, 0, Math.PI * 2);
   ctx.fill();
-
-  // White Core Highlights
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.4;
-  ctx.shadowBlur = 0;
-  drawBone(pose.chest, pose.pelvis);
-  drawBone(pose.leftShoulder, pose.leftElbow);
-  drawBone(pose.leftElbow, pose.leftHand);
-  drawBone(pose.rightShoulder, pose.rightElbow);
-  drawBone(pose.rightElbow, pose.rightHand);
-  drawBone(pose.leftHip, pose.leftKnee);
-  drawBone(pose.leftKnee, pose.leftFoot);
-  drawBone(pose.rightHip, pose.rightKnee);
-  drawBone(pose.rightKnee, pose.rightFoot);
-
   ctx.restore();
+
+  // Blade slash, in front of the body: a glowing crescent with a white-hot edge
+  if (pose.bladeSlash && engine.strikeActive) {
+    drawSlashCrescent(ctx, pose.bladeSlash);
+  }
 
   // 8. Dynamic Move & Tier HUD Banner
   if (engine.isAttacking && combo > 0) {
@@ -979,6 +890,43 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.restore();
   }
 
+  ctx.restore();
+}
+
+/** Crescent-shaped slash: thick in the middle, tapering to points at both ends. */
+function drawSlashCrescent(
+  ctx: CanvasRenderingContext2D,
+  slash: { start: Point2D; end: Point2D; curveOffset: number; color: string }
+) {
+  const midX = (slash.start.x + slash.end.x) / 2;
+  const midY = (slash.start.y + slash.end.y) / 2 + slash.curveOffset;
+  // Push the outer curve away from the chord to give the crescent its thickness.
+  const dx = slash.end.x - slash.start.x;
+  const dy = slash.end.y - slash.start.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const side = slash.curveOffset >= 0 ? 1 : -1;
+  const thick = 9;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(slash.start.x, slash.start.y);
+  ctx.quadraticCurveTo(midX + nx * thick * side, midY + ny * thick * side, slash.end.x, slash.end.y);
+  ctx.quadraticCurveTo(midX - nx * thick * 0.4 * side, midY - ny * thick * 0.4 * side, slash.start.x, slash.start.y);
+  ctx.closePath();
+  ctx.fillStyle = colorWithAlpha(slash.color, 0.55);
+  ctx.shadowColor = slash.color;
+  ctx.shadowBlur = 26;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(slash.start.x, slash.start.y);
+  ctx.quadraticCurveTo(midX + nx * thick * 0.5 * side, midY + ny * thick * 0.5 * side, slash.end.x, slash.end.y);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.2;
+  ctx.shadowBlur = 12;
+  ctx.stroke();
   ctx.restore();
 }
 

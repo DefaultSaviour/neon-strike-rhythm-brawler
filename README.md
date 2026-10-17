@@ -52,6 +52,7 @@ A high-octane cyberpunk rhythm brawler powered by HTML5 Canvas and Web Audio API
 - **Beat-locked animation**: fighter bounce, enemy footsteps, sun and floor pulse all follow a beat grid fitted to the song (`src/audio/beatGrid.ts`).
 - **Snappy strikes** (`src/game/motion.ts`): overshoot snap, hold, recover, and a lunge toward the target, plus hit-stop freeze frames and a camera punch.
 - **Rigid-body shattering** (`src/game/debrisPhysics.ts`): enemies break into pieces that start from their real skeleton, then spin, bounce and slide with friction. The conveyors carry the pieces into the pit.
+- **Solid neon art style** (`src/components/neonBody.ts`): the player, all 9 enemies and their debris share one look: thick limbs and a wedge torso with a dark tinted fill and a glowing outline, far-side limbs drawn dimmer for depth, filled armour and wings, and blades with white-hot edges. Slashes are glowing crescents.
 - **Clarity first**: only the next enemy in each lane is at full brightness, debris fades once it cools, and the timing ring is always drawn on top.
 
 ## ⏸️ Pause & Options

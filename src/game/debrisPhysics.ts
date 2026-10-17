@@ -1,4 +1,5 @@
 import type { EnemyPose, Point } from './enemyMotion';
+import { LIMB_WIDTH, TORSO_WIDTH } from './bodyProportions';
 
 /**
  * Rigid-body physics for the pieces enemies shatter into.
@@ -255,6 +256,8 @@ export interface ShatterOptions {
   /** +1 if the enemy faces right (it's on the left lane), -1 otherwise */
   facing: number;
   scale: number;
+  /** Limb thickness multiplier for this enemy type (see enemyStyles.ts) */
+  limbScale?: number;
   color: string;
   accent: string;
   /** Does this enemy carry a long blade? Adds a spinning weapon piece. */
@@ -338,16 +341,18 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
   };
 
   const sc = opts.scale;
+  // Pieces are as thick as the limbs drawn on screen (radius = half the width).
+  const thick = sc * (opts.limbScale ?? 1) * 0.5;
   make('circle', 'head', sk.head.x, sk.head.y, 0, 0, 9 * sc, opts.color);
-  bone(sk.chest, sk.pelvis, 'torso', 3.2 * sc);
-  bone(sk.frontShoulder, sk.frontElbow, 'limb', 2 * sc);
-  bone(sk.frontElbow, sk.frontHand, 'limb', 2 * sc);
-  bone(sk.backShoulder, sk.backElbow, 'limb', 2 * sc);
-  bone(sk.backElbow, sk.backHand, 'limb', 2 * sc);
-  bone(sk.pelvis, sk.frontKnee, 'limb', 2.2 * sc);
-  bone(sk.frontKnee, sk.frontFoot, 'limb', 2.2 * sc);
-  bone(sk.pelvis, sk.backKnee, 'limb', 2.2 * sc);
-  bone(sk.backKnee, sk.backFoot, 'limb', 2.2 * sc);
+  bone(sk.chest, sk.pelvis, 'torso', TORSO_WIDTH * thick);
+  bone(sk.frontShoulder, sk.frontElbow, 'limb', LIMB_WIDTH.upperArm * thick);
+  bone(sk.frontElbow, sk.frontHand, 'limb', LIMB_WIDTH.forearm * thick);
+  bone(sk.backShoulder, sk.backElbow, 'limb', LIMB_WIDTH.upperArm * thick);
+  bone(sk.backElbow, sk.backHand, 'limb', LIMB_WIDTH.forearm * thick);
+  bone(sk.pelvis, sk.frontKnee, 'limb', LIMB_WIDTH.thigh * thick);
+  bone(sk.frontKnee, sk.frontFoot, 'limb', LIMB_WIDTH.shin * thick);
+  bone(sk.pelvis, sk.backKnee, 'limb', LIMB_WIDTH.thigh * thick);
+  bone(sk.backKnee, sk.backFoot, 'limb', LIMB_WIDTH.shin * thick);
 
   if (opts.hasBlade) {
     // Blade continues on from the forearm.

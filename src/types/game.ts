@@ -76,7 +76,6 @@ export interface Enemy {
   stepOffset?: number;
   /** Pitch (Hz) of the musical note this enemy was charted from */
   pitchHz?: number;
-  trailHistory: Array<{ x: number; y: number; alpha: number }>;
 }
 
 export interface Particle {
