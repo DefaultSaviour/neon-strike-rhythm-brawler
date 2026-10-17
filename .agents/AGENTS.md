@@ -69,3 +69,9 @@
   - **Combat Feel & Animation**: Snap/hold/recover strikes with lunge, hit-stop, camera punch, beat-locked idle bounce & footsteps, enemy lean-in, and white hit-flash. Queued enemies dimmed; timing rings with EARLY/LATE labels.
   - **Rigid-Body Debris Physics (`src/game/debrisPhysics.ts`)**: Anatomy-based skeletal rigid bodies with bounce, spin, friction, conveyor belt drag, and abyss pit physics.
   - **54 Unit Tests**: Comprehensive Vitest test suite covering timing, clock, beat grid, detection accuracy, layout, motion, and debris physics.
+- [x] **Pause Menu Options, Beat-Locked Enemy Motion, In-Key Hit Tone & Depth Backdrop**:
+  - **In-Game Pause Menu (`src/components/GameOptions.tsx`)**: Sample-accurate pause/resume freezing Web Audio clock without restarting song. In-game options modal to adjust volume, hit feedback, screen shake, and latency mid-song.
+  - **Beat-Locked Enemy Motion & Unified IK Skeleton (`src/game/enemyMotion.ts`, `src/components/enemyArt.ts`)**: 4 beat-synced enemy animation styles (run, dance, sway, stand) mapped across all 9 variants on a shared IK skeleton. Debris is dynamically cut from the live skeletal pose.
+  - **In-Key Musical Hit Tone (`src/audio/hitTone.ts`)**: Pitch-analyzed notes trigger a short synth pluck shifted into a bright octave, staying musically in key. Hit feedback modes: `tone + boost`, `tone`, `boost`, `off`.
+  - **Atmospheric Synthwave Depth Backdrop**: Elevated horizon, perspective ground grid, distant skyline silhouettes, dimmed sun, and haze.
+  - **73 Unit Tests**: Vitest suite expanded to 73 tests covering hit tones, enemy motion cycles, and layout horizon.
