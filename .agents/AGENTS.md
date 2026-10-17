@@ -80,3 +80,9 @@
   - **On-Beat Body Dip & Pump**: Rhythmic dipping on every beat where knees and elbows bend outward in sync with the rhythm, straightening between beats.
   - **Front-Facing Visual Accessories (`src/components/enemyArt.ts`)**: Center-aligned visors, mirrored horns, pauldrons, and energy wings; hides back-mounted capes/jets for clean silhouettes.
   - **75 Unit Tests**: Vitest suite expanded to 75 tests covering front-facing pose symmetry and on-beat limb bending.
+- [x] **Solid Neon Art Style (Characters, Debris & Slashes)**:
+  - **Shared Solid Body Renderer (`src/components/neonBody.ts`)**: Thick capsule limbs, wedge torso with dark tinted fill, glowing neon outline, solid heads, and dimmer far-side limbs for true depth.
+  - **3-Layer Depth Layering (`src/components/enemyArt.ts`)**: Back gear (wings, capes, banners), core body, and front gear (helmets, horns, shields, blades with white-hot edges).
+  - **Solid Player Aesthetics**: Matching solid neon body style with tapered solid cyber scarf and crescent-shaped neon slash arcs.
+  - **Anatomy-Matched Solid Debris (`src/game/bodyProportions.ts`, `src/game/debrisPhysics.ts`)**: Debris pieces cut at exact limb thickness (`limbScale`) with glowing cut ends. Removed outdated rectangular ghost trails.
+  - **81 Unit Tests**: Vitest suite expanded to 81 tests covering color helpers, limb proportions, and debris thickness matching.
