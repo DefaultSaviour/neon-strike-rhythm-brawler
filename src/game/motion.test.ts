@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDLE_POSE, ATTACK_MOVES } from './animations';
-import { easeInOutCubic, easeOutBack, idleBouncePose, STRIKE_PHASES, strikeFrame } from './motion';
+import { easeInOutCubic, easeOutBack, idleBouncePose, playerRunPose, playerVictoryPose, STRIKE_PHASES, strikeFrame } from './motion';
 
 describe('easing', () => {
   it('starts at 0 and ends at 1', () => {
@@ -51,5 +51,36 @@ describe('idleBouncePose', () => {
     expect(onBeat.chest.y).toBeGreaterThan(offBeat.chest.y);
     expect(onBeat.leftFoot).toEqual(IDLE_POSE.leftFoot);
     expect(onBeat.rightFoot).toEqual(IDLE_POSE.rightFoot);
+  });
+});
+
+describe('player run and victory poses', () => {
+  const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  it('running keeps his limbs a constant length and his feet on or above the ground', () => {
+    const first = playerRunPose(0);
+    for (let beat = 0; beat < 3; beat += 0.1) {
+      const p = playerRunPose(beat);
+      expect(d(p.leftShoulder, p.leftElbow)).toBeCloseTo(d(first.leftShoulder, first.leftElbow), 3);
+      expect(d(p.rightKnee, p.rightFoot)).toBeCloseTo(d(first.rightKnee, first.rightFoot), 3);
+      expect(p.leftFoot.y).toBeLessThanOrEqual(68.001);
+      expect(p.rightFoot.y).toBeLessThanOrEqual(68.001);
+    }
+  });
+
+  it('running lifts his knees in turn', () => {
+    expect(playerRunPose(0.5).leftFoot.y).toBeLessThan(55);
+    expect(playerRunPose(1.5).rightFoot.y).toBeLessThan(55);
+  });
+
+  it('his scarf streams out behind him while running', () => {
+    const p = playerRunPose(0.3);
+    expect(p.scarf!.every((pt) => pt.x < p.head.x)).toBe(true);
+  });
+
+  it('victory pose has both hands up above his head', () => {
+    const p = playerVictoryPose(2.5);
+    expect(p.leftHand.y).toBeLessThan(p.head.y);
+    expect(p.rightHand.y).toBeLessThan(p.head.y);
   });
 });

@@ -10,6 +10,8 @@ import { HIT_WINDOWS } from '../game/timing';
 import { Enemy } from '../types/game';
 import { buildForBand, enemyPose } from '../game/enemyMotion';
 import { drawEnemyArt } from './enemyArt';
+import { drawFighter } from './fighterArt';
+import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
 interface NeonCanvasProps {
@@ -680,107 +682,18 @@ function drawEnemyFigure(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: Ga
 function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const pose = engine.currentPose;
   const combo = engine.scoreState.combo;
-
-  // ESCALATING NEON GLOW & AURA TIERS:
-  // Character glow ascends from basic cyan -> electric azure -> overdrive magenta -> solar gold -> transcendent god-tier!
-  let glowColor = '#00f3ff';
-  let glowBlur = 16;
-  let tierName = 'BASIC STRIKER';
-  let tierColor = '#00f3ff';
-
-  // Glow grows with the combo, but stays moderate so the fight stays readable.
-  // God tier is pale gold rather than pure white: white means "enemy just got hit".
-  if (combo >= 50) {
-    glowColor = '#fff1a8';
-    glowBlur = 30;
-    tierName = 'GOD TIER';
-    tierColor = '#fff1a8';
-  } else if (combo >= 30) {
-    glowColor = '#ffe600';
-    glowBlur = 26;
-    tierName = 'OVERDRIVE';
-    tierColor = '#ffe600';
-  } else if (combo >= 16) {
-    glowColor = '#ff007f';
-    glowBlur = 22;
-    tierName = 'CYBER NINJA';
-    tierColor = '#ff007f';
-  } else if (combo >= 6) {
-    glowColor = '#38bdf8';
-    glowBlur = 19;
-    tierName = 'ACROBATIC';
-    tierColor = '#38bdf8';
-  }
+  // Glow, colour, lightning and wings all come from the combo tier (see fighterTier.ts).
+  const tier = fighterTier(combo);
 
   ctx.save();
   ctx.translate(engine.playerOffsetX, 0);
 
-  // 1. GOD-TIER RADIANT PLASMA WINGS (Combo 50+)
-  if (combo >= 50) {
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    ctx.strokeStyle = '#fff1a8';
-    ctx.shadowColor = '#ffe600';
-    ctx.shadowBlur = 16;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-
-    const wingSpread = 38 + Math.sin(performance.now() * 0.008) * 6;
-    // Left Wing
-    ctx.beginPath();
-    ctx.moveTo(pose.chest.x - 8, pose.chest.y);
-    ctx.lineTo(pose.chest.x - 45 - wingSpread, pose.chest.y - 45);
-    ctx.lineTo(pose.chest.x - 70 - wingSpread, pose.chest.y - 75);
-    ctx.moveTo(pose.chest.x - 45 - wingSpread, pose.chest.y - 45);
-    ctx.lineTo(pose.chest.x - 65 - wingSpread, pose.chest.y - 35);
-    ctx.moveTo(pose.chest.x - 45 - wingSpread, pose.chest.y - 45);
-    ctx.lineTo(pose.chest.x - 55 - wingSpread, pose.chest.y - 15);
-    ctx.stroke();
-
-    // Right Wing
-    ctx.beginPath();
-    ctx.moveTo(pose.chest.x + 8, pose.chest.y);
-    ctx.lineTo(pose.chest.x + 45 + wingSpread, pose.chest.y - 45);
-    ctx.lineTo(pose.chest.x + 70 + wingSpread, pose.chest.y - 75);
-    ctx.moveTo(pose.chest.x + 45 + wingSpread, pose.chest.y - 45);
-    ctx.lineTo(pose.chest.x + 65 + wingSpread, pose.chest.y - 35);
-    ctx.moveTo(pose.chest.x + 45 + wingSpread, pose.chest.y - 45);
-    ctx.lineTo(pose.chest.x + 55 + wingSpread, pose.chest.y - 15);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 2. OVERDRIVE LIGHTNING ARCS (Combo 30+)
-  if (combo >= 30) {
-    ctx.save();
-    ctx.globalAlpha = 0.7;
-    ctx.strokeStyle = '#ffe600';
-    ctx.shadowColor = '#ffe600';
-    ctx.shadowBlur = 10;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    // Crackling arc from chest to hands
-    const arcX1 = (pose.chest.x + pose.leftHand.x) / 2 + (Math.random() - 0.5) * 16;
-    const arcY1 = (pose.chest.y + pose.leftHand.y) / 2 + (Math.random() - 0.5) * 16;
-    ctx.moveTo(pose.chest.x, pose.chest.y);
-    ctx.lineTo(arcX1, arcY1);
-    ctx.lineTo(pose.leftHand.x, pose.leftHand.y);
-
-    const arcX2 = (pose.chest.x + pose.rightHand.x) / 2 + (Math.random() - 0.5) * 16;
-    const arcY2 = (pose.chest.y + pose.rightHand.y) / 2 + (Math.random() - 0.5) * 16;
-    ctx.moveTo(pose.chest.x, pose.chest.y);
-    ctx.lineTo(arcX2, arcY2);
-    ctx.lineTo(pose.rightHand.x, pose.rightHand.y);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 3. CYBER GHOST AFTERIMAGE (Combo 16+)
-  if (combo >= 16 && engine.isAttacking) {
+  // Cyber ghost afterimage while attacking (Cyber Ninja tier and up)
+  if (tier.ghost && engine.isAttacking) {
     ctx.save();
     ctx.globalAlpha = 0.28;
-    ctx.strokeStyle = glowColor;
-    ctx.shadowColor = glowColor;
+    ctx.strokeStyle = tier.color;
+    ctx.shadowColor = tier.color;
     ctx.shadowBlur = 18;
     ctx.lineWidth = 2.2;
     const ghostPose = engine.lastAttackPose;
@@ -809,89 +722,30 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.restore();
   }
 
-  // 4. Ground Aura Ring under Player Feet (Combo 6+)
-  if (combo >= 6) {
-    ctx.save();
-    const auraRadius = 24 + Math.min(26, combo * 0.6);
-    ctx.strokeStyle = glowColor;
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = glowBlur * 0.6;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(0, 68, auraRadius, auraRadius * 0.32, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 6. Flowing Cyber Scarf (behind the body)
-  if (pose.scarf && pose.scarf.length > 1) {
-    const scarfColor = combo >= 30 ? '#ffe600' : '#ff007f';
-    const pts = [pose.head, ...pose.scarf];
-    for (let i = 1; i < pts.length; i++) {
-      // Tapers from the neck to the tip
-      neonLimb(ctx, pts[i - 1], pts[i], 5 - i * 0.8, scarfColor, bodyFill(scarfColor), 14);
-    }
-  }
-
-  // 7. Solid neon body (outline colour and glow rise with the combo).
-  // The left limbs lead in every attack pose, so they're drawn in front.
-  drawNeonBody(
-    ctx,
-    {
-      head: pose.head,
-      chest: pose.chest,
-      pelvis: pose.pelvis,
-      nearShoulder: pose.leftShoulder,
-      nearElbow: pose.leftElbow,
-      nearHand: pose.leftHand,
-      farShoulder: pose.rightShoulder,
-      farElbow: pose.rightElbow,
-      farHand: pose.rightHand,
-      nearHip: pose.leftHip,
-      nearKnee: pose.leftKnee,
-      nearFoot: pose.leftFoot,
-      farHip: pose.rightHip,
-      farKnee: pose.rightKnee,
-      farFoot: pose.rightFoot,
-    },
-    { color: glowColor, glow: glowBlur, shoulderHalf: 12, waistHalf: 6.5, limbScale: 1 }
-  );
-  neonHead(ctx, pose.head, 9, { color: glowColor, glow: glowBlur });
-
-  // Visor
-  ctx.save();
-  const visorColor = combo >= 30 ? '#ffffff' : '#ffe600';
-  const visorDir = engine.attackDirection === 'left' ? -1 : 1;
-  ctx.fillStyle = visorColor;
-  ctx.shadowColor = visorColor;
-  ctx.shadowBlur = 10;
-  ctx.fillRect(visorDir > 0 ? pose.head.x - 1 : pose.head.x - 9, pose.head.y - 2.5, 10, 3.5);
-
-  // Chest reactor core (pulses with the bass and the combo)
-  const corePulse = 2.5 + audioEngine.bassMeter * 2.5 + Math.min(2.5, combo * 0.08);
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur = glowBlur * 0.8;
-  ctx.beginPath();
-  ctx.arc(pose.chest.x, pose.chest.y + 4, corePulse, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // The fighter himself (shared with the results-screen progress bar)
+  drawFighter(ctx, pose, {
+    tier,
+    combo,
+    facing: engine.attackDirection === 'left' ? -1 : 1,
+    time: performance.now() / 1000,
+    corePulse: audioEngine.bassMeter,
+  });
 
   // Blade slash, in front of the body: a glowing crescent with a white-hot edge
   if (pose.bladeSlash && engine.strikeActive) {
     drawSlashCrescent(ctx, pose.bladeSlash);
   }
 
-  // 8. Dynamic Move & Tier HUD Banner
+  // Move & tier banner
   if (engine.isAttacking && combo > 0) {
     const move = getMoveForCombo(combo, engine.currentMoveIndex);
     ctx.save();
     ctx.font = '800 9px "Outfit", sans-serif';
-    ctx.fillStyle = tierColor;
-    ctx.shadowColor = tierColor;
+    ctx.fillStyle = tier.color;
+    ctx.shadowColor = tier.color;
     ctx.shadowBlur = 12;
     ctx.textAlign = 'center';
-    ctx.fillText(`${tierName} · ${move.name.toUpperCase()}`, 0, -150);
+    ctx.fillText(`${tier.name} · ${move.name.toUpperCase()}`, 0, -150);
     ctx.restore();
   }
 

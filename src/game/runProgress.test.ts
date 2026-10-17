@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   dashDuration,
+  levelUpTimes,
+  runnerTierCombo,
   formatSongTime,
   KeyValueStore,
   loadBestProgress,
@@ -94,5 +96,33 @@ describe('formatSongTime', () => {
     expect(formatSongTime(84.7)).toBe('1:24');
     expect(formatSongTime(190)).toBe('3:10');
     expect(formatSongTime(5)).toBe('0:05');
+  });
+});
+
+describe('runner levels up through 4 quarters', () => {
+  it('basic, cyber ninja, overdrive, then god tier for the last 25%', () => {
+    expect(runnerTierCombo(0.1)).toBe(0);
+    expect(runnerTierCombo(0.3)).toBe(16);
+    expect(runnerTierCombo(0.6)).toBe(30);
+    expect(runnerTierCombo(0.8)).toBe(50);
+    expect(runnerTierCombo(1)).toBe(50);
+  });
+
+  it('levels up exactly on each quarter line', () => {
+    expect(runnerTierCombo(0.25)).toBe(16);
+    expect(runnerTierCombo(0.2499)).toBe(0);
+    expect(runnerTierCombo(0.75)).toBe(50);
+  });
+
+  it('times each level-up to the moment the runner crosses the line', () => {
+    const ups = levelUpTimes(0.9);
+    expect(ups.map((u) => u.position)).toEqual([0.25, 0.5, 0.75]);
+    for (const u of ups) expect(runnerPositionAt(u.elapsed, 0.9)).toBeCloseTo(u.position, 6);
+  });
+
+  it('only lists the lines the runner actually reached', () => {
+    expect(levelUpTimes(0.3).map((u) => u.position)).toEqual([0.25]);
+    expect(levelUpTimes(0.1)).toEqual([]);
+    expect(levelUpTimes(1).map((u) => u.combo)).toEqual([16, 30, 50]);
   });
 });

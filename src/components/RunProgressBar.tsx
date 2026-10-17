@@ -1,8 +1,17 @@
 import React, { useEffect, useRef } from 'react';
-import { RunProgress, dashDuration, formatSongTime, runnerPositionAt } from '../game/runProgress';
-import { enemyPose } from '../game/enemyMotion';
-import { enemyBodyJoints } from './enemyArt';
-import { drawNeonBody, neonHead, neonLimb, bodyFill } from './neonBody';
+import {
+  RunProgress,
+  dashDuration,
+  formatSongTime,
+  levelUpTimes,
+  runnerPositionAt,
+  runnerTierCombo,
+} from '../game/runProgress';
+import { fighterTier } from '../game/fighterTier';
+import { playerRunPose, playerVictoryPose } from '../game/motion';
+import { IDLE_POSE } from '../game/animations';
+import { drawFighter } from './fighterArt';
+import { bodyFill } from './neonBody';
 
 /**
  * Results-screen progress bar: a neon line the length of the song. Your fighter
@@ -15,9 +24,10 @@ interface RunProgressBarProps {
   run: RunProgress;
 }
 
-const HEIGHT = 112;
+const HEIGHT = 150;
 const PAD_X = 22;
-const FIGHTER = '#00f3ff';
+/** Size of the little fighter: world units -> canvas pixels */
+const RUNNER_SCALE = 0.42;
 
 function prefersReducedMotion(): boolean {
   try {
@@ -118,19 +128,22 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
     ctx.stroke();
   }
 
-  // Lit trail behind the runner
+  // Lit trail behind the runner, coloured by the tier he had in each quarter
   if (pos > 0.001) {
-    const grad = ctx.createLinearGradient(x0, 0, runnerX, 0);
-    grad.addColorStop(0, '#00f3ff');
-    grad.addColorStop(1, run.cleared ? '#ffe600' : '#ff007f');
-    ctx.strokeStyle = grad;
-    ctx.shadowColor = '#00f3ff';
-    ctx.shadowBlur = 12;
     ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(x0, barY);
-    ctx.lineTo(runnerX, barY);
-    ctx.stroke();
+    ctx.shadowBlur = 12;
+    for (let q = 0; q < 4; q++) {
+      const from = q / 4;
+      const to = Math.min(pos, (q + 1) / 4);
+      if (to <= from) break;
+      const color = fighterTier(runnerTierCombo(from)).color;
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.beginPath();
+      ctx.moveTo(xAt(from), barY);
+      ctx.lineTo(xAt(to), barY);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 
@@ -191,37 +204,52 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
     ctx.restore();
   }
 
-  // The fighter
-  const scale = 0.4;
+  // The fighter: the same character you play, levelling up as he crosses each quarter.
+  const tier = fighterTier(runnerTierCombo(pos));
   let hop = 0;
   let pose;
   if (!arrived) {
-    pose = enemyPose('run', elapsed * 5, 'agile');
+    pose = playerRunPose(elapsed * 4);
   } else if (run.cleared) {
-    pose = enemyPose('sway', 2 + sinceArrival * 3, 'agile');
+    pose = playerVictoryPose(2 + sinceArrival * 3);
     hop = Math.abs(Math.sin(sinceArrival * Math.PI * 1.8)) * 10;
   } else {
-    pose = enemyPose('stand', 0, 'agile');
+    pose = IDLE_POSE;
   }
   ctx.save();
-  // World units: feet at y = 68. Map so feet sit on the bar.
+  // World units have the feet at y = 68. Map so the feet sit on the bar.
   ctx.translate(runnerX, barY - 3 - hop);
-  ctx.scale(scale, scale);
+  ctx.scale(RUNNER_SCALE, RUNNER_SCALE);
   ctx.translate(0, -68);
-  const j = enemyBodyJoints(pose);
-  // Scarf trailing behind the head
-  const h = pose.head;
-  const wave = Math.sin(elapsed * 14) * 3;
-  neonLimb(ctx, h, { x: h.x - 14, y: h.y + 3 + wave }, 4, '#ff007f', bodyFill('#ff007f'), 10);
-  neonLimb(ctx, { x: h.x - 14, y: h.y + 3 + wave }, { x: h.x - 28, y: h.y + 8 - wave }, 3, '#ff007f', bodyFill('#ff007f'), 10);
-  drawNeonBody(ctx, j, { color: FIGHTER, glow: 14, shoulderHalf: 11, waistHalf: 6, limbScale: 1 });
-  neonHead(ctx, h, 9, { color: FIGHTER, glow: 14 });
-  ctx.fillStyle = '#ffe600';
-  ctx.shadowColor = '#ffe600';
-  ctx.shadowBlur = 8;
-  if (pose.facingCamera) ctx.fillRect(h.x - 5, h.y - 2, 10, 3.5);
-  else ctx.fillRect(h.x - 1, h.y - 2, 10, 3.5);
+  drawFighter(ctx, pose, { tier, facing: 1, time: elapsed, combo: tier.minCombo });
   ctx.restore();
+
+  // Level-up flash: a ring bursts out and the new tier name pops up as he crosses each quarter line
+  // Only the most recent level-up shows, so the names never pile up.
+  const latestUp = levelUpTimes(run.fraction)
+    .filter((u) => u.elapsed <= elapsed)
+    .pop();
+  for (const up of latestUp ? [latestUp] : []) {
+    const age = elapsed - up.elapsed;
+    if (age > 0.7) continue;
+    const t = age / 0.7;
+    const upTier = fighterTier(up.combo);
+    const ux = xAt(up.position);
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = upTier.color;
+    ctx.shadowColor = upTier.color;
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(ux, barY - 22, 8 + t * 26, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.font = '900 10px "Outfit", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = upTier.color;
+    ctx.fillText(upTier.name, ux, barY - 58 - t * 10);
+    ctx.restore();
+  }
 
   // Death: a glowing red X pops in over the fighter
   if (arrived && !run.cleared) {
@@ -229,7 +257,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
     const s = 1.6 - 0.6 * pop; // starts big, snaps to size
     const r = 15 * s;
     const cx = runnerX;
-    const cy = barY - 30;
+    const cy = barY - 28;
     ctx.save();
     ctx.globalAlpha = pop;
     ctx.lineCap = 'round';

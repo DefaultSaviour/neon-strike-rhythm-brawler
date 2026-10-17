@@ -104,3 +104,32 @@ export function runnerPositionAt(elapsed: number, target: number): number {
   const eased = 1 - Math.pow(1 - t, 3);
   return target * eased;
 }
+
+/**
+ * The bar is split (behind the scenes) into 4 quarters. The runner levels up
+ * through the fighter's combo tiers as he crosses each one, reaching god tier
+ * (angel wings) for the final 25%. Values are combos to feed fighterTier().
+ */
+export const QUARTER_TIER_COMBOS = [0, 16, 30, 50] as const; // basic, cyber ninja, overdrive, god tier
+
+/** Combo-equivalent tier for a runner at `position` (0..1) along the bar. */
+export function runnerTierCombo(position: number): number {
+  const quarter = Math.min(3, Math.max(0, Math.floor(position * 4 + 1e-9)));
+  return QUARTER_TIER_COMBOS[quarter];
+}
+
+/**
+ * When (seconds into the dash) the runner crosses each quarter line on his way
+ * to `target`, so a level-up flash can play right as he passes it.
+ */
+export function levelUpTimes(target: number): Array<{ position: number; elapsed: number; combo: number }> {
+  const d = dashDuration(target);
+  const out: Array<{ position: number; elapsed: number; combo: number }> = [];
+  for (const q of [0.25, 0.5, 0.75]) {
+    if (q > target + 1e-9) break;
+    // Invert runnerPositionAt: position = target * (1 - (1 - t)^3)
+    const t = 1 - Math.cbrt(Math.max(0, 1 - q / target));
+    out.push({ position: q, elapsed: t * d, combo: runnerTierCombo(q) });
+  }
+  return out;
+}
