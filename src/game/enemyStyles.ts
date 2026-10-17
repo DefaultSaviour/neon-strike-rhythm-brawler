@@ -31,16 +31,16 @@ export const ENEMY_STYLES: Record<FrequencyBand, Record<EnemyTier, EnemyStyle>> 
     3: { name: 'Acid Dancer', color: '#ff4fd8', accent: '#b6ff3d', scale: 0.95 },
   },
   high: {
-    1: { name: 'Pulse Barrier', color: '#00e5ff', accent: '#ffffff', scale: 1.0 },
-    2: { name: 'Laser Hurdle', color: '#3dffb0', accent: '#d0fff0', scale: 1.0 },
-    3: { name: 'Plasma Gate', color: '#c8f8ff', accent: '#7df9ff', scale: 1.0 },
+    1: { name: 'Speeder', color: '#00e5ff', accent: '#ffffff', scale: 0.98 },
+    2: { name: 'Wraith', color: '#3dffb0', accent: '#d0fff0', scale: 1.0 },
+    3: { name: 'Seraph', color: '#c8f8ff', accent: '#7df9ff', scale: 1.0 },
   },
 };
 
 export const BAND_LABELS: Record<FrequencyBand, string> = {
   sub: 'Kick / Sub',
   bass: 'Bassline',
-  high: 'Highs (Hurdles)',
+  high: 'Highs',
 };
 
 /** Resolve band + tier for a note or enemy, with a fallback for charts made before band analysis existed. */

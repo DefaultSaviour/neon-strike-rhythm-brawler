@@ -845,69 +845,7 @@ export const ATTACK_MOVES: AttackMove[] = [
   },
 ];
 
-export const AIR_STRIKE_POSE: SkeletonPose = {
-  head: { x: 0, y: -72 },
-  chest: { x: 0, y: -45 },
-  pelvis: { x: 0, y: -15 },
-  leftShoulder: { x: -14, y: -45 },
-  leftElbow: { x: -20, y: -30 },
-  leftHand: { x: -12, y: -15 }, // tucked guard
-  rightShoulder: { x: 14, y: -45 },
-  rightElbow: { x: 18, y: -68 },
-  rightHand: { x: 14, y: -95 }, // skyward fist soaring into the clouds!
-  leftHip: { x: -10, y: -15 },
-  leftKnee: { x: -16, y: 15 },
-  leftFoot: { x: -20, y: 45 }, // trailing leg
-  rightHip: { x: 10, y: -15 },
-  rightKnee: { x: 18, y: -35 }, // high tucked knee
-  rightFoot: { x: 12, y: -10 },
-  scarf: [
-    { x: -6, y: -65 },
-    { x: -16, y: -50 },
-    { x: -22, y: -25 },
-    { x: -26, y: 10 },
-  ],
-  bladeSlash: {
-    start: { x: -35, y: -30 },
-    end: { x: 25, y: -105 },
-    curveOffset: -25,
-    color: '#00f3ff',
-  },
-};
-
-export const DUAL_STRIKE_POSE: SkeletonPose = {
-  head: { x: 0, y: -50 },
-  chest: { x: 0, y: -24 },
-  pelvis: { x: 0, y: 6 },
-  leftShoulder: { x: -18, y: -24 },
-  leftElbow: { x: -42, y: -24 },
-  leftHand: { x: -68, y: -24 }, // left strike extended!
-  rightShoulder: { x: 18, y: -24 },
-  rightElbow: { x: 42, y: -24 },
-  rightHand: { x: 68, y: -24 }, // right strike extended!
-  leftHip: { x: -12, y: 6 },
-  leftKnee: { x: -30, y: 36 },
-  leftFoot: { x: -48, y: 68 }, // wide low horse stance
-  rightHip: { x: 12, y: 6 },
-  rightKnee: { x: 30, y: 36 },
-  rightFoot: { x: 48, y: 68 }, // wide low horse stance
-  scarf: [
-    { x: 0, y: -45 },
-    { x: 0, y: -30 },
-    { x: 0, y: -15 },
-    { x: 0, y: 0 },
-  ],
-  bladeSlash: {
-    start: { x: -75, y: -24 },
-    end: { x: 75, y: -24 },
-    curveOffset: 0,
-    color: '#ff007f',
-  },
-};
-
-export function getOrientedPose(pose: SkeletonPose, direction: 'left' | 'right' | 'air' | 'both'): SkeletonPose {
-  if (direction === 'air') return AIR_STRIKE_POSE;
-  if (direction === 'both') return DUAL_STRIKE_POSE;
+export function getOrientedPose(pose: SkeletonPose, direction: 'left' | 'right'): SkeletonPose {
   if (direction === 'right') return pose;
 
   const mirrorX = (pt: Point2D): Point2D => ({ x: -pt.x, y: pt.y });

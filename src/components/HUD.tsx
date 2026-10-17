@@ -29,7 +29,6 @@ export const HUD: React.FC<HUDProps> = ({
   const [playbackTime, setPlaybackTime] = useState(0);
   const [leftActive, setLeftActive] = useState(false);
   const [rightActive, setRightActive] = useState(false);
-  const [airActive, setAirActive] = useState(false);
   const [singleActive, setSingleActive] = useState(false);
 
   useEffect(() => {
@@ -100,13 +99,6 @@ export const HUD: React.FC<HUDProps> = ({
     setRightActive(true);
     onStrike('right');
     setTimeout(() => setRightActive(false), 90);
-  };
-
-  const handleAirDown = (e: React.PointerEvent) => {
-    e.preventDefault();
-    setAirActive(true);
-    onStrike('air');
-    setTimeout(() => setAirActive(false), 90);
   };
 
   const handleSingleDown = (e: React.PointerEvent) => {
@@ -282,44 +274,29 @@ export const HUD: React.FC<HUDProps> = ({
           {/* Left Strike Zone */}
           <div
             onPointerDown={handleLeftDown}
-            className={`flex-1 flex flex-col justify-end pb-8 pl-4 sm:pl-6 border-r border-cyan-500/10 cursor-pointer select-none transition-colors ${
+            className={`flex-1 flex flex-col justify-end pb-8 pl-6 border-r border-cyan-500/10 cursor-pointer select-none transition-colors ${
               leftActive ? 'bg-cyan-500/15' : 'hover:bg-cyan-500/5'
             }`}
           >
-            <div className="flex items-center gap-1.5 opacity-60 text-cyan-400 text-xs font-bold tracking-widest uppercase">
+            <div className="flex items-center gap-2 opacity-50 text-cyan-400 text-xs font-bold tracking-widest uppercase">
               <span className="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono">
-                [←] / [A]
+                [←] or [A]
               </span>
-              <span className="hidden sm:inline">Strike Left</span>
-            </div>
-          </div>
-
-          {/* Center Jump Over Hurdle Zone */}
-          <div
-            onPointerDown={handleAirDown}
-            className={`flex-[1.2] flex flex-col justify-end items-center pb-8 border-x border-cyan-400/20 cursor-pointer select-none transition-colors ${
-              airActive ? 'bg-cyan-400/20' : 'hover:bg-cyan-400/5'
-            }`}
-          >
-            <div className="flex items-center gap-2 text-cyan-300 text-xs font-bold tracking-widest uppercase bg-slate-950/80 px-3 py-1.5 rounded-full border border-cyan-400/40 shadow-[0_0_12px_rgba(0,243,255,0.25)]">
-              <span className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/60 text-[10px] font-mono font-black text-cyan-300">
-                [↑] / [W]
-              </span>
-              <span>Jump Hurdle</span>
+              <span>Strike Left</span>
             </div>
           </div>
 
           {/* Right Strike Zone */}
           <div
             onPointerDown={handleRightDown}
-            className={`flex-1 flex flex-col justify-end pb-8 pr-4 sm:pr-6 items-end border-l border-pink-500/10 cursor-pointer select-none transition-colors ${
+            className={`flex-1 flex flex-col justify-end pb-8 pr-6 items-end border-l border-pink-500/10 cursor-pointer select-none transition-colors ${
               rightActive ? 'bg-pink-500/15' : 'hover:bg-pink-500/5'
             }`}
           >
-            <div className="flex items-center gap-1.5 opacity-60 text-pink-400 text-xs font-bold tracking-widest uppercase">
-              <span className="hidden sm:inline">Strike Right</span>
+            <div className="flex items-center gap-2 opacity-50 text-pink-400 text-xs font-bold tracking-widest uppercase">
+              <span>Strike Right</span>
               <span className="px-2 py-1 rounded bg-pink-950/80 border border-pink-500/40 text-[10px] font-mono">
-                [→] / [D]
+                [→] or [D]
               </span>
             </div>
           </div>

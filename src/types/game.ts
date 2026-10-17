@@ -2,9 +2,7 @@
  * Game types and state definitions for Neon Strike: Rhythm Brawler
  */
 
-export type Lane = 'left' | 'right' | 'air';
-
-export type AttackDirection = 'left' | 'right' | 'air' | 'both';
+export type Lane = 'left' | 'right';
 
 /** Acoustic frequency band a beat was detected in */
 export type FrequencyBand = 'sub' | 'bass' | 'high';
@@ -58,7 +56,7 @@ export interface DebrisPiece {
   angle: number;
   vAngle: number;
   color: string;
-  shapeType: 'head' | 'chest' | 'arm' | 'leg' | 'blade' | 'shard' | 'barrier_beam';
+  shapeType: 'head' | 'chest' | 'arm' | 'leg' | 'blade' | 'shard';
   size: number;
   points?: Array<{ x: number; y: number }>;
   landed: boolean;
