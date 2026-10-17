@@ -15,7 +15,7 @@ export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway';
 export const ENEMY_MOTION_STYLES: Array<{ id: EnemyMotionStyle; label: string; description: string }> = [
   { id: 'run', label: 'Run on the spot', description: 'Knees up, arms pumping, one step per beat' },
   { id: 'dance', label: 'Dance', description: 'Bounce on the beat, hips sway, arms point up in turn' },
-  { id: 'sway', label: 'Hands up sway', description: 'Arms in the air, swaying side to side like a crowd' },
+  { id: 'sway', label: 'Hands up', description: 'Facing you, hands in the air, knees and elbows pumping on the beat' },
   { id: 'stand', label: 'Just stand', description: 'Guard up, riding the conveyor, nodding on the beat' },
 ];
 
@@ -45,6 +45,8 @@ export interface EnemyPose {
   backFoot: Point;
   /** 0..1, peaks the moment a foot lands (for stomp rings and dust) */
   stomp: number;
+  /** True when the body faces the viewer (symmetric pose) rather than side-on */
+  facingCamera: boolean;
 }
 
 export const LIMB = { upperArm: 21, forearm: 21, thigh: 31, shin: 32 } as const;
@@ -102,6 +104,12 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
   // the elbow down; on a raised arm it points the elbow forward.
   let armBendFront: 1 | -1 = 1;
   let armBendBack: 1 | -1 = 1;
+  // Knees bend toward +x (forward) by default. Front-facing poses bend them outward instead.
+  let legBendFront: 1 | -1 = -1;
+  let legBendBack: 1 | -1 = -1;
+  // Half the distance between the shoulders. Side-on poses overlap them; front-on spreads them.
+  let shoulderSpread = 3;
+  let facingCamera = false;
   let stomp = 0;
 
   if (style === 'run') {
@@ -138,19 +146,27 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     armBendBack = -1;
     stomp = pulse;
   } else if (style === 'sway') {
-    // Hands in the air, swaying one side per 2 beats; knees bounce on the beat.
-    const sway = Math.sin((Math.PI * beat) / 2);
-    const wave = Math.sin(Math.PI * 2 * beat) * 3;
-    const dip = pulse * 2.5;
-    pelvis = { x: sway * 3, y: 8 + dip };
-    chest = { x: sway * 8, y: -22 + dip };
-    head = { x: sway * 11, y: -48 + dip };
-    frontFootTarget = { x: stance * 0.6, y: FLOOR };
-    backFootTarget = { x: -stance * 0.6, y: FLOOR };
-    frontHandTarget = { x: chest.x + 12 + sway * 10 + wave, y: chest.y - 46 };
-    backHandTarget = { x: chest.x - 12 + sway * 10 - wave, y: chest.y - 46 };
+    // Hands-up crowd pose, FACING THE CAMERA: one arm up on each side of the
+    // head, feet apart. On every beat the whole body pumps: knees and elbows
+    // bend (body dips, hands drop a little), then straighten between beats.
+    // A gentle side-to-side sway runs over two beats.
+    facingCamera = true;
+    const sway = Math.sin((Math.PI * beat) / 2) * 3;
+    const dip = pulse * 7;
+    const handDrop = pulse * 14;
+    pelvis = { x: sway * 0.5, y: 8 + dip };
+    chest = { x: sway, y: -22 + dip };
+    head = { x: sway * 1.3, y: -48 + dip };
+    frontFootTarget = { x: 13, y: FLOOR };
+    backFootTarget = { x: -13, y: FLOOR };
+    frontHandTarget = { x: chest.x + 21, y: chest.y - 42 + handDrop };
+    backHandTarget = { x: chest.x - 21, y: chest.y - 42 + handDrop };
+    shoulderSpread = 9;
+    // Elbows and knees bend OUTWARD, away from the body's centre line.
     armBendFront = 1;
     armBendBack = -1;
+    legBendFront = -1;
+    legBendBack = 1;
     stomp = 0;
   } else {
     // Stand: fighting guard, small nod on each beat.
@@ -167,13 +183,12 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     stomp = 0;
   }
 
-  const frontShoulder = { x: chest.x + 3, y: chest.y + 1 };
-  const backShoulder = { x: chest.x - 3, y: chest.y + 1 };
+  const frontShoulder = { x: chest.x + shoulderSpread, y: chest.y + 1 };
+  const backShoulder = { x: chest.x - shoulderSpread, y: chest.y + 1 };
   const frontArm = solveTwoBone(frontShoulder, frontHandTarget, LIMB.upperArm, LIMB.forearm, armBendFront);
   const backArm = solveTwoBone(backShoulder, backHandTarget, LIMB.upperArm, LIMB.forearm, armBendBack);
-  // Knees always bend forward (toward +x), like real knees.
-  const frontLeg = solveTwoBone(pelvis, frontFootTarget, LIMB.thigh, LIMB.shin, -1);
-  const backLeg = solveTwoBone(pelvis, backFootTarget, LIMB.thigh, LIMB.shin, -1);
+  const frontLeg = solveTwoBone(pelvis, frontFootTarget, LIMB.thigh, LIMB.shin, legBendFront);
+  const backLeg = solveTwoBone(pelvis, backFootTarget, LIMB.thigh, LIMB.shin, legBendBack);
 
   return {
     head,
@@ -190,6 +205,7 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     backKnee: backLeg.joint,
     backFoot: backLeg.end,
     stomp,
+    facingCamera,
   };
 }
 
