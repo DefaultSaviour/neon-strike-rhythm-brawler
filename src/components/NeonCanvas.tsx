@@ -550,13 +550,14 @@ function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
     // Bright on impact, then fades back so it never competes with incoming enemies.
-    const presence = 0.4 + 0.6 * p.heat;
+    const presence = 0.3 + 0.7 * p.heat;
     ctx.globalAlpha = Math.max(0, p.alpha) * presence;
 
     // Same solid-neon look as the bodies they came from. Fresh pieces glow
     // white-hot and cool down to the enemy's colour.
     const outline = heatColor(p.color, p.heat * 0.85);
-    const glow = 8 + p.heat * 14;
+    // Only fresh (hot) pieces glow; cooled pieces stay quiet in the background.
+    const glow = p.heat > 0.15 ? 6 + p.heat * 14 : 0;
     const fill = bodyFill(p.color);
 
     if (p.shape === 'circle') {
@@ -687,24 +688,26 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   let tierName = 'BASIC STRIKER';
   let tierColor = '#00f3ff';
 
+  // Glow grows with the combo, but stays moderate so the fight stays readable.
+  // God tier is pale gold rather than pure white: white means "enemy just got hit".
   if (combo >= 50) {
-    glowColor = '#ffffff';
-    glowBlur = 55;
+    glowColor = '#fff1a8';
+    glowBlur = 30;
     tierName = 'GOD TIER';
-    tierColor = '#ffffff';
+    tierColor = '#fff1a8';
   } else if (combo >= 30) {
     glowColor = '#ffe600';
-    glowBlur = 42;
+    glowBlur = 26;
     tierName = 'OVERDRIVE';
     tierColor = '#ffe600';
   } else if (combo >= 16) {
     glowColor = '#ff007f';
-    glowBlur = 32;
+    glowBlur = 22;
     tierName = 'CYBER NINJA';
     tierColor = '#ff007f';
   } else if (combo >= 6) {
     glowColor = '#38bdf8';
-    glowBlur = 24;
+    glowBlur = 19;
     tierName = 'ACROBATIC';
     tierColor = '#38bdf8';
   }
@@ -715,9 +718,10 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   // 1. GOD-TIER RADIANT PLASMA WINGS (Combo 50+)
   if (combo >= 50) {
     ctx.save();
-    ctx.strokeStyle = '#ffffff';
-    ctx.shadowColor = '#00f3ff';
-    ctx.shadowBlur = 40;
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = '#fff1a8';
+    ctx.shadowColor = '#ffe600';
+    ctx.shadowBlur = 16;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
 
@@ -749,10 +753,11 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   // 2. OVERDRIVE LIGHTNING ARCS (Combo 30+)
   if (combo >= 30) {
     ctx.save();
+    ctx.globalAlpha = 0.7;
     ctx.strokeStyle = '#ffe600';
     ctx.shadowColor = '#ffe600';
-    ctx.shadowBlur = 22;
-    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
     // Crackling arc from chest to hands
     const arcX1 = (pose.chest.x + pose.leftHand.x) / 2 + (Math.random() - 0.5) * 16;
