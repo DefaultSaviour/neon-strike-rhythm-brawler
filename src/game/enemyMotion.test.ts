@@ -88,14 +88,38 @@ describe('enemyPose', () => {
     expect(odd.frontHand.y).toBeGreaterThan(odd.chest.y);
   });
 
-  it('sway keeps both hands above the head and leans side to side', () => {
-    const left = enemyPose('sway', 3, 'agile');
-    const right = enemyPose('sway', 1, 'agile');
-    for (const p of [left, right]) {
+  it('hands-up faces the camera: one hand each side of the head, feet apart', () => {
+    for (let beat = 0; beat < 4; beat += 0.25) {
+      const p = enemyPose('sway', beat, 'agile');
+      expect(p.facingCamera).toBe(true);
+      expect(p.frontHand.x).toBeGreaterThan(p.head.x + 5);
+      expect(p.backHand.x).toBeLessThan(p.head.x - 5);
       expect(p.frontHand.y).toBeLessThan(p.head.y);
       expect(p.backHand.y).toBeLessThan(p.head.y);
+      expect(p.frontFoot.x).toBeGreaterThan(p.pelvis.x);
+      expect(p.backFoot.x).toBeLessThan(p.pelvis.x);
+      // Elbows and knees point outward, away from the centre line.
+      expect(p.frontElbow.x).toBeGreaterThan(p.frontShoulder.x);
+      expect(p.backElbow.x).toBeLessThan(p.backShoulder.x);
+      expect(p.frontKnee.x).toBeGreaterThan(p.pelvis.x);
+      expect(p.backKnee.x).toBeLessThan(p.pelvis.x);
     }
-    expect(right.head.x - left.head.x).toBeGreaterThan(10);
+  });
+
+  it('hands-up bends knees and elbows on the beat and straightens between beats', () => {
+    const onBeat = enemyPose('sway', 2, 'samurai');
+    const between = enemyPose('sway', 2.8, 'samurai');
+    // Knees bend = hip comes closer to the foot.
+    expect(onBeat.frontFoot.y - onBeat.pelvis.y).toBeLessThan(between.frontFoot.y - between.pelvis.y - 4);
+    // Elbows bend = hand comes closer to the shoulder.
+    const reach = (p: typeof onBeat) => Math.hypot(p.frontHand.x - p.frontShoulder.x, p.frontHand.y - p.frontShoulder.y);
+    expect(reach(onBeat)).toBeLessThan(reach(between) - 4);
+  });
+
+  it('only the hands-up pose faces the camera', () => {
+    for (const style of ['stand', 'run', 'dance'] as const) {
+      expect(enemyPose(style, 1, 'heavy').facingCamera).toBe(false);
+    }
   });
 
   it('repeats every two beats, so the motion stays in time for the whole song', () => {

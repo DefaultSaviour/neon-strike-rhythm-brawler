@@ -58,7 +58,7 @@ A high-octane cyberpunk rhythm brawler powered by HTML5 Canvas and Web Audio API
 
 - **Space** pauses in 2-Button Mode (**Esc / P** in 1-Button Mode, where Space is the strike key). The song freezes exactly where it is and resumes from the same spot.
 - The pause menu lets you change options mid-song:
-  - **Enemy Movement**: Run on the spot, Dance, Hands up sway, or Just stand. Every style moves on the beat (`src/game/enemyMotion.ts`).
+  - **Enemy Movement**: Run on the spot, Dance, Hands up (facing you, knees and elbows pumping on the beat), or Just stand. Every style moves on the beat (`src/game/enemyMotion.ts`).
   - **Hit Sound**: a short tone tuned to the pitch of the beat you hit (so it stays in key with the song), the song volume boost, both, or off (`src/audio/hitTone.ts`).
   - Music and hit-sound volume, and the audio latency offset.
 
