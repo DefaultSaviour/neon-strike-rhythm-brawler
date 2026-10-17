@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { GameScoreState, Track, HighScoreRecord } from '../types/game';
 import type { DeathReport } from '../game/timing';
+import type { RunProgress } from '../game/runProgress';
+import { RunProgressBar } from './RunProgressBar';
 import { RotateCcw, Music, Trophy, Flame, Target } from 'lucide-react';
 
 interface GameOverModalProps {
@@ -19,6 +21,8 @@ interface GameOverModalProps {
   onApplyLatencyOffset?: (offsetMs: number) => void;
   /** Why the run ended, when an enemy got through */
   deathReport?: DeathReport | null;
+  /** How far through the song this run got (drives the progress bar) */
+  runProgress?: RunProgress | null;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -33,6 +37,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   suggestedLatencyOffsetMs = null,
   onApplyLatencyOffset,
   deathReport = null,
+  runProgress = null,
 }) => {
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
   // Freeze the suggestion when the screen opens: once applied, the setting
@@ -102,7 +107,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         }`}
       >
         {/* Outcome Header */}
-        <div className="flex flex-col items-center mb-5">
+        <div className="w-full flex flex-col items-center mb-5">
           <div
             className={`text-2xl md:text-3xl font-black tracking-widest uppercase ${
               cleared
@@ -121,6 +126,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 Killed by a {deathReport.enemyName} on the {deathReport.lane.toUpperCase()}.
               </div>
               <div className="mt-0.5">{deathReport.reason}</div>
+            </div>
+          )}
+          {runProgress && (
+            <div className="mt-4 w-full self-stretch">
+              <RunProgressBar run={runProgress} />
             </div>
           )}
         </div>
