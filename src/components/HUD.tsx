@@ -8,8 +8,8 @@ interface HUDProps {
   scoreState: GameScoreState;
   oneButtonMode?: boolean;
   onToggleOneButtonMode?: () => void;
-  onStrike: (lane: Lane) => void;
-  onOneButtonStrike?: () => void;
+  onStrike: (lane: Lane, eventTimeStamp?: number) => void;
+  onOneButtonStrike?: (eventTimeStamp?: number) => void;
   onPause: () => void;
   onRestart: () => void;
   onOpenSelect: () => void;
@@ -90,14 +90,14 @@ export const HUD: React.FC<HUDProps> = ({
   const handleLeftDown = (e: React.PointerEvent) => {
     e.preventDefault();
     setLeftActive(true);
-    onStrike('left');
+    onStrike('left', e.timeStamp);
     setTimeout(() => setLeftActive(false), 90);
   };
 
   const handleRightDown = (e: React.PointerEvent) => {
     e.preventDefault();
     setRightActive(true);
-    onStrike('right');
+    onStrike('right', e.timeStamp);
     setTimeout(() => setRightActive(false), 90);
   };
 
@@ -105,9 +105,9 @@ export const HUD: React.FC<HUDProps> = ({
     e.preventDefault();
     setSingleActive(true);
     if (onOneButtonStrike) {
-      onOneButtonStrike();
+      onOneButtonStrike(e.timeStamp);
     } else {
-      onStrike('left');
+      onStrike('left', e.timeStamp);
     }
     setTimeout(() => setSingleActive(false), 90);
   };

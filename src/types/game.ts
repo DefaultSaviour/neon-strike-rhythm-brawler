@@ -21,6 +21,8 @@ export interface FloatingJudgement {
   createdAt: number;
   scale: number;
   lane: Lane;
+  /** For non-PERFECT hits: whether the press was early or late (helps players adjust) */
+  detail?: 'EARLY' | 'LATE';
 }
 
 export interface BeatNote {
@@ -47,25 +49,6 @@ export interface Track {
   audioUrl?: string;
 }
 
-export interface DebrisPiece {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  angle: number;
-  vAngle: number;
-  color: string;
-  shapeType: 'head' | 'chest' | 'arm' | 'leg' | 'blade' | 'shard';
-  size: number;
-  points?: Array<{ x: number; y: number }>;
-  landed: boolean;
-  fallingInPit: boolean;
-  alpha: number;
-  life: number;
-  maxLife: number;
-}
-
 export interface Enemy {
   id: string;
   lane: Lane;
@@ -82,6 +65,8 @@ export interface Enemy {
   defeated: boolean;
   deathTime?: number;
   animPhase: number;
+  /** Added to the walk cycle so neighbouring enemies lead with opposite feet */
+  stepOffset?: number;
   trailHistory: Array<{ x: number; y: number; alpha: number }>;
 }
 
@@ -95,7 +80,7 @@ export interface Particle {
   alpha: number;
   life: number;
   maxLife: number;
-  sparkType?: 'line' | 'dot' | 'ring' | 'ember';
+  sparkType?: 'line' | 'dot' | 'ring' | 'ember' | 'flash';
 }
 
 export interface Point2D {

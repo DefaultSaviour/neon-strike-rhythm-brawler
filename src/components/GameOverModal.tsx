@@ -9,6 +9,13 @@ interface GameOverModalProps {
   highScoreRecord: HighScoreRecord | null;
   onRestart: () => void;
   onOpenSelect: () => void;
+  /** Median press-minus-beat error in ms (positive = late), or null if no hits */
+  averageTimingErrorMs?: number | null;
+  /** Current latency setting (ms) */
+  currentLatencyOffsetMs?: number;
+  /** Latency offset suggested from this run's hits, or null if not enough data */
+  suggestedLatencyOffsetMs?: number | null;
+  onApplyLatencyOffset?: (offsetMs: number) => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -18,7 +25,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   highScoreRecord,
   onRestart,
   onOpenSelect,
+  averageTimingErrorMs = null,
+  currentLatencyOffsetMs = 0,
+  suggestedLatencyOffsetMs = null,
+  onApplyLatencyOffset,
 }) => {
+  const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
+  // Freeze the suggestion when the screen opens: once applied, the setting
+  // changes, and recomputing from the same hits would count the error twice.
+  const [suggestion] = React.useState(suggestedLatencyOffsetMs);
+  const [offsetAtOpen] = React.useState(currentLatencyOffsetMs);
+  // Only worth suggesting a change if it's a noticeable one.
+  const showSuggestion =
+    suggestion !== null && Math.abs(suggestion - offsetAtOpen) >= 15 && onApplyLatencyOffset !== undefined;
   const totalHits =
     scoreState.perfectCount + scoreState.goodCount + scoreState.okCount + scoreState.missCount;
   const accuracy =
@@ -164,6 +183,39 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Timing feedback: tells players which way they're off, and offers a fix */}
+        {averageTimingErrorMs !== null && (
+          <div className="w-full mb-4 p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-xs text-slate-300">
+            <div className="flex justify-between">
+              <span>Your average timing</span>
+              <span className="font-mono font-bold text-slate-100">
+                {Math.abs(averageTimingErrorMs) <= 5
+                  ? 'spot on'
+                  : `${Math.abs(averageTimingErrorMs)} ms ${averageTimingErrorMs < 0 ? 'early' : 'late'}`}
+              </span>
+            </div>
+            {showSuggestion && (
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-slate-400">
+                  Consistently {averageTimingErrorMs < 0 ? 'early' : 'late'}? Your audio may be delayed.
+                </span>
+                <button
+                  onClick={() => {
+                    onApplyLatencyOffset!(suggestion!);
+                    setAppliedOffset(suggestion);
+                  }}
+                  disabled={appliedOffset !== null}
+                  className="shrink-0 px-2.5 py-1.5 rounded bg-cyan-950 border border-cyan-500/50 text-cyan-300 font-mono font-bold hover:bg-cyan-900 disabled:opacity-60 cursor-pointer"
+                >
+                  {appliedOffset !== null
+                    ? `Offset set to ${appliedOffset} ms`
+                    : `Set offset to ${suggestion} ms`}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="w-full flex flex-col gap-2.5">

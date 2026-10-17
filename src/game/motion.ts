@@ -1,0 +1,120 @@
+import { Point2D, SkeletonPose } from '../types/game';
+
+/**
+ * Animation helpers for the player fighter.
+ *
+ * The old strike animation slid linearly from idle to the attack pose and back,
+ * which reads as floaty. Good fighting-game animation is about contrast:
+ * a very fast snap INTO the hit (slightly overshooting, then settling), a short
+ * hold so the eye can read the pose, then a softer recovery. The fighter also
+ * lunges toward the enemy so the blow visibly travels.
+ */
+
+/** 0..1 -> 0..1 with a small overshoot past 1 before settling (a "snap"). */
+export function easeOutBack(t: number, overshoot = 1.6): number {
+  const x = Math.min(1, Math.max(0, t)) - 1;
+  return 1 + (overshoot + 1) * x * x * x + overshoot * x * x;
+}
+
+export function easeOutCubic(t: number): number {
+  const x = 1 - Math.min(1, Math.max(0, t));
+  return 1 - x * x * x;
+}
+
+export function easeInOutCubic(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+/** Linear blend between two poses. Unlike lerpPose, `t` may go past 1 for overshoot. */
+export function blendPose(a: SkeletonPose, b: SkeletonPose, t: number): SkeletonPose {
+  const mix = (p: Point2D, q: Point2D): Point2D => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+  const mixList = (p?: Point2D[], q?: Point2D[]) =>
+    p && q && p.length === q.length ? p.map((pt, i) => mix(pt, q[i])) : q ?? p;
+  return {
+    head: mix(a.head, b.head),
+    chest: mix(a.chest, b.chest),
+    pelvis: mix(a.pelvis, b.pelvis),
+    leftShoulder: mix(a.leftShoulder, b.leftShoulder),
+    leftElbow: mix(a.leftElbow, b.leftElbow),
+    leftHand: mix(a.leftHand, b.leftHand),
+    rightShoulder: mix(a.rightShoulder, b.rightShoulder),
+    rightElbow: mix(a.rightElbow, b.rightElbow),
+    rightHand: mix(a.rightHand, b.rightHand),
+    leftHip: mix(a.leftHip, b.leftHip),
+    leftKnee: mix(a.leftKnee, b.leftKnee),
+    leftFoot: mix(a.leftFoot, b.leftFoot),
+    rightHip: mix(a.rightHip, b.rightHip),
+    rightKnee: mix(a.rightKnee, b.rightKnee),
+    rightFoot: mix(a.rightFoot, b.rightFoot),
+    scarf: mixList(a.scarf, b.scarf),
+    bladeSlash: b.bladeSlash ?? a.bladeSlash,
+  };
+}
+
+/** Strike timeline, as fractions of the whole attack. */
+export const STRIKE_PHASES = {
+  /** End of the snap into the attack pose */
+  impact: 0.28,
+  /** End of the hold on the attack pose */
+  hold: 0.6,
+} as const;
+
+export interface StrikeFrame {
+  pose: SkeletonPose;
+  /** Horizontal body offset toward the enemy (world units) */
+  lungeX: number;
+  /** True while the blow is landing (used to draw the slash trail) */
+  active: boolean;
+}
+
+/**
+ * Pose of the fighter `progress` (0..1) of the way through a strike.
+ * `fromPose` is wherever the fighter was when the button was pressed, so fast
+ * strings of hits chain smoothly instead of snapping back to idle each time.
+ */
+export function strikeFrame(
+  progress: number,
+  fromPose: SkeletonPose,
+  strikePose: SkeletonPose,
+  restPose: SkeletonPose,
+  lungeX: number
+): StrikeFrame {
+  const p = Math.min(1, Math.max(0, progress));
+  if (p < STRIKE_PHASES.impact) {
+    const t = p / STRIKE_PHASES.impact;
+    return { pose: blendPose(fromPose, strikePose, easeOutBack(t)), lungeX: lungeX * easeOutCubic(t), active: true };
+  }
+  if (p < STRIKE_PHASES.hold) {
+    return { pose: strikePose, lungeX, active: true };
+  }
+  const t = easeInOutCubic((p - STRIKE_PHASES.hold) / (1 - STRIKE_PHASES.hold));
+  return { pose: blendPose(strikePose, restPose, t), lungeX: lungeX * (1 - t), active: false };
+}
+
+/**
+ * Idle fighting stance that bounces on the music's beat: knees dip as the beat
+ * lands (`pulse` = 1) and spring back up between beats.
+ */
+export function idleBouncePose(rest: SkeletonPose, pulse: number, sway: number): SkeletonPose {
+  const dip = pulse * 4;
+  const lift = (pt: Point2D, amount: number, dx = 0): Point2D => ({ x: pt.x + dx, y: pt.y + amount });
+  return {
+    ...rest,
+    head: lift(rest.head, dip * 1.1, sway * 0.6),
+    chest: lift(rest.chest, dip, sway * 0.4),
+    pelvis: lift(rest.pelvis, dip * 0.9),
+    leftShoulder: lift(rest.leftShoulder, dip),
+    rightShoulder: lift(rest.rightShoulder, dip),
+    leftElbow: lift(rest.leftElbow, dip * 0.8),
+    rightElbow: lift(rest.rightElbow, dip * 0.8),
+    leftHand: lift(rest.leftHand, dip * 0.7 - pulse * 2),
+    rightHand: lift(rest.rightHand, dip * 0.7 - pulse * 2),
+    leftHip: lift(rest.leftHip, dip * 0.9),
+    rightHip: lift(rest.rightHip, dip * 0.9),
+    // Knees push outward as the body sinks; feet stay planted.
+    leftKnee: lift(rest.leftKnee, dip * 0.5, -dip * 0.6),
+    rightKnee: lift(rest.rightKnee, dip * 0.5, dip * 0.6),
+    scarf: rest.scarf?.map((pt, i) => ({ x: pt.x - sway * i * 0.8, y: pt.y + dip + Math.sin(sway + i) * i * 1.5 })),
+  };
+}

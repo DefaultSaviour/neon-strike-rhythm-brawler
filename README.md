@@ -38,6 +38,28 @@ A high-octane cyberpunk rhythm brawler powered by HTML5 Canvas and Web Audio API
 
 ---
 
+## 🎯 Timing Accuracy & Feel
+
+- **Latency-corrected song clock** (`src/audio/songClock.ts`): the game follows the audio you *hear*, not the audio the browser is processing, so enemies reach the strike line exactly on the audible beat.
+- **Charts land on the attack**: the kick/bass detector's built-in ~15 ms lag is removed (verified by tests on synthetic songs with known kick times).
+- **Fair judging** (`src/game/timing.ts`): PERFECT ±55 ms, GOOD ±105 ms, OK ±160 ms. A press always hits the *earliest* enemy in range, and enemies only breach after their OK window has passed. Key auto-repeat is ignored, and presses are timed from the input event itself.
+- **Timing rings** close onto each strike zone exactly on the beat, and non-PERFECT hits show **EARLY / LATE**.
+- **Auto-calibration**: the results screen shows your average timing and offers a one-click latency offset.
+
+## 💥 Visuals
+
+- The arena **scales to the screen** (`src/game/layout.ts`): fighters fill about a third of the screen height on any monitor.
+- **Beat-locked animation**: fighter bounce, enemy footsteps, sun and floor pulse all follow a beat grid fitted to the song (`src/audio/beatGrid.ts`).
+- **Snappy strikes** (`src/game/motion.ts`): overshoot snap, hold, recover, and a lunge toward the target, plus hit-stop freeze frames and a camera punch.
+- **Rigid-body shattering** (`src/game/debrisPhysics.ts`): enemies break into pieces that start from their real skeleton, then spin, bounce and slide with friction. The conveyors carry the pieces into the pit.
+- **Clarity first**: only the next enemy in each lane is at full brightness, debris fades once it cools, and the timing ring is always drawn on top.
+
+## 🧪 Tests
+
+```bash
+npm test
+```
+
 ## 🎮 Controls
 
 | Action | 2-Button Mode | 1-Button Mode | Touch / Mobile |
@@ -57,9 +79,9 @@ A high-octane cyberpunk rhythm brawler powered by HTML5 Canvas and Web Audio API
 | :--- | :--- | :--- | :--- | :--- |
 | **Eargasm** | 150 | Hard | 3:10 | Heavy thumping kicks and rolling 16th-note sub-bass groove. |
 | **Eargasm 2** | 150 | Hard | 3:40 | Relentless driving rhythm with melodic synth breakdowns. |
-| **Eargasm 3** | 150 | Hard | 3:09 | Dark electro industrial rhythm with rapid syncopated basslines. |
-| **Eargasm 4** | 200 | Hard | 3:15 | High-speed 200 BPM frantic speedcore rush testing reflex limits. |
-| **Eargasm 5** | 136 | Medium | 3:19 | Deep bouncy groove with rhythmic acoustic accents. |
+| **Eargasm 3** | 155 | Hard | 3:09 | Dark electro industrial rhythm with rapid syncopated basslines. |
+| **Eargasm 4** | 199 | Hard | 3:15 | High-speed 200 BPM frantic speedcore rush testing reflex limits. |
+| **Eargasm 5** | 104 | Medium | 3:19 | Deep bouncy groove with rhythmic acoustic accents. |
 
 ---
 

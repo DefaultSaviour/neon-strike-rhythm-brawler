@@ -55,6 +55,13 @@ export default function App() {
     });
   }, []);
 
+  // Dev builds only: expose the engine so automated browser tests can drive the game.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as unknown as { __neonEngine?: GameEngine }).__neonEngine = engine;
+    }
+  }, [engine]);
+
   const refreshHighScores = useCallback(() => {
     setHighScores(engine.getAllHighScores());
   }, [engine]);
@@ -117,15 +124,17 @@ export default function App() {
   }, [handleStartGame, selectedTrack]);
 
   // Strike input handler
-  const handleStrike = useCallback((lane: Lane) => {
+  // `eventTimeStamp` is the input event's timeStamp, so presses are judged
+  // at the moment they happened rather than when this code got to run.
+  const handleStrike = useCallback((lane: Lane, eventTimeStamp?: number) => {
     if (gameStatus === 'PLAYING') {
-      engine.handleInput(lane);
+      engine.handleInput(lane, eventTimeStamp);
     }
   }, [gameStatus, engine]);
 
-  const handleOneButtonStrike = useCallback(() => {
+  const handleOneButtonStrike = useCallback((eventTimeStamp?: number) => {
     if (gameStatus === 'PLAYING') {
-      engine.handleOneButtonInput();
+      engine.handleOneButtonInput(eventTimeStamp);
     }
   }, [gameStatus, engine]);
 
@@ -154,6 +163,8 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is inside an input field
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      // Holding a key down fires repeated keydown events; only the first press counts.
+      if (e.repeat) return;
 
       if (e.code === 'KeyR') {
         e.preventDefault();
@@ -182,7 +193,7 @@ export default function App() {
         ) {
           e.preventDefault();
           if (gameStatus === 'PLAYING') {
-            handleOneButtonStrike();
+            handleOneButtonStrike(e.timeStamp);
           } else if (gameStatus === 'MENU') {
             handleStartGame();
           } else if (gameStatus === 'PAUSED') {
@@ -193,10 +204,10 @@ export default function App() {
         // STANDARD 2-BUTTON COMBAT MODE
         if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ') {
           e.preventDefault();
-          handleStrike('left');
+          handleStrike('left', e.timeStamp);
         } else if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'KeyE') {
           e.preventDefault();
-          handleStrike('right');
+          handleStrike('right', e.timeStamp);
         } else if (e.code === 'Space' || e.code === 'Escape' || e.code === 'KeyP') {
           e.preventDefault();
           if (gameStatus === 'PLAYING' || gameStatus === 'PAUSED') {
@@ -476,6 +487,10 @@ export default function App() {
             setGameStatus('MENU');
             setShowTrackSelect(true);
           }}
+          averageTimingErrorMs={engine.getAverageTimingErrorMs()}
+          currentLatencyOffsetMs={audioSettings.latencyOffsetMs}
+          suggestedLatencyOffsetMs={engine.getSuggestedLatencyOffsetMs()}
+          onApplyLatencyOffset={(offsetMs) => handleUpdateSettings({ latencyOffsetMs: offsetMs })}
         />
       )}
 

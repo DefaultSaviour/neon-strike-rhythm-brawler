@@ -1,0 +1,56 @@
+/**
+ * Arena layout: how the game world maps onto the screen.
+ *
+ * Everything in the fight (fighters, enemies, debris, strike zones) is drawn
+ * in "world units" where the floor is at y = FLOOR_Y and a fighter is about
+ * FIGHTER_HEIGHT tall. Previously world units were raw pixels, so on a big
+ * monitor the fight was a tiny strip in a sea of empty space. Now we pick a
+ * scale so the fighters fill a sensible share of the screen.
+ */
+
+export const FLOOR_Y = 68;
+/** Head-crest to feet height of a fighter, in world units */
+export const FIGHTER_HEIGHT = 145;
+
+export interface ArenaLayout {
+  /** Screen pixels per world unit */
+  scale: number;
+  /** Screen position of the world origin (centre of the arena) */
+  originX: number;
+  originY: number;
+  /** Screen y of the floor line the fighters stand on */
+  floorScreenY: number;
+  /** Screen y of the horizon behind the fight */
+  horizonY: number;
+  /** Half the screen width, in world units (enemies spawn just beyond this) */
+  worldHalfWidth: number;
+}
+
+/** Fraction of screen height from the top where the fighters' feet go */
+const FLOOR_SCREEN_FRACTION = 0.8;
+/** Target fighter height as a fraction of screen height */
+const FIGHTER_SCREEN_FRACTION = 0.34;
+/** Minimum world width that must stay visible so enemies have room to approach */
+const MIN_VISIBLE_WORLD_WIDTH = 440;
+const MIN_SCALE = 0.6;
+const MAX_SCALE = 3.2;
+
+export function computeArenaLayout(width: number, height: number): ArenaLayout {
+  const byHeight = (height * FIGHTER_SCREEN_FRACTION) / FIGHTER_HEIGHT;
+  const byWidth = width / MIN_VISIBLE_WORLD_WIDTH;
+  const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, byHeight, byWidth));
+
+  const floorScreenY = height * FLOOR_SCREEN_FRACTION;
+  const originY = floorScreenY - FLOOR_Y * scale;
+  // Horizon sits at roughly chest height of the fighters, like a side-on camera.
+  const horizonY = floorScreenY - 70 * scale;
+
+  return {
+    scale,
+    originX: width / 2,
+    originY,
+    floorScreenY,
+    horizonY,
+    worldHalfWidth: width / 2 / scale,
+  };
+}

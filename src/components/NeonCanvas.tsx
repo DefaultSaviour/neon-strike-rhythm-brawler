@@ -1,14 +1,23 @@
 import React, { useRef, useEffect } from 'react';
 import { GameEngine } from '../game/gameEngine';
-import { Point2D, DebrisPiece } from '../types/game';
-import { ATTACK_MOVES, getMoveForCombo } from '../game/animations';
+import { Point2D } from '../types/game';
+import { getMoveForCombo } from '../game/animations';
 import { getEnemyStyle, resolveBandTier } from '../game/enemyStyles';
 import { audioEngine } from '../audio/audioEngine';
+import { beatPulse } from '../audio/beatGrid';
+import { ArenaLayout, computeArenaLayout, FLOOR_Y } from '../game/layout';
+import { HIT_WINDOWS } from '../game/timing';
+import { Enemy } from '../types/game';
 
 interface NeonCanvasProps {
   engine: GameEngine;
   scanlines: boolean;
 }
+
+/** How long a struck enemy flashes white before it is gone (ms) */
+const HIT_FLASH_MS = 110;
+/** Depth of the conveyor floor behind the fighters' feet (world units) */
+const FLOOR_BACK = 34;
 
 export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -44,14 +53,17 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       const width = window.innerWidth;
       const height = window.innerHeight;
       const dpr = window.devicePixelRatio || 1;
+      const layout = computeArenaLayout(width, height);
 
       // Update engine physics (enemies, debris, conveyor belt forces)
-      engine.update(dt, width);
+      engine.update(dt, layout.worldHalfWidth);
 
-      // Inward conveyor scrolling
-      const bpm = engine.track?.bpm || 120;
-      const conveyorSpeed = engine.conveyorSpeed * (bpm / 120);
-      conveyorOffset = (conveyorOffset + dt * conveyorSpeed) % 50;
+      // Inward conveyor scrolling (world units)
+      const conveyorSpeed = engine.conveyorSpeed * (engine.beatGrid.bpm / 120) * 0.6;
+      conveyorOffset = (conveyorOffset + dt * conveyorSpeed) % 40;
+
+      // 1 on each beat, fading before the next: drives everything that pulses with the music.
+      const pulse = engine.track ? beatPulse(engine.songTime, engine.beatGrid, 5) : 0;
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -59,66 +71,45 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       ctx.fillStyle = '#060713';
       ctx.fillRect(0, 0, width, height);
 
-      // Apply screen shake
       ctx.save();
       if (engine.screenShake > 0) {
-        const shakeX = (Math.random() - 0.5) * engine.screenShake * 1.5;
-        const shakeY = (Math.random() - 0.5) * engine.screenShake * 1.5;
+        const shakeX = (Math.random() - 0.5) * engine.screenShake * 2;
+        const shakeY = (Math.random() - 0.5) * engine.screenShake * 2;
         ctx.translate(shakeX, shakeY);
       }
 
-      const horizonY = height * 0.44;
-      const runwayTopY = height * 0.58;
-      const runwayBottomY = height * 0.92;
-      const runwayCenterY = (runwayTopY + runwayBottomY) / 2;
-      const groundY = runwayCenterY + 15; // Characters physically stand on this runway line
-      const centerX = width / 2;
-      const pitRadius = engine.pitRadius;
+      // Screen-space backdrop
+      drawAtmosphereAndSun(ctx, layout, width, pulse);
+      drawHorizonVisualizer(ctx, width, layout);
 
-      // 1. Atmosphere & Sun
-      drawAtmosphereAndSun(ctx, centerX, horizonY, width);
+      // World space: everything in the fight is drawn in world units, scaled to fit the screen.
+      ctx.save();
+      const zoom = 1 + engine.cameraKick.zoom;
+      ctx.translate(layout.originX, layout.originY);
+      // Zoom punch is centred on the fighter's chest so it feels like the camera leans in.
+      ctx.translate(0, -20 * layout.scale);
+      ctx.scale(zoom, zoom);
+      ctx.translate(engine.cameraKick.x * layout.scale, 20 * layout.scale);
+      ctx.scale(layout.scale, layout.scale);
 
-      // 2. Horizon Visualizer
-      drawHorizonVisualizer(ctx, width, horizonY);
+      const halfW = layout.worldHalfWidth / zoom + 20;
+      const worldBottom = (height - layout.originY) / layout.scale + 20;
 
-      // 3. Dual Converging Conveyor Floors (Left moves Right -> Pit <- Right moves Left)
-      drawConvergingConveyors(
-        ctx,
-        centerX,
-        runwayTopY,
-        runwayBottomY,
-        width,
-        pitRadius,
-        conveyorOffset
-      );
-
-      // 4. Central Abyss Pit & Grinder (Behind/Underneath the player)
-      drawCentralPit(ctx, centerX, groundY, runwayBottomY, pitRadius);
-
-      // 5. Tactical Strike Range Brackets
-      drawTacticalStrikeZones(ctx, centerX, groundY, engine);
-
-      // 6. Ground Shadows & Underglow
-      drawFloorShadowsAndReflections(ctx, centerX, groundY, engine, pitRadius);
-
-      // 7. Exploded Debris Shapes (Tumbling on conveyors and into the pit!)
-      drawDebrisPieces(ctx, centerX, groundY, engine);
-
-      // 8. Full-Sized Cyber Enemies (Same scale as the player!)
-      drawFullSizedEnemies(ctx, centerX, groundY, engine);
-
-      // 9. Player Neon Cyber-Fighter
-      drawPlayer(ctx, centerX, groundY, engine);
-
-      // 10. Hit Sparks & Particles
-      drawParticles(ctx, centerX, groundY, engine);
-
-      // 11. Floating Timing Judgements
-      drawJudgements(ctx, centerX, groundY, engine);
+      drawConvergingConveyors(ctx, halfW, worldBottom, engine.pitRadius, conveyorOffset, pulse);
+      drawCentralPit(ctx, worldBottom, engine.pitRadius, pulse);
+      drawTacticalStrikeZones(ctx, engine);
+      drawFloorShadowsAndReflections(ctx, engine, halfW);
+      drawDebrisPieces(ctx, engine);
+      drawFullSizedEnemies(ctx, engine, halfW);
+      drawPlayer(ctx, engine);
+      drawParticles(ctx, engine);
+      drawJudgements(ctx, engine);
+      // Last, so no effect can ever cover the timing cue.
+      drawTimingRings(ctx, engine);
+      ctx.restore();
 
       ctx.restore();
 
-      // 12. Scanlines
       if (scanlines) {
         drawScanlines(ctx, width, height);
       }
@@ -144,7 +135,6 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
 
 // --- RENDER HELPERS ---
 
-
 function colorWithAlpha(hex: string, alpha: number): string {
   if (hex.startsWith('#') && hex.length === 7) {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -155,36 +145,41 @@ function colorWithAlpha(hex: string, alpha: number): string {
   return hex;
 }
 
-function drawAtmosphereAndSun(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  horizonY: number,
-  width: number
-) {
-  const bassPulse = audioEngine.bassMeter * 0.25;
+/** Blend a #rrggbb colour toward white. amount 0 = original, 1 = white. */
+function heatColor(hex: string, amount: number): string {
+  if (!(hex.startsWith('#') && hex.length === 7) || amount <= 0) return hex;
+  const mix = (i: number) => {
+    const c = parseInt(hex.slice(i, i + 2), 16);
+    return Math.round(c + (255 - c) * Math.min(1, amount));
+  };
+  return `rgb(${mix(1)}, ${mix(3)}, ${mix(5)})`;
+}
 
-  const horizonGlow = ctx.createRadialGradient(
-    centerX,
-    horizonY,
-    20,
-    centerX,
-    horizonY,
-    width * 0.65
-  );
-  horizonGlow.addColorStop(0, `rgba(255, 0, 127, ${0.35 + bassPulse})`);
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function drawAtmosphereAndSun(ctx: CanvasRenderingContext2D, layout: ArenaLayout, width: number, pulse: number) {
+  const centerX = layout.originX;
+  const horizonY = layout.horizonY;
+  const bassPulse = audioEngine.bassMeter * 0.25 + pulse * 0.12;
+
+  const horizonGlow = ctx.createRadialGradient(centerX, horizonY, 20, centerX, horizonY, width * 0.7);
+  horizonGlow.addColorStop(0, `rgba(255, 0, 127, ${0.32 + bassPulse})`);
   horizonGlow.addColorStop(0.4, 'rgba(121, 40, 202, 0.18)');
   horizonGlow.addColorStop(1, 'rgba(6, 7, 19, 0)');
   ctx.fillStyle = horizonGlow;
-  ctx.fillRect(0, horizonY - 260, width, 400);
+  ctx.fillRect(0, 0, width, layout.floorScreenY);
 
-  const sunRadius = 75 + bassPulse * 15;
-  const sunCenterY = horizonY - 12;
+  // Synthwave sun, sized to the arena and breathing on the beat.
+  const sunRadius = (62 + bassPulse * 14) * layout.scale;
+  const sunCenterY = horizonY - 4 * layout.scale;
 
   ctx.save();
+  ctx.globalAlpha = 0.72; // slightly dimmed so the fighter in front of it stays readable
   ctx.beginPath();
   ctx.arc(centerX, sunCenterY, sunRadius, Math.PI, 0, false);
-  ctx.lineTo(centerX + sunRadius, sunCenterY);
-  ctx.lineTo(centerX - sunRadius, sunCenterY);
   ctx.closePath();
 
   const sunGrad = ctx.createLinearGradient(0, sunCenterY - sunRadius, 0, sunCenterY);
@@ -195,9 +190,10 @@ function drawAtmosphereAndSun(
   ctx.fill();
 
   ctx.fillStyle = '#060713';
+  const stripeGap = sunRadius / 6.5;
   for (let i = 1; i <= 6; i++) {
-    const y = sunCenterY - 12 * i;
-    const stripeHeight = 1.6 + i * 1.1;
+    const y = sunCenterY - stripeGap * i;
+    const stripeHeight = (1.6 + i * 1.1) * (layout.scale * 0.6);
     ctx.fillRect(centerX - sunRadius - 5, y, sunRadius * 2 + 10, stripeHeight);
   }
   ctx.restore();
@@ -205,8 +201,8 @@ function drawAtmosphereAndSun(
   ctx.save();
   ctx.strokeStyle = '#00f3ff';
   ctx.shadowColor = '#00f3ff';
-  ctx.shadowBlur = 12;
-  ctx.lineWidth = 1.5;
+  ctx.shadowBlur = 12 + pulse * 10;
+  ctx.lineWidth = 1.5 + pulse;
   ctx.beginPath();
   ctx.moveTo(0, horizonY);
   ctx.lineTo(width, horizonY);
@@ -214,391 +210,323 @@ function drawAtmosphereAndSun(
   ctx.restore();
 }
 
-function drawHorizonVisualizer(ctx: CanvasRenderingContext2D, width: number, horizonY: number) {
-  const bars = 48;
+function drawHorizonVisualizer(ctx: CanvasRenderingContext2D, width: number, layout: ArenaLayout) {
+  const bars = 64;
   const barWidth = width / bars;
   const bass = audioEngine.bassMeter;
   const treble = audioEngine.trebleMeter;
+  const maxH = 40 * layout.scale;
+  const now = performance.now();
 
   ctx.save();
   for (let i = 0; i < bars; i++) {
     const norm = Math.abs(i - bars / 2) / (bars / 2);
     const isLeft = i < bars / 2;
-    const factor = isLeft ? bass * (1 - norm) : treble * (1 - norm);
-    const h = factor * 45 + Math.sin(performance.now() * 0.006 + i) * 6;
+    const factor = isLeft ? bass * (1 - norm * 0.6) : treble * (1 - norm * 0.6);
+    const h = factor * maxH + Math.sin(now * 0.006 + i) * 4;
 
     if (h > 4) {
-      const grad = ctx.createLinearGradient(0, horizonY - h, 0, horizonY);
-      grad.addColorStop(0, isLeft ? 'rgba(0, 243, 255, 0.7)' : 'rgba(255, 0, 127, 0.7)');
+      const grad = ctx.createLinearGradient(0, layout.horizonY - h, 0, layout.horizonY);
+      grad.addColorStop(0, isLeft ? 'rgba(0, 243, 255, 0.32)' : 'rgba(255, 0, 127, 0.32)');
       grad.addColorStop(1, 'rgba(6, 7, 19, 0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(i * barWidth + 1, horizonY - h, barWidth - 2, h);
+      ctx.fillRect(i * barWidth + 1, layout.horizonY - h, barWidth - 2, h);
     }
   }
   ctx.restore();
 }
 
-// DUAL CONVERGING CONVEYOR FLOORS:
+// DUAL CONVERGING CONVEYOR FLOORS (world units):
 // Left side moves RIGHT (inwards towards the pit: >>>>>)
 // Right side moves LEFT (inwards towards the pit: <<<<<)
 function drawConvergingConveyors(
   ctx: CanvasRenderingContext2D,
-  centerX: number,
-  runwayTopY: number,
-  runwayBottomY: number,
-  width: number,
+  halfW: number,
+  worldBottom: number,
   pitRadius: number,
-  conveyorOffset: number
+  conveyorOffset: number,
+  pulse: number
 ) {
-  const runwayH = runwayBottomY - runwayTopY;
-  const leftEnd = centerX - pitRadius;
-  const rightStart = centerX + pitRadius;
+  const top = FLOOR_Y - FLOOR_BACK;
+  const front = FLOOR_Y + 22;
 
   ctx.save();
 
-  // 1. LEFT CONVEYOR BELT (Surface from 0 to leftEnd)
-  const leftGrad = ctx.createLinearGradient(0, runwayTopY, 0, runwayBottomY);
+  // Belt surfaces
+  const leftGrad = ctx.createLinearGradient(0, top, 0, front);
   leftGrad.addColorStop(0, '#0a0d24');
-  leftGrad.addColorStop(0.5, '#0e1232');
-  leftGrad.addColorStop(1, '#07091a');
+  leftGrad.addColorStop(1, '#10163c');
   ctx.fillStyle = leftGrad;
-  ctx.fillRect(0, runwayTopY, leftEnd, runwayH);
+  ctx.fillRect(-halfW, top, halfW - pitRadius, front - top);
 
-  // 2. RIGHT CONVEYOR BELT (Surface from rightStart to width)
-  const rightGrad = ctx.createLinearGradient(0, runwayTopY, 0, runwayBottomY);
+  const rightGrad = ctx.createLinearGradient(0, top, 0, front);
   rightGrad.addColorStop(0, '#1c0a1a');
-  rightGrad.addColorStop(0.5, '#280e25');
-  rightGrad.addColorStop(1, '#140612');
+  rightGrad.addColorStop(1, '#2c0f29');
   ctx.fillStyle = rightGrad;
-  ctx.fillRect(rightStart, runwayTopY, width - rightStart, runwayH);
+  ctx.fillRect(pitRadius, top, halfW - pitRadius, front - top);
 
-  // Top and Bottom Rails
-  ctx.save();
-  ctx.strokeStyle = '#00f3ff';
-  ctx.shadowColor = '#00f3ff';
-  ctx.shadowBlur = 8;
-  ctx.lineWidth = 2.5;
+  // Front face of the machine below the belts
+  const faceGrad = ctx.createLinearGradient(0, front, 0, worldBottom);
+  faceGrad.addColorStop(0, '#0b0c1c');
+  faceGrad.addColorStop(1, '#040510');
+  ctx.fillStyle = faceGrad;
+  ctx.fillRect(-halfW, front, halfW - pitRadius, worldBottom - front);
+  ctx.fillRect(pitRadius, front, halfW - pitRadius, worldBottom - front);
 
-  // Left rails
-  ctx.beginPath();
-  ctx.moveTo(0, runwayTopY);
-  ctx.lineTo(leftEnd, runwayTopY);
-  ctx.moveTo(0, runwayBottomY);
-  ctx.lineTo(leftEnd, runwayBottomY);
-  ctx.stroke();
-
-  // Right rails (Hot Magenta)
-  ctx.strokeStyle = '#ff007f';
-  ctx.shadowColor = '#ff007f';
-  ctx.beginPath();
-  ctx.moveTo(rightStart, runwayTopY);
-  ctx.lineTo(width, runwayTopY);
-  ctx.moveTo(rightStart, runwayBottomY);
-  ctx.lineTo(width, runwayBottomY);
-  ctx.stroke();
-  ctx.restore();
-
-  // LEFT INWARD MOVING CHEVRONS & SEGMENTS (Moving RIGHT >>>)
-  ctx.save();
-  ctx.strokeStyle = 'rgba(0, 243, 255, 0.22)';
-  ctx.lineWidth = 2;
-  const segmentDist = 50;
-
-  for (let x = -segmentDist + conveyorOffset; x < leftEnd; x += segmentDist) {
-    if (x >= 0 && x <= leftEnd) {
-      // Chevron pointing RIGHT >>>
-      ctx.beginPath();
-      ctx.moveTo(x - 12, runwayTopY + 12);
-      ctx.lineTo(x, runwayTopY + runwayH * 0.5);
-      ctx.lineTo(x - 12, runwayBottomY - 12);
-      ctx.stroke();
-    }
-  }
-
-  // RIGHT INWARD MOVING CHEVRONS & SEGMENTS (Moving LEFT <<<)
-  ctx.strokeStyle = 'rgba(255, 0, 127, 0.25)';
-  for (let x = width + segmentDist - conveyorOffset; x > rightStart; x -= segmentDist) {
-    if (x >= rightStart && x <= width) {
-      // Chevron pointing LEFT <<<
-      ctx.beginPath();
-      ctx.moveTo(x + 12, runwayTopY + 12);
-      ctx.lineTo(x, runwayTopY + runwayH * 0.5);
-      ctx.lineTo(x + 12, runwayBottomY - 12);
-      ctx.stroke();
-    }
-  }
-
-  ctx.restore();
-}
-
-// CENTRAL ABYSS PIT: Deep incinerator void behind/beneath the player where debris falls
-function drawCentralPit(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  runwayBottomY: number,
-  pitRadius: number
-) {
-  const pitLeft = centerX - pitRadius;
-  const pitRight = centerX + pitRadius;
-  const pitW = pitRadius * 2;
-  const pitTopY = groundY - 20;
-  const pitBottomY = runwayBottomY + 25;
-
-  ctx.save();
-
-  // Deep black abyss void
-  const pitVoid = ctx.createLinearGradient(0, pitTopY, 0, pitBottomY);
-  pitVoid.addColorStop(0, '#04040a');
-  pitVoid.addColorStop(0.6, '#080518');
-  pitVoid.addColorStop(1, '#ff007f33');
-  ctx.fillStyle = pitVoid;
-  ctx.fillRect(pitLeft, pitTopY, pitW, pitBottomY - pitTopY);
-
-  // Pit Hazard Walls & Neon Rim
-  ctx.strokeStyle = '#ffe600';
-  ctx.shadowColor = '#ffe600';
-  ctx.shadowBlur = 10;
-  ctx.lineWidth = 2.5;
-
-  // Left pit rim wall
-  ctx.beginPath();
-  ctx.moveTo(pitLeft, pitTopY);
-  ctx.lineTo(pitLeft, pitBottomY);
-  ctx.stroke();
-
-  // Right pit rim wall
-  ctx.beginPath();
-  ctx.moveTo(pitRight, pitTopY);
-  ctx.lineTo(pitRight, pitBottomY);
-  ctx.stroke();
-
-  // Grate teeth in the pit
-  ctx.strokeStyle = 'rgba(255, 230, 0, 0.35)';
-  ctx.lineWidth = 1.5;
-  for (let y = pitTopY + 20; y < pitBottomY; y += 18) {
+  // Rails glow brighter on every beat
+  ctx.lineWidth = 1.6;
+  ctx.shadowBlur = 8 + pulse * 14;
+  for (const side of [-1, 1]) {
+    const color = side < 0 ? '#00f3ff' : '#ff007f';
+    const x0 = side < 0 ? -halfW : pitRadius;
+    const x1 = side < 0 ? -pitRadius : halfW;
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
     ctx.beginPath();
-    ctx.moveTo(pitLeft + 6, y);
-    ctx.lineTo(pitRight - 6, y);
+    ctx.moveTo(x0, top);
+    ctx.lineTo(x1, top);
+    ctx.moveTo(x0, front);
+    ctx.lineTo(x1, front);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  // Moving chevrons show which way the belts run
+  const segment = 40;
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = `rgba(0, 243, 255, ${0.16 + pulse * 0.18})`;
+  for (let x = -halfW - segment + ((conveyorOffset + halfW) % segment); x < -pitRadius; x += segment) {
+    if (x - 8 < -halfW) continue;
+    ctx.beginPath();
+    ctx.moveTo(x - 8, top + 6);
+    ctx.lineTo(x, (top + front) / 2);
+    ctx.lineTo(x - 8, front - 6);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = `rgba(255, 0, 127, ${0.18 + pulse * 0.18})`;
+  for (let x = halfW + segment - ((conveyorOffset + halfW) % segment); x > pitRadius; x -= segment) {
+    if (x + 8 > halfW) continue;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, top + 6);
+    ctx.lineTo(x, (top + front) / 2);
+    ctx.lineTo(x + 8, front - 6);
     ctx.stroke();
   }
 
-  // Incinerator glow at bottom of the pit
-  const glow = ctx.createRadialGradient(
-    centerX,
-    pitBottomY,
-    5,
-    centerX,
-    pitBottomY,
-    pitRadius * 1.4
-  );
-  glow.addColorStop(0, 'rgba(255, 0, 127, 0.7)');
-  glow.addColorStop(0.5, 'rgba(121, 40, 202, 0.3)');
-  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(pitLeft - 10, pitBottomY - 40, pitW + 20, 60);
+  ctx.restore();
+}
 
-  // Central Combat Bridge Platform for the player (spanning across the pit)
+// CENTRAL ABYSS PIT: debris that reaches the middle drops in here
+function drawCentralPit(ctx: CanvasRenderingContext2D, worldBottom: number, pitRadius: number, pulse: number) {
+  const top = FLOOR_Y - FLOOR_BACK;
+
+  ctx.save();
+  const pitVoid = ctx.createLinearGradient(0, top, 0, worldBottom);
+  pitVoid.addColorStop(0, '#020208');
+  pitVoid.addColorStop(0.6, '#080518');
+  pitVoid.addColorStop(1, `rgba(255, 0, 127, ${0.25 + pulse * 0.2})`);
+  ctx.fillStyle = pitVoid;
+  ctx.fillRect(-pitRadius, top, pitRadius * 2, worldBottom - top);
+
+  // Hazard walls
+  ctx.strokeStyle = '#ffe600';
+  ctx.shadowColor = '#ffe600';
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(-pitRadius, top);
+  ctx.lineTo(-pitRadius, worldBottom);
+  ctx.moveTo(pitRadius, top);
+  ctx.lineTo(pitRadius, worldBottom);
+  ctx.stroke();
+
+  // Grate teeth
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255, 230, 0, 0.22)';
+  ctx.lineWidth = 1;
+  for (let y = FLOOR_Y + 14; y < worldBottom; y += 14) {
+    ctx.beginPath();
+    ctx.moveTo(-pitRadius + 4, y);
+    ctx.lineTo(pitRadius - 4, y);
+    ctx.stroke();
+  }
+
+  // Catwalk the fighter stands on, spanning the pit
   ctx.strokeStyle = '#00f3ff';
   ctx.shadowColor = '#00f3ff';
   ctx.shadowBlur = 12;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
-  ctx.moveTo(pitLeft - 6, groundY + 12);
-  ctx.lineTo(pitRight + 6, groundY + 12);
+  ctx.moveTo(-pitRadius - 4, FLOOR_Y + 1);
+  ctx.lineTo(pitRadius + 4, FLOOR_Y + 1);
   ctx.stroke();
-
-  // Bridge core
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 0.8;
   ctx.shadowBlur = 0;
   ctx.stroke();
-
   ctx.restore();
 }
 
-function drawTacticalStrikeZones(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  engine: GameEngine
-) {
+function drawTacticalStrikeZones(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const hitDist = engine.hitLineOffset;
-  const leftX = centerX - hitDist;
-  const rightX = centerX + hitDist;
+  const now = engine.songTime;
 
-  const nowTime = audioEngine.getPlaybackTime();
-  const leftEnemyInRange = engine.enemies.some(
-    (e) => !e.defeated && e.lane === 'left' && Math.abs(e.targetTime - nowTime) < 0.22
-  );
-  const rightEnemyInRange = engine.enemies.some(
-    (e) => !e.defeated && e.lane === 'right' && Math.abs(e.targetTime - nowTime) < 0.22
-  );
+  const inRange = (lane: 'left' | 'right') =>
+    engine.enemies.some((e) => !e.defeated && e.lane === lane && Math.abs(e.targetTime - now) < HIT_WINDOWS.GOOD);
 
   ctx.save();
+  for (const lane of ['left', 'right'] as const) {
+    const side = lane === 'left' ? -1 : 1;
+    const x = side * hitDist;
+    const color = lane === 'left' ? '#00f3ff' : '#ff007f';
+    const hot = inRange(lane);
 
-  const leftAlpha = leftEnemyInRange ? 0.95 : 0.45;
-  ctx.strokeStyle = `rgba(0, 243, 255, ${leftAlpha})`;
-  ctx.shadowColor = '#00f3ff';
-  ctx.shadowBlur = leftEnemyInRange ? 18 : 6;
-  ctx.lineWidth = leftEnemyInRange ? 3 : 2;
+    ctx.strokeStyle = colorWithAlpha(color, hot ? 0.95 : 0.4);
+    ctx.shadowColor = color;
+    ctx.shadowBlur = hot ? 18 : 6;
+    ctx.lineWidth = hot ? 2.2 : 1.4;
 
-  ctx.beginPath();
-  ctx.moveTo(leftX - 18, groundY - 65);
-  ctx.lineTo(leftX, groundY - 65);
-  ctx.lineTo(leftX, groundY + 12);
-  ctx.lineTo(leftX - 18, groundY + 12);
-  ctx.stroke();
+    // Bracket opening toward the incoming enemies
+    ctx.beginPath();
+    ctx.moveTo(x + side * 12, -62);
+    ctx.lineTo(x, -62);
+    ctx.lineTo(x, FLOOR_Y + 4);
+    ctx.lineTo(x + side * 12, FLOOR_Y + 4);
+    ctx.stroke();
 
-  ctx.beginPath();
-  ctx.ellipse(leftX, groundY + 8, 22, 8, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
-  const rightAlpha = rightEnemyInRange ? 0.95 : 0.45;
-  ctx.strokeStyle = `rgba(255, 0, 127, ${rightAlpha})`;
-  ctx.shadowColor = '#ff007f';
-  ctx.shadowBlur = rightEnemyInRange ? 18 : 6;
-  ctx.lineWidth = rightEnemyInRange ? 3 : 2;
-
-  ctx.beginPath();
-  ctx.moveTo(rightX + 18, groundY - 65);
-  ctx.lineTo(rightX, groundY - 65);
-  ctx.lineTo(rightX, groundY + 12);
-  ctx.lineTo(rightX + 18, groundY + 12);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.ellipse(rightX, groundY + 8, 22, 8, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
+    ctx.beginPath();
+    ctx.ellipse(x, FLOOR_Y + 2, 18, 5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
-function drawFloorShadowsAndReflections(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  engine: GameEngine,
-  pitRadius: number
-) {
+/**
+ * Timing rings: for each lane's next enemy, a ring closes in on the strike
+ * zone and meets it EXACTLY on the beat. The enemy body is wide, so "when is it
+ * touching the line?" is fuzzy; the ring gives a precise moment to hit on.
+ */
+function drawTimingRings(ctx: CanvasRenderingContext2D, engine: GameEngine) {
+  const now = engine.songTime;
+  const lead = Math.min(0.6, engine.approachDuration * 0.45);
+
+  ctx.save();
+  for (const lane of ['left', 'right'] as const) {
+    const next = nextEnemyInLane(engine, lane);
+    if (!next) continue;
+
+    const remaining = next.targetTime - now;
+    if (remaining > lead) continue;
+
+    const side = lane === 'left' ? -1 : 1;
+    const cx = side * engine.hitLineOffset;
+    const cy = -2;
+    const baseR = 22;
+    const progress = Math.max(0, remaining / lead);
+    const r = baseR + progress * 70;
+    const color = lane === 'left' ? '#00f3ff' : '#ff007f';
+
+    ctx.strokeStyle = colorWithAlpha(color, 0.25 + (1 - progress) * 0.7);
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 1.5 + (1 - progress) * 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Fixed target ring the moving ring closes onto
+    ctx.strokeStyle = colorWithAlpha('#ffffff', Math.abs(remaining) < HIT_WINDOWS.PERFECT ? 0.9 : 0.22);
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseR, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFloorShadowsAndReflections(ctx: CanvasRenderingContext2D, engine: GameEngine, halfW: number) {
   ctx.save();
 
-  // Player Ground Shadow
-  const pShadow = ctx.createRadialGradient(
-    centerX,
-    groundY + 10,
-    2,
-    centerX,
-    groundY + 10,
-    35
-  );
-  pShadow.addColorStop(0, 'rgba(0, 243, 255, 0.55)');
-  pShadow.addColorStop(0.5, 'rgba(0, 243, 255, 0.2)');
-  pShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-  ctx.fillStyle = pShadow;
-  ctx.beginPath();
-  ctx.ellipse(centerX, groundY + 10, 36, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Full-size enemy ground shadows
-  for (const enemy of engine.enemies) {
-    if (enemy.defeated || Math.abs(enemy.x) > window.innerWidth / 2 + 60) continue;
-
-    const posX = centerX + enemy.x;
-    if (Math.abs(enemy.x) < pitRadius) continue; // don't draw shadow over empty pit
-
-    const eShadow = ctx.createRadialGradient(
-      posX,
-      groundY + 10,
-      2,
-      posX,
-      groundY + 10,
-      35
-    );
-    eShadow.addColorStop(0, colorWithAlpha(enemy.color, 0.55));
-    eShadow.addColorStop(0.6, 'rgba(0, 0, 0, 0.35)');
-    eShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-    ctx.fillStyle = eShadow;
+  const shadow = (x: number, color: string, w: number) => {
+    const g = ctx.createRadialGradient(x, FLOOR_Y + 2, 1, x, FLOOR_Y + 2, w);
+    g.addColorStop(0, colorWithAlpha(color, 0.5));
+    g.addColorStop(0.6, 'rgba(0, 0, 0, 0.3)');
+    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(posX, groundY + 10, 32, 9, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, FLOOR_Y + 2, w, w * 0.22, 0, 0, Math.PI * 2);
     ctx.fill();
+  };
+
+  shadow(engine.playerOffsetX, '#00f3ff', 34);
+
+  for (const enemy of engine.enemies) {
+    if (enemy.defeated || Math.abs(enemy.x) > halfW + 60) continue;
+    if (Math.abs(enemy.x) < engine.pitRadius) continue; // no shadow over the empty pit
+    shadow(enemy.x, enemy.color, 30);
   }
 
   ctx.restore();
 }
 
-// EXPLODED DEBRIS PIECES: Basic shapes that fly all over the place and sweep into the pit
-function drawDebrisPieces(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  engine: GameEngine
-) {
+// SHATTERED ENEMY PIECES: rigid sticks, heads and armour shards (see debrisPhysics.ts)
+function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.save();
-  ctx.translate(centerX, groundY);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
   for (const p of engine.debris) {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
-    ctx.globalAlpha = Math.max(0, p.alpha);
+    // Bright on impact, then fades back so it never competes with incoming enemies.
+    const presence = 0.4 + 0.6 * p.heat;
+    ctx.globalAlpha = Math.max(0, p.alpha) * presence;
 
-    ctx.strokeStyle = p.color;
+    // Fresh pieces glow white-hot and cool down to the enemy's colour.
+    const color = heatColor(p.color, p.heat * 0.85);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
     ctx.shadowColor = p.color;
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = p.color;
-    ctx.lineWidth = 2;
+    ctx.shadowBlur = 8 + p.heat * 14;
 
-    if (p.shapeType === 'head') {
-      // Exploded head circle with eye slit
+    if (p.shape === 'circle') {
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+      ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3, -2, 6, 2);
-    } else if (p.shapeType === 'chest' && p.points) {
-      // Exploded chest armor plate polygon
+      ctx.fillRect(p.radius * 0.1, -1.5, p.radius * 0.7, 2.5); // visor
+    } else if (p.shape === 'segment') {
+      ctx.lineWidth = p.radius * 2;
       ctx.beginPath();
-      ctx.moveTo(p.points[0].x, p.points[0].y);
-      for (let i = 1; i < p.points.length; i++) {
-        ctx.lineTo(p.points[i].x, p.points[i].y);
+      ctx.moveTo(-p.halfLength, 0);
+      ctx.lineTo(p.halfLength, 0);
+      ctx.stroke();
+      // Bright core, plus glowing cut ends while hot
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(0.6, p.radius * 0.6);
+      ctx.stroke();
+      if (p.heat > 0.05) {
+        ctx.fillStyle = colorWithAlpha('#fff6c0', p.heat);
+        ctx.beginPath();
+        ctx.arc(-p.halfLength, 0, p.radius * 1.4, 0, Math.PI * 2);
+        ctx.arc(p.halfLength, 0, p.radius * 1.4, 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.closePath();
-      ctx.stroke();
-    } else if (p.shapeType === 'arm') {
-      // Limb capsule
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-p.size * 0.5, 0);
-      ctx.lineTo(p.size * 0.5, 0);
-      ctx.stroke();
-    } else if (p.shapeType === 'leg') {
-      // Leg bone segment
-      ctx.lineWidth = 3.2;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-p.size * 0.5, 0);
-      ctx.lineTo(p.size * 0.5, 0);
-      ctx.stroke();
-    } else if (p.shapeType === 'blade') {
-      // Flying severed katana blade
-      ctx.strokeStyle = '#ffe600';
-      ctx.shadowColor = '#ffe600';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(-p.size * 0.5, 0);
-      ctx.lineTo(p.size * 0.5, 0);
-      ctx.stroke();
     } else {
-      // Geometric sharp shard
+      const s = p.halfLength;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.moveTo(-p.size, -p.size * 0.5);
-      ctx.lineTo(p.size, 0);
-      ctx.lineTo(-p.size * 0.5, p.size);
+      ctx.moveTo(-s, -s * 0.5);
+      ctx.lineTo(s, 0);
+      ctx.lineTo(-s * 0.5, s);
       ctx.closePath();
+      ctx.globalAlpha = Math.max(0, p.alpha) * presence * 0.35;
+      ctx.fill();
+      ctx.globalAlpha = Math.max(0, p.alpha) * presence;
       ctx.stroke();
     }
 
@@ -608,31 +536,73 @@ function drawDebrisPieces(
   ctx.restore();
 }
 
+interface EnemyDrawOptions {
+  /** Draw as a solid white silhouette (the instant it is struck) */
+  flash?: boolean;
+  /** Extra scale multiplier (the flash swells as it fades) */
+  grow?: number;
+}
+
 // FULL-SIZED CYBER ENEMIES: 3 Frequency Bands (Sub, Bass, High) x 3 Tiers (Low, Mid, High Hz)
-function drawFullSizedEnemies(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  engine: GameEngine
-) {
-  ctx.save();
-  ctx.translate(centerX, groundY);
+function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine, halfW: number) {
+  const now = performance.now();
+  // The next enemy due in each lane is drawn at full strength; the queue behind
+  // it is dimmed, so the player always knows which one to hit next.
+  const nextLeft = nextEnemyInLane(engine, 'left');
+  const nextRight = nextEnemyInLane(engine, 'right');
 
-  for (const enemy of engine.enemies) {
-    if (enemy.defeated || Math.abs(enemy.x) > window.innerWidth / 2 + 120) continue;
+  // Draw back-to-front: queued enemies first, the next one on top.
+  const ordered = [...engine.enemies].sort((a, b) => b.targetTime - a.targetTime);
+  for (const enemy of ordered) {
+    if (enemy.defeated) {
+      const age = enemy.deathTime !== undefined ? now - enemy.deathTime : Infinity;
+      if (age < HIT_FLASH_MS) {
+        const t = age / HIT_FLASH_MS;
+        ctx.save();
+        ctx.globalAlpha = 1 - t;
+        drawEnemyFigure(ctx, enemy, engine, { flash: true, grow: 1 + t * 0.18 });
+        ctx.restore();
+      }
+      continue;
+    }
+    if (Math.abs(enemy.x) > halfW + 120) continue;
+    const isNext = enemy === nextLeft || enemy === nextRight;
+    ctx.save();
+    ctx.globalAlpha = isNext ? 1 : 0.42;
+    drawEnemyFigure(ctx, enemy, engine, {});
+    ctx.restore();
+  }
+}
 
+/** The undefeated enemy in `lane` whose beat comes first (still hittable or upcoming). */
+function nextEnemyInLane(engine: GameEngine, lane: 'left' | 'right'): Enemy | null {
+  let next: Enemy | null = null;
+  for (const e of engine.enemies) {
+    if (e.defeated || e.lane !== lane) continue;
+    if (e.targetTime - engine.songTime < -HIT_WINDOWS.OK) continue;
+    if (!next || e.targetTime < next.targetTime) next = e;
+  }
+  return next;
+}
+
+function drawEnemyFigure(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameEngine, opts: EnemyDrawOptions) {
+  {
     const posX = enemy.x;
     const dir = enemy.lane === 'left' ? 1 : -1;
     const phase = enemy.animPhase;
 
     const { band, tier } = resolveBandTier(enemy);
     const style = getEnemyStyle(band, tier);
-    const mainColor = enemy.color || style.color;
-    const accent = style.accent;
-    const scale = style.scale;
+    const mainColor = opts.flash ? '#ffffff' : enemy.color || style.color;
+    const accent = opts.flash ? '#ffffff' : style.accent;
+    const scale = style.scale * (opts.grow ?? 1);
+
+    // Wind-up: enemies lean in over the last moments before their beat.
+    const timeLeft = enemy.targetTime - engine.songTime;
+    const lean = opts.flash ? 0 : dir * 0.14 * smoothstep(0.32, 0, timeLeft);
 
     // Cyber ghost trail
-    if (enemy.trailHistory.length > 0) {
+    if (!opts.flash && enemy.trailHistory.length > 0) {
       for (let t = 0; t < enemy.trailHistory.length; t++) {
         const tr = enemy.trailHistory[t];
         const trailAlpha = ((t + 1) / enemy.trailHistory.length) * 0.24;
@@ -648,8 +618,9 @@ function drawFullSizedEnemies(
     ctx.save();
     ctx.translate(posX, 0);
 
-    // Anchor scaling so feet remain on the conveyor ground level (y = 68)
+    // Anchor scaling (and the wind-up lean) at the feet so they stay on the floor (y = 68)
     ctx.translate(0, 68);
+    ctx.rotate(lean);
     ctx.scale(scale, scale);
     ctx.translate(0, -68);
 
@@ -1161,16 +1132,9 @@ function drawFullSizedEnemies(
 
     ctx.restore();
   }
-
-  ctx.restore();
 }
 
-function drawPlayer(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  engine: GameEngine
-) {
+function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const pose = engine.currentPose;
   const combo = engine.scoreState.combo;
 
@@ -1204,7 +1168,7 @@ function drawPlayer(
   }
 
   ctx.save();
-  ctx.translate(centerX, groundY);
+  ctx.translate(engine.playerOffsetX, 0);
 
   // 1. GOD-TIER RADIANT PLASMA WINGS (Combo 50+)
   if (combo >= 50) {
@@ -1313,7 +1277,7 @@ function drawPlayer(
   }
 
   // 5. Blade Slash Arc
-  if (pose.bladeSlash && engine.isAttacking) {
+  if (pose.bladeSlash && engine.strikeActive) {
     const slash = pose.bladeSlash;
     ctx.save();
     ctx.strokeStyle = slash.color;
@@ -1432,26 +1396,20 @@ function drawPlayer(
   if (engine.isAttacking && combo > 0) {
     const move = getMoveForCombo(combo, engine.currentMoveIndex);
     ctx.save();
-    ctx.font = '800 12px "Outfit", sans-serif';
+    ctx.font = '800 9px "Outfit", sans-serif';
     ctx.fillStyle = tierColor;
     ctx.shadowColor = tierColor;
     ctx.shadowBlur = 12;
     ctx.textAlign = 'center';
-    ctx.fillText(`${tierName} · ${move.name.toUpperCase()}`, 0, -92);
+    ctx.fillText(`${tierName} · ${move.name.toUpperCase()}`, 0, -150);
     ctx.restore();
   }
 
   ctx.restore();
 }
 
-function drawParticles(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  engine: GameEngine
-) {
+function drawParticles(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.save();
-  ctx.translate(centerX, groundY);
 
   for (const p of engine.particles) {
     ctx.save();
@@ -1462,24 +1420,34 @@ function drawParticles(
     ctx.shadowBlur = 10;
 
     if (p.sparkType === 'ring') {
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(p.x, 8, p.size, p.size * 0.35, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, p.size, p.size * 0.28, 0, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (p.sparkType === 'flash') {
+      // Impact flash: bright core fading out into a soft halo
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+      g.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      g.addColorStop(0.35, 'rgba(255, 255, 255, 0.45)');
+      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = g;
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
     } else if (p.sparkType === 'ember') {
-      // Pit heat embers rising upward
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
     } else if (p.sparkType === 'line') {
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
-      ctx.lineTo(p.x - p.vx * 0.03, p.y - p.vy * 0.03);
+      ctx.lineTo(p.x - p.vx * 0.025, p.y - p.vy * 0.025);
       ctx.stroke();
     } else {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.size * 0.6, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -1489,29 +1457,24 @@ function drawParticles(
   ctx.restore();
 }
 
-function drawJudgements(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  groundY: number,
-  engine: GameEngine
-) {
+function drawJudgements(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.save();
-  ctx.translate(centerX, groundY);
 
   const now = performance.now();
 
   for (const j of engine.judgements) {
     const age = (now - j.createdAt) / 1000;
-    const alpha = Math.max(0, 1 - age / 0.65);
-    const floatY = j.y - age * 45;
-    const scale = j.scale * (1 + Math.sin(Math.min(Math.PI, age * 12)) * 0.35);
+    const alpha = Math.max(0, 1 - age / 0.7);
+    const floatY = j.y - age * 40;
+    // Pops in big, then settles
+    const scale = j.scale * (1 + Math.max(0, 0.45 - age * 4));
 
     ctx.save();
     ctx.translate(j.x, floatY);
     ctx.scale(scale, scale);
     ctx.globalAlpha = alpha;
 
-    ctx.font = '900 19px "Outfit", sans-serif';
+    ctx.font = '900 13px "Outfit", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = j.color;
     ctx.shadowColor = j.color;
@@ -1521,6 +1484,13 @@ function drawJudgements(
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff';
     ctx.fillText(j.text, 0, 0);
+
+    // EARLY / LATE hint so players can tell which way they're off
+    if (j.detail) {
+      ctx.font = '800 7px "JetBrains Mono", monospace';
+      ctx.fillStyle = j.detail === 'EARLY' ? '#7dd3fc' : '#fda4af';
+      ctx.fillText(j.detail, 0, 9);
+    }
 
     ctx.restore();
   }

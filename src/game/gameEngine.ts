@@ -5,21 +5,33 @@ import {
   TimingJudgementType,
   FloatingJudgement,
   Particle,
-  DebrisPiece,
   GameScoreState,
   HighScoreRecord,
   SkeletonPose,
   AudioSettings,
 } from '../types/game';
-import { ATTACK_MOVES, IDLE_POSE, getOrientedPose, lerpPose, getMoveForCombo } from './animations';
+import { ATTACK_MOVES, IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
+import { BREACH_LATE_SEC, judgeOffset, pickTarget, suggestLatencyOffsetMs } from './timing';
+import { DebrisPiece, DebrisWorld, shatterEnemy, stepDebris } from './debrisPhysics';
+import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
+import { songTimeAtEvent } from '../audio/songClock';
+import { idleBouncePose, strikeFrame } from './motion';
+import { FLOOR_Y } from './layout';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
   onGameOver: (score: GameScoreState, cleared: boolean) => void;
   onJudgement: (judgement: TimingJudgementType, combo: number) => void;
 }
+
+/** Never keep more than this many debris pieces alive (protects frame rate on long combos). */
+const MAX_DEBRIS = 260;
+/** How far the fighter lunges toward the enemy on a strike (world units) */
+const LUNGE_DISTANCE = 16;
+/** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
+const HIT_STOP: Record<TimingJudgementType, number> = { PERFECT: 0.06, GOOD: 0.04, OK: 0.025, MISS: 0 };
 
 export class GameEngine {
   public track: Track | null = null;
@@ -29,17 +41,29 @@ export class GameEngine {
   public judgements: FloatingJudgement[] = [];
   public currentPose: SkeletonPose = { ...IDLE_POSE };
   public isAttacking: boolean = false;
+  /** True during the fast "blow landing" part of a strike (for slash trails) */
+  public strikeActive: boolean = false;
   public attackDirection: Lane = 'right';
   public currentMoveIndex: number = 0;
-  public attackStartTime: number = 0;
-  public attackDuration: number = 180;
   public lastAttackPose: SkeletonPose = { ...IDLE_POSE };
+  /** Fighter's body offset from centre while lunging (world units) */
+  public playerOffsetX: number = 0;
 
   public screenShake: number = 0;
-  public freezeFrameMs: number = 0;
-  public hitLineOffset: number = 70; // Strike distance from center
+  /** Brief camera nudge toward the side that was hit, plus a tiny zoom punch */
+  public cameraKick = { x: 0, zoom: 0 };
+  public hitLineOffset: number = 78; // Strike distance from center (world units)
   public pitRadius: number = 44; // Central abyss pit half-width
   public conveyorSpeed: number = 220; // Pixels per second moving inward towards the pit
+
+  /** Song time (s) the player is hearing, with the latency setting applied. Updated every frame. */
+  public songTime: number = 0;
+  /** Exact tempo and beat positions, so visuals can pulse on the beat */
+  public beatGrid: BeatGrid = { bpm: 120, offset: 0, strength: 0 };
+  /** Seconds an enemy takes to walk from the screen edge to the strike line */
+  public approachDuration: number = 1.35;
+  /** Press-minus-beat timing error (s) of every successful hit this song */
+  public hitOffsets: number[] = [];
 
   public scoreState: GameScoreState = {
     score: 0,
@@ -63,10 +87,17 @@ export class GameEngine {
 
   private callbacks: GameEngineCallbacks;
   private isRunning: boolean = false;
-  private approachDuration: number = 1.35;
   private nextJudgementId: number = 1;
   private nextDebrisId: number = 1;
   private songSession: number = 0;
+
+  // Animation clock: like real time, but it stops during hit-stop freeze frames.
+  private animClock: number = 0;
+  private hitStopRemaining: number = 0;
+  private strikeStart: number = 0;
+  private strikeDuration: number = 0.2;
+  private strikeFromPose: SkeletonPose = { ...IDLE_POSE };
+  private strikeLunge: number = 0;
 
   constructor(callbacks: GameEngineCallbacks) {
     this.callbacks = callbacks;
@@ -99,11 +130,16 @@ export class GameEngine {
     this.particles = [];
     this.debris = [];
     this.judgements = [];
+    this.hitOffsets = [];
     this.currentMoveIndex = 0;
     this.isAttacking = false;
+    this.strikeActive = false;
+    this.playerOffsetX = 0;
     this.currentPose = { ...IDLE_POSE };
     this.screenShake = 0;
-    this.freezeFrameMs = 0;
+    this.cameraKick = { x: 0, zoom: 0 };
+    this.hitStopRemaining = 0;
+    this.songTime = 0;
     audioEngine.stop();
 
     // Bundled tracks are charted from their audio on first play
@@ -123,7 +159,11 @@ export class GameEngine {
     };
     this.callbacks.onScoreUpdate(this.scoreState);
 
-    const beatSec = 60 / track.bpm;
+    // Lock visuals to the music: exact tempo + where the beats fall.
+    const grid = gridForNotes(track.notes, track.bpm, 0.01);
+    this.beatGrid = grid.strength > 0.15 ? grid : { bpm: track.bpm, offset: 0, strength: 0 };
+
+    const beatSec = 60 / this.beatGrid.bpm;
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
 
     this.enemies = track.notes.map((note, index) => {
@@ -136,7 +176,7 @@ export class GameEngine {
         targetTime: note.time,
         spawnTime: Math.max(0, note.time - this.approachDuration),
         speed: 1.0,
-        x: note.lane === 'left' ? -999 : 999,
+        x: note.lane === 'left' ? -9999 : 9999,
         y: 0,
         color,
         enemyType: note.enemyType,
@@ -144,7 +184,9 @@ export class GameEngine {
         band,
         tier,
         defeated: false,
-        animPhase: Math.random() * Math.PI * 2,
+        animPhase: 0,
+        // Alternate which foot leads so a crowd doesn't march as one blob.
+        stepOffset: index % 2 ? Math.PI : 0,
         trailHistory: [],
       };
     });
@@ -160,75 +202,63 @@ export class GameEngine {
     audioEngine.stop();
   }
 
-  public handleInput(lane: Lane) {
+  /** Song time of a press, corrected for event delay and the player's latency setting. */
+  private pressTime(eventTimeStamp?: number): number {
+    const heard = songTimeAtEvent(audioEngine.getPlaybackTime(), performance.now(), eventTimeStamp);
+    return heard - this.settings.latencyOffsetMs / 1000;
+  }
+
+  /**
+   * Strike toward a lane. `eventTimeStamp` is the key/pointer event's
+   * `timeStamp`, so the press is judged when it happened, not when we got to it.
+   */
+  public handleInput(lane: Lane, eventTimeStamp?: number) {
     if (!this.isRunning || !this.track) return;
 
     if (this.settings.oneButtonMode) {
-      this.handleOneButtonInput();
+      this.handleOneButtonInput(eventTimeStamp);
       return;
     }
 
-    const audioTime = audioEngine.getPlaybackTime();
-    const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
-
-    const candidates = this.enemies.filter((e) => !e.defeated && e.lane === lane);
-
-    if (candidates.length === 0) {
+    const time = this.pressTime(eventTimeStamp);
+    const target = pickTarget(this.enemies, time, lane);
+    if (!target) {
       this.triggerMiss(lane);
       return;
     }
-
-    candidates.sort(
-      (a, b) => Math.abs(a.targetTime - effectiveTime) - Math.abs(b.targetTime - effectiveTime)
-    );
-    const closest = candidates[0];
-    const delta = Math.abs(closest.targetTime - effectiveTime);
-
-    if (delta <= 0.080) {
-      this.hitEnemy(closest, 'PERFECT', lane);
-    } else if (delta <= 0.160) {
-      this.hitEnemy(closest, 'GOOD', lane);
-    } else if (delta <= 0.250) {
-      this.hitEnemy(closest, 'OK', lane);
-    } else {
-      this.triggerMiss(lane);
-    }
+    this.hitEnemy(target, time - target.targetTime, lane);
   }
 
-  public handleOneButtonInput() {
+  /** One-button mode: strike whichever lane has the next enemy due. */
+  public handleOneButtonInput(eventTimeStamp?: number) {
     if (!this.isRunning || !this.track) return;
 
-    const audioTime = audioEngine.getPlaybackTime();
-    const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
-
-    // In One-Button Mode, search across both lanes for the nearest beat enemy
-    const candidates = this.enemies.filter((e) => !e.defeated);
-
-    if (candidates.length === 0) {
+    const time = this.pressTime(eventTimeStamp);
+    const target = pickTarget(this.enemies, time, null);
+    if (!target) {
       this.triggerMiss(this.attackDirection || 'left');
       return;
     }
-
-    candidates.sort(
-      (a, b) => Math.abs(a.targetTime - effectiveTime) - Math.abs(b.targetTime - effectiveTime)
-    );
-    const closest = candidates[0];
-    const delta = Math.abs(closest.targetTime - effectiveTime);
-
-    if (delta <= 0.080) {
-      this.hitEnemy(closest, 'PERFECT', closest.lane);
-    } else if (delta <= 0.160) {
-      this.hitEnemy(closest, 'GOOD', closest.lane);
-    } else if (delta <= 0.250) {
-      this.hitEnemy(closest, 'OK', closest.lane);
-    } else {
-      this.triggerMiss(closest.lane);
-    }
+    this.hitEnemy(target, time - target.targetTime, target.lane);
   }
 
-  private hitEnemy(enemy: Enemy, judgement: TimingJudgementType, lane: Lane) {
+  /** Latency offset (ms) suggested from this song's hits, or null if there weren't enough. */
+  public getSuggestedLatencyOffsetMs(): number | null {
+    return suggestLatencyOffsetMs(this.settings.latencyOffsetMs, this.hitOffsets);
+  }
+
+  /** Median press-minus-beat error of this song's hits in ms (positive = late). */
+  public getAverageTimingErrorMs(): number | null {
+    if (this.hitOffsets.length === 0) return null;
+    const sorted = [...this.hitOffsets].sort((a, b) => a - b);
+    return Math.round(sorted[Math.floor(sorted.length / 2)] * 1000);
+  }
+
+  private hitEnemy(enemy: Enemy, offsetSec: number, lane: Lane) {
+    const judgement = judgeOffset(offsetSec);
     enemy.defeated = true;
     enemy.deathTime = performance.now();
+    this.hitOffsets.push(offsetSec);
 
     const multiplier = 1 + Math.floor(this.scoreState.combo / 10) * 0.5;
     let baseScore = 300;
@@ -250,15 +280,16 @@ export class GameEngine {
       this.scoreState.okCount++;
     }
 
-    // Extremely subtle micro-vibration (virtually zero disorientation)
+    // Impact feel: freeze frame + camera nudge, scaled by the player's shake setting.
     const shakeMode = this.settings.screenShake || 'subtle';
-    if (shakeMode === 'none') {
-      this.screenShake = 0;
-    } else if (shakeMode === 'subtle') {
-      this.screenShake = judgement === 'PERFECT' ? 0.6 : 0;
-    } else {
-      this.screenShake = judgement === 'PERFECT' ? 1.2 : judgement === 'GOOD' ? 0.5 : 0;
-    }
+    const shakeAmount = shakeMode === 'none' ? 0 : shakeMode === 'subtle' ? 0.5 : 1;
+    this.screenShake = shakeAmount * (judgement === 'PERFECT' ? 2.2 : judgement === 'GOOD' ? 1.2 : 0.5);
+    const sideSign = lane === 'left' ? -1 : 1;
+    this.cameraKick = {
+      x: sideSign * 7 * shakeAmount,
+      zoom: (judgement === 'PERFECT' ? 0.045 : 0.025) * shakeAmount,
+    };
+    this.hitStopRemaining = HIT_STOP[judgement];
 
     this.callbacks.onScoreUpdate({ ...this.scoreState });
     this.callbacks.onJudgement(judgement, this.scoreState.combo);
@@ -270,29 +301,23 @@ export class GameEngine {
     }
 
     const currentMove = getMoveForCombo(this.scoreState.combo, this.currentMoveIndex);
-    this.isAttacking = true;
-    this.attackDirection = lane;
-    this.attackStartTime = performance.now();
-    this.attackDuration = currentMove.durationMs;
-    this.lastAttackPose = getOrientedPose(currentMove.pose, lane);
+    this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
 
     const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
     this.judgements.push({
       id: this.nextJudgementId++,
       text: judgement,
       x: targetX,
-      y: -65 - Math.random() * 20,
+      y: -92 - Math.random() * 8,
       color: judgement === 'PERFECT' ? '#00f3ff' : judgement === 'GOOD' ? '#ff007f' : '#ffe600',
       createdAt: performance.now(),
       scale: judgement === 'PERFECT' ? 1.4 : judgement === 'GOOD' ? 1.2 : 1.0,
       lane,
+      detail: judgement === 'PERFECT' ? undefined : offsetSec < 0 ? 'EARLY' : 'LATE',
     });
 
-    // SPAWN EXPLODING CONSTITUENT GEOMETRIC SHAPES (Knocked harder with high combo!)
-    this.spawnEnemyDebrisExplosion(enemy, targetX, judgement);
-
-    // Spawn sparks and shockwave ring
-    this.spawnHitParticles(targetX, 0, lane, judgement, enemy.color);
+    this.spawnEnemyDebrisExplosion(enemy, judgement);
+    this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
     const remaining = this.enemies.filter((e) => !e.defeated);
     if (remaining.length === 0) {
@@ -300,109 +325,44 @@ export class GameEngine {
     }
   }
 
-  // Explode enemy into its basic geometric vector pieces (Knocked harder with higher combos!)
-  private spawnEnemyDebrisExplosion(enemy: Enemy, hitX: number, judgement: TimingJudgementType) {
-    const dirSign = enemy.lane === 'left' ? -1 : 1;
-    const power = judgement === 'PERFECT' ? 1.4 : judgement === 'GOOD' ? 1.1 : 0.85;
+  /** Begin a strike animation from wherever the fighter currently is. */
+  private startStrike(lane: Lane, pose: SkeletonPose, durationSec: number, lunge: number) {
+    this.isAttacking = true;
+    this.attackDirection = lane;
+    this.strikeFromPose = this.currentPose;
+    this.lastAttackPose = pose;
+    this.strikeStart = this.animClock;
+    this.strikeDuration = durationSec;
+    this.strikeLunge = (lane === 'left' ? -1 : 1) * lunge;
+  }
 
-    // Explosive knockback speed and fragment count scales with combo count
-    const comboBoost = 1.0 + Math.min(3.8, this.scoreState.combo * 0.12);
+  // Break the enemy into rigid pieces where its body parts were, then knock them away.
+  private spawnEnemyDebrisExplosion(enemy: Enemy, judgement: TimingJudgementType) {
+    const style = getEnemyStyle(enemy.band, enemy.tier);
+    const combo = this.scoreState.combo;
+    const judgementPower = judgement === 'PERFECT' ? 1.35 : judgement === 'GOOD' ? 1.1 : 0.9;
+    const comboPower = 1 + Math.min(0.9, combo * 0.02);
+    const extraShards = combo >= 50 ? 9 : combo >= 32 ? 6 : combo >= 18 ? 4 : combo >= 8 ? 2 : 0;
 
-    // Core constituent body parts of the enemy
-    const pieces: Array<{
-      shapeType: DebrisPiece['shapeType'];
-      size: number;
-      offsetY: number;
-      points?: Array<{ x: number; y: number }>;
-    }> = [
-      // Head / helmet
-      { shapeType: 'head', size: 11, offsetY: -52 },
-      // Chest core armor plate
+    const pieces = shatterEnemy(
       {
-        shapeType: 'chest',
-        size: 16,
-        offsetY: -25,
-        points: [
-          { x: -12, y: -12 },
-          { x: 12, y: -12 },
-          { x: 8, y: 12 },
-          { x: -8, y: 12 },
-        ],
-      },
-      // Pelvis block
-      { shapeType: 'shard', size: 10, offsetY: 5 },
-      // Left Arm limb
-      { shapeType: 'arm', size: 18, offsetY: -18 },
-      // Right Arm limb
-      { shapeType: 'arm', size: 18, offsetY: -14 },
-      // Left Leg limb
-      { shapeType: 'leg', size: 22, offsetY: 32 },
-      // Right Leg limb
-      { shapeType: 'leg', size: 22, offsetY: 36 },
-      // Signature weapon / armor piece
-      {
-        shapeType: 'blade',
-        size: enemy.band === 'bass' ? 32 : 18,
-        offsetY: -5,
-      },
-      // Cyber armor shards
-      { shapeType: 'shard', size: 8, offsetY: -10 },
-      { shapeType: 'shard', size: 8, offsetY: 15 },
-    ];
-
-    // High combo = massively more shattered shards & explosive debris
-    if (this.scoreState.combo >= 8) {
-      pieces.push({ shapeType: 'shard', size: 9, offsetY: -32 });
-      pieces.push({ shapeType: 'shard', size: 9, offsetY: -5 });
-      pieces.push({ shapeType: 'shard', size: 8, offsetY: 22 });
-    }
-    if (this.scoreState.combo >= 18) {
-      pieces.push({ shapeType: 'shard', size: 11, offsetY: -45 });
-      pieces.push({ shapeType: 'shard', size: 10, offsetY: 10 });
-      pieces.push({ shapeType: 'shard', size: 11, offsetY: -15 });
-      pieces.push({ shapeType: 'shard', size: 12, offsetY: 35 });
-    }
-    if (this.scoreState.combo >= 32) {
-      pieces.push({ shapeType: 'shard', size: 14, offsetY: -50 });
-      pieces.push({ shapeType: 'shard', size: 13, offsetY: 0 });
-      pieces.push({ shapeType: 'blade', size: 22, offsetY: -20 });
-      pieces.push({ shapeType: 'shard', size: 12, offsetY: 40 });
-    }
-    if (this.scoreState.combo >= 50) {
-      for (let s = 0; s < 8; s++) {
-        pieces.push({
-          shapeType: 'shard',
-          size: 10 + Math.random() * 8,
-          offsetY: -50 + Math.random() * 90,
-        });
-      }
-    }
-
-    for (const p of pieces) {
-      // Explosive dispersal arc: knocked back harder away from player with extreme velocity
-      const angle = (Math.random() - 0.5) * Math.PI * 0.95 - Math.PI * 0.5;
-      const speed = (280 + Math.random() * 400) * power * comboBoost;
-      const vx = Math.cos(angle) * speed + dirSign * (110 + Math.random() * 180) * comboBoost;
-      const vy = Math.sin(angle) * speed;
-
-      this.debris.push({
-        id: this.nextDebrisId++,
-        x: hitX + (Math.random() - 0.5) * 20,
-        y: p.offsetY,
-        vx,
-        vy,
-        angle: Math.random() * Math.PI * 2,
-        vAngle: (Math.random() - 0.5) * 24 * comboBoost,
+        x: enemy.x,
+        phase: enemy.animPhase,
+        facing: enemy.lane === 'left' ? 1 : -1,
+        scale: style.scale,
         color: enemy.color,
-        shapeType: p.shapeType,
-        size: p.size,
-        points: p.points,
-        landed: false,
-        fallingInPit: false,
-        alpha: 1.0,
-        life: 0,
-        maxLife: 3.8,
-      });
+        accent: style.accent,
+        hasBlade: enemy.band !== 'sub',
+        power: judgementPower * comboPower,
+        extraShards,
+      },
+      () => this.nextDebrisId++
+    );
+    this.debris.push(...pieces);
+
+    // Drop the oldest pieces if there are too many on screen.
+    if (this.debris.length > MAX_DEBRIS) {
+      this.debris.splice(0, this.debris.length - MAX_DEBRIS);
     }
   }
 
@@ -418,18 +378,15 @@ export class GameEngine {
       id: this.nextJudgementId++,
       text: 'MISS',
       x: targetX,
-      y: -55,
+      y: -80,
       color: '#ff2a5f',
       createdAt: performance.now(),
       scale: 1.0,
       lane,
     });
 
-    this.isAttacking = true;
-    this.attackDirection = lane;
-    this.attackStartTime = performance.now();
-    this.attackDuration = 140;
-    this.lastAttackPose = getOrientedPose(ATTACK_MOVES[0].pose, lane);
+    // A whiff: quick jab into empty air with only a small lunge.
+    this.startStrike(lane, getOrientedPose(ATTACK_MOVES[0].pose, lane), 0.16, LUNGE_DISTANCE * 0.4);
   }
 
   private spawnHitParticles(
@@ -440,10 +397,26 @@ export class GameEngine {
     color: string
   ) {
     const count = judgement === 'PERFECT' ? 36 : judgement === 'GOOD' ? 22 : 12;
+    const away = lane === 'left' ? -1 : 1;
 
+    // Bright flash at the point of impact
+    this.particles.push({
+      x: x - away * 6,
+      y,
+      vx: 0,
+      vy: 0,
+      color: '#ffffff',
+      size: judgement === 'PERFECT' ? 34 : 24,
+      alpha: 1,
+      life: 0,
+      maxLife: 0.12,
+      sparkType: 'flash',
+    });
+
+    // Shockwave ring along the floor
     this.particles.push({
       x,
-      y: 68,
+      y: FLOOR_Y,
       vx: 0,
       vy: 0,
       color,
@@ -455,32 +428,58 @@ export class GameEngine {
     });
 
     for (let i = 0; i < count; i++) {
-      const angle = (Math.random() - 0.5) * Math.PI * 1.5 + (lane === 'left' ? Math.PI : 0);
-      const speed = 180 + Math.random() * (judgement === 'PERFECT' ? 450 : 300);
+      const angle = (Math.random() - 0.5) * Math.PI * 1.2 + (away < 0 ? Math.PI : 0);
+      const speed = 220 + Math.random() * (judgement === 'PERFECT' ? 520 : 340);
 
       this.particles.push({
-        x: x + (Math.random() - 0.5) * 20,
-        y: y + (Math.random() - 0.5) * 40,
+        x: x + (Math.random() - 0.5) * 16,
+        y: y + (Math.random() - 0.5) * 30,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 60,
-        color: Math.random() > 0.4 ? color : '#00f3ff',
+        vy: Math.sin(angle) * speed - 80,
+        color: Math.random() > 0.4 ? color : '#ffffff',
         size: 2 + Math.random() * 4,
         alpha: 1.0,
         life: 0,
-        maxLife: 0.35 + Math.random() * 0.35,
-        sparkType: Math.random() > 0.4 ? 'line' : 'dot',
+        maxLife: 0.3 + Math.random() * 0.35,
+        sparkType: Math.random() > 0.35 ? 'line' : 'dot',
       });
     }
   }
 
-  public update(deltaTimeSec: number, canvasWidth: number) {
+  private spawnFloorSparks(x: number, strength: number, color: string) {
+    const count = Math.min(8, Math.floor(strength / 120));
+    for (let i = 0; i < count; i++) {
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      this.particles.push({
+        x,
+        y: FLOOR_Y - 1,
+        vx: dir * (60 + Math.random() * strength * 0.4),
+        vy: -(60 + Math.random() * strength * 0.35),
+        color: Math.random() > 0.5 ? color : '#ffffff',
+        size: 1.5 + Math.random() * 1.5,
+        alpha: 1,
+        life: 0,
+        maxLife: 0.18 + Math.random() * 0.2,
+        sparkType: 'line',
+      });
+    }
+  }
+
+  /**
+   * Advance the game by `deltaTimeSec`. `worldHalfWidth` is half the screen
+   * width in world units (enemies spawn just beyond it).
+   */
+  public update(deltaTimeSec: number, worldHalfWidth: number) {
     if (!this.isRunning || !this.track) return;
 
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
-    const halfWidth = canvasWidth / 2;
+    this.songTime = effectiveTime;
+    const beatPos = beatPosition(effectiveTime, this.beatGrid);
 
-    // 1. UPDATE ENEMIES
+    // 1. ENEMIES: position comes straight from the song clock, so they always
+    // reach the strike line exactly on their beat.
+    const minX = this.hitLineOffset * 0.55;
     for (const enemy of this.enemies) {
       if (enemy.defeated) continue;
 
@@ -488,172 +487,120 @@ export class GameEngine {
       const t = timeRemaining / this.approachDuration;
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      const spawnX = enemy.lane === 'left' ? -halfWidth - 80 : halfWidth + 80;
+      const spawnX = enemy.lane === 'left' ? -worldHalfWidth - 80 : worldHalfWidth + 80;
 
       enemy.x = hitX + (spawnX - hitX) * t;
+      // Late enemies press in but never walk through the player.
+      if (Math.abs(enemy.x) < minX) enemy.x = Math.sign(enemy.x || (enemy.lane === 'left' ? -1 : 1)) * minX;
 
-      const bpm = this.track?.bpm || 120;
-      const strideRate = (bpm / 60) * Math.PI * 2 * (enemy.band === 'high' && enemy.tier === 1 ? 1.4 : 1.0);
-      enemy.animPhase += deltaTimeSec * strideRate;
+      // Footsteps land on the beat: one step per beat (double-time for speeders).
+      const stepsPerBeat = enemy.band === 'high' && enemy.tier === 1 ? 2 : 1;
+      enemy.animPhase = beatPos * Math.PI * stepsPerBeat + (enemy.stepOffset ?? 0);
 
-      if (Math.abs(enemy.x) < halfWidth + 20) {
+      if (Math.abs(enemy.x) < worldHalfWidth + 20) {
         enemy.trailHistory.push({ x: enemy.x, y: enemy.y, alpha: 0.5 });
         if (enemy.trailHistory.length > 4) {
           enemy.trailHistory.shift();
         }
       }
 
-      if (timeRemaining < -0.12) {
+      if (timeRemaining < -BREACH_LATE_SEC) {
         this.triggerPlayerDeath();
         return;
       }
     }
 
-    // 2. UPDATE EXPLODED DEBRIS PIECES WITH CONVEYOR & PIT PHYSICS
-    const groundLevel = 68;
-    const bpm = this.track?.bpm || 120;
-    const currentConveyorSpeed = this.conveyorSpeed * (bpm / 120);
+    // 2. HIT-STOP: on impact, effects and the fighter freeze for a few frames.
+    // Enemies above keep moving, because they must stay locked to the music.
+    let fxDt = deltaTimeSec;
+    if (this.hitStopRemaining > 0) {
+      fxDt = 0;
+      this.hitStopRemaining -= deltaTimeSec;
+    }
+    this.animClock += fxDt;
 
-    for (let i = this.debris.length - 1; i >= 0; i--) {
-      const piece = this.debris[i];
-      piece.life += deltaTimeSec;
-
-      if (piece.fallingInPit) {
-        // Accelerate into the abyss pit
-        piece.vy += 850 * deltaTimeSec;
-        piece.y += piece.vy * deltaTimeSec;
-        piece.x += piece.vx * 0.3 * deltaTimeSec;
-        piece.angle += piece.vAngle * 0.5 * deltaTimeSec;
-        piece.alpha -= 1.8 * deltaTimeSec;
-
-        if (piece.y > 220 || piece.alpha <= 0) {
-          // Despawn in pit with a small disintegrating spark
-          this.particles.push({
-            x: piece.x,
-            y: Math.min(piece.y, 140),
-            vx: (Math.random() - 0.5) * 80,
-            vy: -40 - Math.random() * 80,
-            color: piece.color,
-            size: 2.5,
-            alpha: 0.9,
-            life: 0,
-            maxLife: 0.4,
-            sparkType: 'ember',
-          });
-          this.debris.splice(i, 1);
-          continue;
-        }
-      } else {
-        // Normal airborne / ground motion
-        piece.vy += 750 * deltaTimeSec;
-        piece.x += piece.vx * deltaTimeSec;
-        piece.y += piece.vy * deltaTimeSec;
-        piece.angle += piece.vAngle * deltaTimeSec;
-
-        // Check if over the Central Pit
-        if (Math.abs(piece.x) <= this.pitRadius) {
-          // Inside the pit region: falls straight down into the pit!
-          if (piece.y >= groundLevel - 5) {
-            piece.fallingInPit = true;
-            piece.vx *= 0.3;
-          }
-        } else {
-          // Over Left or Right Conveyors: check ground bounce
-          if (piece.y >= groundLevel) {
-            piece.y = groundLevel;
-            if (Math.abs(piece.vy) > 80) {
-              piece.vy = -piece.vy * 0.42;
-              piece.vx *= 0.75;
-              piece.vAngle *= 0.8;
-            } else {
-              piece.landed = true;
-              piece.vy = 0;
-            }
-          }
-
-          // If landed on conveyor: Conveyors move inwards towards the pit!
-          if (piece.y >= groundLevel - 2) {
-            if (piece.x < -this.pitRadius) {
-              // Left side conveyor moves RIGHT (towards center pit)
-              piece.x += currentConveyorSpeed * deltaTimeSec;
-              piece.angle += 3 * deltaTimeSec;
-            } else if (piece.x > this.pitRadius) {
-              // Right side conveyor moves LEFT (towards center pit)
-              piece.x -= currentConveyorSpeed * deltaTimeSec;
-              piece.angle -= 3 * deltaTimeSec;
-            }
-          }
-        }
-      }
-
-      if (piece.life >= piece.maxLife && !piece.fallingInPit) {
-        piece.alpha -= 1.5 * deltaTimeSec;
-        if (piece.alpha <= 0) {
-          this.debris.splice(i, 1);
-        }
+    // 3. DEBRIS: rigid-body physics with bouncing, friction, conveyors and the pit.
+    const world: DebrisWorld = {
+      floorY: FLOOR_Y,
+      pitHalfWidth: this.pitRadius,
+      beltSpeed: this.conveyorSpeed * (this.beatGrid.bpm / 120) * 0.6,
+      gravity: 1500,
+    };
+    if (fxDt > 0) {
+      const { impacts, sunk } = stepDebris(this.debris, world, fxDt);
+      for (const hit of impacts) this.spawnFloorSparks(hit.x, hit.strength, hit.color);
+      for (const piece of sunk) {
+        this.particles.push({
+          x: piece.x,
+          y: FLOOR_Y + 30,
+          vx: (Math.random() - 0.5) * 80,
+          vy: -60 - Math.random() * 90,
+          color: piece.color,
+          size: 2.5,
+          alpha: 0.9,
+          life: 0,
+          maxLife: 0.45,
+          sparkType: 'ember',
+        });
       }
     }
 
     if (this.screenShake > 0) {
-      this.screenShake = Math.max(0, this.screenShake - deltaTimeSec * 35);
+      this.screenShake = Math.max(0, this.screenShake - deltaTimeSec * 18);
     }
+    const kickDecay = Math.exp(-deltaTimeSec * 14);
+    this.cameraKick.x *= kickDecay;
+    this.cameraKick.zoom *= kickDecay;
 
     const now = performance.now();
     this.judgements = this.judgements.filter((j) => {
       const age = (now - j.createdAt) / 1000;
-      return age < 0.65;
+      return age < 0.7;
     });
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.life += deltaTimeSec;
+      p.life += fxDt;
       if (p.life >= p.maxLife) {
         this.particles.splice(i, 1);
         continue;
       }
       if (p.sparkType === 'ring') {
-        p.size += 180 * deltaTimeSec;
+        p.size += 220 * fxDt;
+      } else if (p.sparkType === 'flash') {
+        p.size += 160 * fxDt;
       } else if (p.sparkType === 'ember') {
-        p.x += p.vx * deltaTimeSec;
-        p.y += p.vy * deltaTimeSec;
+        p.x += p.vx * fxDt;
+        p.y += p.vy * fxDt;
       } else {
-        p.x += p.vx * deltaTimeSec;
-        p.y += p.vy * deltaTimeSec;
-        p.vy += 480 * deltaTimeSec;
+        p.x += p.vx * fxDt;
+        p.y += p.vy * fxDt;
+        p.vy += 900 * fxDt;
       }
       p.alpha = Math.max(0, 1 - p.life / p.maxLife);
     }
 
-    const scarfWind = Math.sin(now * 0.008) * 6;
-    if (this.isAttacking) {
-      const elapsedMs = now - this.attackStartTime;
-      const progress = elapsedMs / this.attackDuration;
+    // 4. PLAYER ANIMATION
+    const pulse = beatPulse(effectiveTime, this.beatGrid, 5);
+    const sway = Math.sin(beatPos * Math.PI) * 1.5;
+    const restPose = idleBouncePose(IDLE_POSE, pulse, sway);
 
-      if (progress < 0.4) {
-        const t = progress / 0.4;
-        this.currentPose = lerpPose(IDLE_POSE, this.lastAttackPose, t * t);
-      } else if (progress < 0.75) {
-        this.currentPose = this.lastAttackPose;
-      } else if (progress < 1.0) {
-        const t = (progress - 0.75) / 0.25;
-        this.currentPose = lerpPose(this.lastAttackPose, IDLE_POSE, t);
-      } else {
+    if (this.isAttacking) {
+      const progress = (this.animClock - this.strikeStart) / this.strikeDuration;
+      if (progress >= 1) {
         this.isAttacking = false;
-        this.currentPose = { ...IDLE_POSE };
+        this.strikeActive = false;
+        this.playerOffsetX = 0;
+        this.currentPose = restPose;
+      } else {
+        const frame = strikeFrame(progress, this.strikeFromPose, this.lastAttackPose, restPose, this.strikeLunge);
+        this.currentPose = frame.pose;
+        this.playerOffsetX = frame.lungeX;
+        this.strikeActive = frame.active;
       }
     } else {
-      const breath = Math.sin(now * 0.005) * 1.5;
-      this.currentPose = {
-        ...IDLE_POSE,
-        chest: { x: IDLE_POSE.chest.x, y: IDLE_POSE.chest.y + breath * 0.5 },
-        head: { x: IDLE_POSE.head.x, y: IDLE_POSE.head.y + breath },
-        scarf: [
-          { x: -8, y: -48 + breath },
-          { x: -22, y: -44 + scarfWind * 0.5 },
-          { x: -38, y: -38 + scarfWind },
-          { x: -55, y: -32 + scarfWind * 1.5 },
-        ],
-      };
+      this.currentPose = restPose;
+      this.playerOffsetX = 0;
     }
   }
 
@@ -661,14 +608,14 @@ export class GameEngine {
     this.isRunning = false;
     audioEngine.stop();
     audioEngine.playDeathSound();
-    this.screenShake = 28;
+    this.screenShake = 20;
 
     for (let i = 0; i < 70; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 120 + Math.random() * 450;
       this.particles.push({
         x: 0,
-        y: 10,
+        y: -10,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         color: Math.random() > 0.5 ? '#ff2a5f' : '#00f3ff',

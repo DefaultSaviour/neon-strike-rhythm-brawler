@@ -1,5 +1,10 @@
 import { Track, BeatNote, Lane, TimingJudgementType, FrequencyBand } from '../types/game';
 import { audioStorage } from '../utils/audioStorage';
+import { gridForNotes } from './beatGrid';
+import { computeHeardSongTime } from './songClock';
+
+/** How late the kick/bass onset detector lands after the real attack (see analyzeAudioBuffer step 5b). */
+export const LOW_BAND_DETECTOR_LAG_SEC = 0.015;
 
 type BiquadCoeffs = [number, number, number, number, number];
 
@@ -299,13 +304,31 @@ class AudioEngine {
     this.trebleMeter = Math.min(1.0, Math.pow(tAvg, 1.1) * 1.65);
   }
 
+  /**
+   * Song position (seconds) the player is HEARING right now, corrected for the
+   * delay between the browser processing audio and it leaving the speakers.
+   * See songClock.ts for the details.
+   */
   public getPlaybackTime(): number {
     if (this.isLoadingBuffer) return 0;
     if (!this.ctx || (!this.currentSource && !this.isPlayingSynth)) return 0;
     if (this.currentSource) {
       this.updateRealtimeMeters();
     }
-    return Math.max(0, this.ctx.currentTime - this.startTime);
+    const ctx = this.ctx;
+    let outputStamp: AudioTimestamp | undefined;
+    try {
+      outputStamp = typeof ctx.getOutputTimestamp === 'function' ? ctx.getOutputTimestamp() : undefined;
+    } catch {
+      outputStamp = undefined;
+    }
+    return computeHeardSongTime({
+      contextTime: ctx.currentTime,
+      songStartContextTime: this.startTime,
+      outputLatency: (ctx.outputLatency || 0) + (ctx.baseLatency || 0),
+      outputStamp,
+      perfNow: performance.now(),
+    });
   }
 
   private preparePromises: Map<string, Promise<void>> = new Map();
@@ -381,8 +404,9 @@ class AudioEngine {
           if (onComplete) onComplete();
         }
       };
-      this.startTime = this.ctx!.currentTime;
-      source.start(0);
+      // Start a touch in the future so the first sample lands exactly on startTime.
+      this.startTime = this.ctx!.currentTime + 0.05;
+      source.start(this.startTime);
       this.currentSource = source;
     } else {
       // Procedural Web Audio synthesizer fallback
@@ -872,7 +896,7 @@ class AudioEngine {
 
     const beatFrames = bestLag;
     const beatSec = beatFrames * frameDt;
-    const estimatedBpm = Math.min(195, Math.max(90, Math.round(60 / beatSec)));
+    const estimatedBpm = Math.min(200, Math.max(90, Math.round(60 / beatSec)));
 
     const locLowMean = computeMovingMean(lowOnset, 24);
     const locHighMean = computeMovingMean(highN, 24);
@@ -1068,6 +1092,16 @@ class AudioEngine {
     }
     lockedBeats.sort((a, b) => a.time - b.time);
 
+    // 5b. Remove the detector's built-in lag on kick & bass notes.
+    // The low-band onset curve peaks after the sound actually starts (25ms
+    // analysis windows, smoothing and filter delay). Measured on synthetic
+    // songs with known kick times: 13-19ms late in a loud, dense mix, so we
+    // pull these notes 15ms earlier. Treble notes measured ~0ms off: unchanged.
+    for (const b of lockedBeats) {
+      if (b.kind !== 'lead') b.time = Math.max(0, b.time - LOW_BAND_DETECTOR_LAG_SEC);
+    }
+    lockedBeats.sort((a, b) => a.time - b.time);
+
     // 6. Acoustic & Phrase-Aware Lane Choreography
     const notes: BeatNote[] = [];
     let sameLaneStreak = 0;
@@ -1140,10 +1174,14 @@ class AudioEngine {
 
     if (progressCallback) progressCallback(1.0);
 
+    // Refine the coarse tempo (only accurate to ~±2 BPM) by lining notes up on a beat grid.
+    const grid = gridForNotes(notes, estimatedBpm);
+    const preciseBpm = grid.strength > 0.15 ? grid.bpm : estimatedBpm;
+
     return {
-      bpm: estimatedBpm,
+      bpm: preciseBpm,
       notes,
-      description: `${notes.length} dynamic bassline-locked beats (${estimatedBpm} BPM â€¢ Adaptive Kick & Bass Tracker)`,
+      description: `${notes.length} dynamic bassline-locked beats (${Math.round(preciseBpm)} BPM · Adaptive Kick & Bass Tracker)`,
     };
   }
 
@@ -1240,11 +1278,11 @@ export const PRELOADED_TRACKS: Track[] = [
     id: 'track_eargasm_5',
     title: 'Eargasm 5',
     artist: 'defaultsaviour',
-    bpm: 136,
+    bpm: 104,
     difficulty: 'Medium',
     duration: 199,
     description:
-      'Hypnotic 136 BPM deep techno groove with deep resonant sub kicks and spacious atmospheric sweeps.',
+      'Hypnotic 104 BPM deep techno groove with deep resonant sub kicks and spacious atmospheric sweeps.',
     notes: [],
     audioUrl: '/audio/Eargasm5.mp3',
   },

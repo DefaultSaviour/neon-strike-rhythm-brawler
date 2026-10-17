@@ -366,15 +366,15 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
                 </div>
                 <input
                   type="range"
-                  min="-150"
-                  max="150"
+                  min="-300"
+                  max="300"
                   step="5"
                   value={settings.latencyOffsetMs}
                   onChange={(e) => onUpdateSettings({ latencyOffsetMs: parseInt(e.target.value, 10) })}
                   className="w-full accent-cyan-400 cursor-pointer"
                 />
                 <div className="text-[11px] text-slate-500">
-                  Adjust this if you are using Bluetooth headphones or if audio feels delayed relative to on-screen hits.
+                  If hits keep showing LATE, raise this; if they show EARLY, lower it. Bluetooth headphones usually need +150 ms or more. Tip: after a song, the results screen suggests a value for you.
                 </div>
               </div>
 
