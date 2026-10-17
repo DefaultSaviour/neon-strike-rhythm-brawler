@@ -19,6 +19,7 @@ import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGr
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
 import { FLOOR_Y } from './layout';
+import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { buildForBand, DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, enemyPose } from './enemyMotion';
 
 export interface GameEngineCallbacks {
@@ -27,8 +28,6 @@ export interface GameEngineCallbacks {
   onJudgement: (judgement: TimingJudgementType, combo: number) => void;
 }
 
-/** Never keep more than this many debris pieces alive (protects frame rate on long combos). */
-const MAX_DEBRIS = 260;
 /** How far the fighter lunges toward the enemy on a strike (world units) */
 const LUNGE_DISTANCE = 16;
 /** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
@@ -333,6 +332,8 @@ export class GameEngine {
     this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
 
     const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
+    // One judgement word per side: the newest replaces the last, so they never stack up.
+    this.judgements = this.judgements.filter((j) => j.lane !== lane);
     this.judgements.push({
       id: this.nextJudgementId++,
       text: judgement,
@@ -370,8 +371,9 @@ export class GameEngine {
     const style = getEnemyStyle(enemy.band, enemy.tier);
     const combo = this.scoreState.combo;
     const judgementPower = judgement === 'PERFECT' ? 1.35 : judgement === 'GOOD' ? 1.1 : 0.9;
-    const comboPower = 1 + Math.min(0.9, combo * 0.02);
-    const extraShards = combo >= 50 ? 9 : combo >= 32 ? 6 : combo >= 18 ? 4 : combo >= 8 ? 2 : 0;
+    // The longer the chain, the harder enemies are blown apart (see comboFx.ts).
+    const comboPower = comboBlastPower(combo);
+    const extraShards = extraShardsForCombo(combo);
 
     const pieces = shatterEnemy(
       {
@@ -426,8 +428,9 @@ export class GameEngine {
     judgement: TimingJudgementType,
     color: string
   ) {
-    const count = judgement === 'PERFECT' ? 36 : judgement === 'GOOD' ? 22 : 12;
+    const count = judgement === 'PERFECT' ? 16 : judgement === 'GOOD' ? 10 : 6;
     const away = lane === 'left' ? -1 : 1;
+    const blast = comboBlastPower(this.scoreState.combo);
 
     // Bright flash at the point of impact
     this.particles.push({
@@ -436,7 +439,8 @@ export class GameEngine {
       vx: 0,
       vy: 0,
       color: '#ffffff',
-      size: judgement === 'PERFECT' ? 34 : 24,
+      // The impact flash swells with the combo, so big chains feel bigger.
+      size: (judgement === 'PERFECT' ? 30 : 22) * (0.8 + blast * 0.3),
       alpha: 1,
       life: 0,
       maxLife: 0.12,
@@ -459,7 +463,7 @@ export class GameEngine {
 
     for (let i = 0; i < count; i++) {
       const angle = (Math.random() - 0.5) * Math.PI * 1.2 + (away < 0 ? Math.PI : 0);
-      const speed = 220 + Math.random() * (judgement === 'PERFECT' ? 520 : 340);
+      const speed = (220 + Math.random() * (judgement === 'PERFECT' ? 520 : 340)) * (0.8 + blast * 0.25);
 
       this.particles.push({
         x: x + (Math.random() - 0.5) * 16,
@@ -477,7 +481,7 @@ export class GameEngine {
   }
 
   private spawnFloorSparks(x: number, strength: number, color: string) {
-    const count = Math.min(8, Math.floor(strength / 120));
+    const count = Math.min(4, Math.floor(strength / 200));
     for (let i = 0; i < count; i++) {
       const dir = Math.random() > 0.5 ? 1 : -1;
       this.particles.push({
@@ -549,6 +553,7 @@ export class GameEngine {
       pitHalfWidth: this.pitRadius,
       beltSpeed: this.conveyorSpeed * (this.beatGrid.bpm / 120) * 0.6,
       gravity: 1500,
+      halfWidth: worldHalfWidth,
     };
     if (fxDt > 0) {
       const { impacts, sunk } = stepDebris(this.debris, world, fxDt);
@@ -582,6 +587,10 @@ export class GameEngine {
       return age < 0.7;
     });
 
+    // Keep the newest sparks if there are too many on screen.
+    if (this.particles.length > MAX_PARTICLES) {
+      this.particles.splice(0, this.particles.length - MAX_PARTICLES);
+    }
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life += fxDt;

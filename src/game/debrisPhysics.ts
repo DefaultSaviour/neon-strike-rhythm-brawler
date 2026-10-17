@@ -46,6 +46,8 @@ export interface DebrisPiece {
   alpha: number;
   /** True once it has dropped below the floor into the pit */
   inPit: boolean;
+  /** Seconds this piece has been lying still on the floor (it fades once settled) */
+  restTime?: number;
 }
 
 export interface DebrisWorld {
@@ -54,6 +56,11 @@ export interface DebrisWorld {
   /** Conveyor surface speed (units/s). Both belts move toward the centre. */
   beltSpeed: number;
   gravity: number;
+  /**
+   * Half the visible width (world units). Pieces knocked this far past the
+   * edge of the screen are removed, since nobody will see them again.
+   */
+  halfWidth?: number;
 }
 
 export interface DebrisImpact {
@@ -79,6 +86,12 @@ const SPIN_DRAG = 0.6;
 const SUBSTEP = 1 / 240;
 const PIT_DEPTH = 260;
 const HEAT_COOL_RATE = 1.6;
+/** Seconds a piece may lie still before it starts fading */
+const REST_BEFORE_FADE = 0.45;
+/** Alpha lost per second while fading (about 0.5 s to vanish) */
+const FADE_RATE = 2;
+const OFFSCREEN_MARGIN = 60;
+const OFFSCREEN_HEIGHT = 900;
 
 /** Contact points in the piece's own (unrotated) coordinates. */
 function localContacts(p: DebrisPiece): Array<{ x: number; y: number }> {
@@ -235,8 +248,20 @@ export function stepDebris(pieces: DebrisPiece[], world: DebrisWorld, dt: number
       continue;
     }
 
-    if (p.life > p.maxLife) {
-      p.alpha -= 1.5 * dt;
+    // Gone off the side of the screen (or way above it): drop it.
+    if (world.halfWidth !== undefined && (Math.abs(p.x) > world.halfWidth + OFFSCREEN_MARGIN || p.y < -OFFSCREEN_HEIGHT)) {
+      pieces.splice(i, 1);
+      continue;
+    }
+
+    // Settled pieces (lying still on the floor or riding a belt) fade quickly,
+    // so finished debris doesn't pile up and clutter the fight.
+    const onFloor = p.y + p.radius >= world.floorY - 2 && Math.abs(p.vy) < 30;
+    const slide = Math.abs(p.vx - beltVelocityAt(p.x, world));
+    p.restTime = onFloor && slide < 30 ? (p.restTime ?? 0) + dt : 0;
+
+    if (p.life > p.maxLife || p.restTime > REST_BEFORE_FADE) {
+      p.alpha -= FADE_RATE * dt;
       if (p.alpha <= 0) pieces.splice(i, 1);
     }
   }

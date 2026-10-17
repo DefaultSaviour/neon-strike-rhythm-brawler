@@ -125,6 +125,28 @@ describe('stepDebris: conveyors and pit', () => {
     expect(simulate([soft], world, 1).impacts).toBe(0);
   });
 
+  it('settled pieces fade away within about a second, so debris never piles up', () => {
+    const p = piece({ shape: 'segment', x: -200, y: world.floorY - 2 });
+    const pieces = [p];
+    simulate(pieces, world, 1.2);
+    expect(pieces).toHaveLength(0);
+  });
+
+  it('pieces still flying through the air do not fade early', () => {
+    const p = piece({ shape: 'circle', x: -200, y: -300, vy: -200 });
+    const pieces = [p];
+    simulate(pieces, world, 0.5);
+    expect(pieces).toContain(p);
+    expect(p.alpha).toBe(1);
+  });
+
+  it('removes pieces knocked off the side of the screen', () => {
+    const p = piece({ shape: 'segment', x: 300, y: -50, vx: 2000 });
+    const pieces = [p];
+    simulate(pieces, { ...world, halfWidth: 400 }, 0.3);
+    expect(pieces).toHaveLength(0);
+  });
+
   it('fades out and removes pieces that outlive their lifetime', () => {
     const p = piece({ shape: 'segment', y: world.floorY - 2, maxLife: 0.5 });
     const pieces = [p];
