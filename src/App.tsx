@@ -493,6 +493,7 @@ export default function App() {
         <GameOverModal
           cleared={clearedOutcome}
           deathReport={deathReport}
+          runProgress={engine.lastRun}
           track={selectedTrack}
           scoreState={scoreState}
           highScoreRecord={engine.getHighScore(selectedTrack.id)}

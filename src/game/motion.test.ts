@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDLE_POSE, ATTACK_MOVES } from './animations';
-import { easeInOutCubic, easeOutBack, idleBouncePose, STRIKE_PHASES, strikeFrame } from './motion';
+import { attackChainFrame, CHAIN_STRIKE_SEC, easeInOutCubic, easeOutBack, idleBouncePose, playerVictoryPose, STRIKE_PHASES, strikeFrame } from './motion';
 
 describe('easing', () => {
   it('starts at 0 and ends at 1', () => {
@@ -51,5 +51,37 @@ describe('idleBouncePose', () => {
     expect(onBeat.chest.y).toBeGreaterThan(offBeat.chest.y);
     expect(onBeat.leftFoot).toEqual(IDLE_POSE.leftFoot);
     expect(onBeat.rightFoot).toEqual(IDLE_POSE.rightFoot);
+  });
+});
+
+describe('player victory pose', () => {
+  it('victory pose has both hands up above his head', () => {
+    const p = playerVictoryPose(2.5);
+    expect(p.leftHand.y).toBeLessThan(p.head.y);
+    expect(p.rightHand.y).toBeLessThan(p.head.y);
+  });
+});
+
+describe('attackChainFrame (progress-bar attack chain)', () => {
+  const pick = (i: number) => ATTACK_MOVES[i % ATTACK_MOVES.length].pose;
+
+  it('throws a new strike every CHAIN_STRIKE_SEC', () => {
+    expect(attackChainFrame(0.01, pick, IDLE_POSE).strikeIndex).toBe(0);
+    expect(attackChainFrame(CHAIN_STRIKE_SEC * 1.5, pick, IDLE_POSE).strikeIndex).toBe(1);
+    expect(attackChainFrame(CHAIN_STRIKE_SEC * 3.2, pick, IDLE_POSE).strikeIndex).toBe(3);
+  });
+
+  it('hits the full attack pose in the middle of each strike', () => {
+    const mid = (STRIKE_PHASES.impact + STRIKE_PHASES.hold) / 2;
+    const f = attackChainFrame(CHAIN_STRIKE_SEC * (2 + mid), pick, IDLE_POSE);
+    expect(f.pose.leftHand).toEqual(pick(2).leftHand);
+    expect(f.active).toBe(true);
+  });
+
+  it('flows from one strike into the next without jumping', () => {
+    const justBefore = attackChainFrame(CHAIN_STRIKE_SEC * 2 - 1e-6, pick, IDLE_POSE).pose;
+    const justAfter = attackChainFrame(CHAIN_STRIKE_SEC * 2 + 1e-6, pick, IDLE_POSE).pose;
+    expect(justAfter.chest.x).toBeCloseTo(justBefore.chest.x, 2);
+    expect(justAfter.leftHand.x).toBeCloseTo(justBefore.leftHand.x, 1);
   });
 });

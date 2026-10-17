@@ -20,6 +20,7 @@ import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
 import { FLOOR_Y } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
+import { recordRunProgress, RunProgress } from './runProgress';
 import { buildForBand, DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, enemyPose } from './enemyMotion';
 
 export interface GameEngineCallbacks {
@@ -67,6 +68,8 @@ export class GameEngine {
   public hitOffsets: number[] = [];
   /** The player's last few presses, used to explain a death */
   private recentPresses: PressRecord[] = [];
+  /** How far the last finished run got (for the results screen's progress bar) */
+  public lastRun: RunProgress | null = null;
 
   public scoreState: GameScoreState = {
     score: 0,
@@ -147,6 +150,7 @@ export class GameEngine {
     this.judgements = [];
     this.hitOffsets = [];
     this.recentPresses = [];
+    this.lastRun = null;
     this.currentMoveIndex = 0;
     this.isAttacking = false;
     this.strikeActive = false;
@@ -655,6 +659,7 @@ export class GameEngine {
 
   private triggerPlayerDeath(killer: Enemy) {
     this.isRunning = false;
+    this.recordProgress(false);
     const report = explainDeath(
       { name: getEnemyStyle(killer.band, killer.tier).name, lane: killer.lane, targetTime: killer.targetTime },
       this.recentPresses,
@@ -686,8 +691,23 @@ export class GameEngine {
     }, 700);
   }
 
+  /** Save how far this run got, and compare it with the best attempt on this song. */
+  private recordProgress(cleared: boolean) {
+    if (!this.track || this.lastRun) return;
+    const duration = this.track.audioBuffer?.duration ?? this.track.duration;
+    let store: Storage | undefined;
+    try {
+      store = typeof localStorage !== 'undefined' ? localStorage : undefined;
+    } catch {
+      store = undefined;
+    }
+    this.lastRun = recordRunProgress(this.track.id, this.songTime, duration, cleared, store);
+  }
+
   private finishSong(cleared: boolean) {
+    if (!this.isRunning) return;
     this.isRunning = false;
+    this.recordProgress(cleared);
     audioEngine.stop();
     this.saveHighScore(cleared);
     this.callbacks.onGameOver(this.scoreState, cleared);

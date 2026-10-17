@@ -1,4 +1,5 @@
 import { Point2D, SkeletonPose } from '../types/game';
+import { EnemyPose, enemyPose } from './enemyMotion';
 
 /**
  * Animation helpers for the player fighter.
@@ -117,4 +118,69 @@ export function idleBouncePose(rest: SkeletonPose, pulse: number, sway: number):
     rightKnee: lift(rest.rightKnee, dip * 0.5, dip * 0.6),
     scarf: rest.scarf?.map((pt, i) => ({ x: pt.x - sway * i * 0.8, y: pt.y + dip + Math.sin(sway + i) * i * 1.5 })),
   };
+}
+
+/**
+ * Convert an enemy-style skeleton (front/back limbs) into the player's
+ * skeleton format (left/right limbs). The player's LEFT limbs lead, so they
+ * take the front limbs. A scarf is added, streaming behind the head.
+ */
+export function playerPoseFromEnemyPose(p: EnemyPose, scarfWave = 0): SkeletonPose {
+  const h = p.head;
+  const behind = p.facingCamera ? 0.4 : 1; // a front-facing scarf hangs down more
+  return {
+    head: p.head,
+    chest: p.chest,
+    pelvis: p.pelvis,
+    leftShoulder: p.frontShoulder,
+    leftElbow: p.frontElbow,
+    leftHand: p.frontHand,
+    rightShoulder: p.backShoulder,
+    rightElbow: p.backElbow,
+    rightHand: p.backHand,
+    leftHip: { x: p.pelvis.x + 2, y: p.pelvis.y },
+    leftKnee: p.frontKnee,
+    leftFoot: p.frontFoot,
+    rightHip: { x: p.pelvis.x - 2, y: p.pelvis.y },
+    rightKnee: p.backKnee,
+    rightFoot: p.backFoot,
+    scarf: [1, 2, 3, 4].map((i) => ({
+      x: h.x - 4 - i * 14 * behind,
+      y: h.y + 2 + i * (behind < 1 ? 7 : 3) + Math.sin(scarfWave + i * 0.9) * i * 1.6,
+    })),
+  };
+}
+
+/** The player celebrating: facing you, hands up, bouncing on the beat. */
+export function playerVictoryPose(beat: number): SkeletonPose {
+  return playerPoseFromEnemyPose(enemyPose('sway', beat, 'agile'), beat * Math.PI);
+}
+
+/** How long each blow takes in the progress-bar attack chain (seconds) */
+export const CHAIN_STRIKE_SEC = 0.26;
+
+export interface ChainFrame {
+  pose: SkeletonPose;
+  /** True while the blow is landing (draw the slash) */
+  active: boolean;
+  /** Which strike in the chain this is (0, 1, 2...) */
+  strikeIndex: number;
+}
+
+/**
+ * The fighter throwing a non-stop chain of attacks, each one snapping out
+ * from his guard and recovering back to it, so blows flow into each other
+ * with no jumps. `pickMove(i)` chooses the i-th strike's pose (already facing
+ * the right way), so the caller can use moves from the current combo tier.
+ */
+export function attackChainFrame(
+  elapsed: number,
+  pickMove: (strikeIndex: number) => SkeletonPose,
+  rest: SkeletonPose
+): ChainFrame {
+  const t = Math.max(0, elapsed);
+  const strikeIndex = Math.floor(t / CHAIN_STRIKE_SEC);
+  const progress = (t - strikeIndex * CHAIN_STRIKE_SEC) / CHAIN_STRIKE_SEC;
+  const frame = strikeFrame(progress, rest, pickMove(strikeIndex), rest, 0);
+  return { pose: frame.pose, active: frame.active, strikeIndex };
 }
