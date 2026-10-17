@@ -2,7 +2,12 @@
  * Game types and state definitions for Neon Strike: Rhythm Brawler
  */
 
+import type { EnemyMotionStyle } from '../game/enemyMotion';
+
 export type Lane = 'left' | 'right';
+
+/** What plays when you hit an enemy */
+export type HitSoundMode = 'both' | 'tone' | 'surge' | 'off';
 
 /** Acoustic frequency band a beat was detected in */
 export type FrequencyBand = 'sub' | 'bass' | 'high';
@@ -33,6 +38,8 @@ export interface BeatNote {
   band?: FrequencyBand;
   tier?: EnemyTier;
   color?: string;
+  /** Strongest frequency (Hz) in the note's band at the hit, used to tune the hit tone */
+  pitchHz?: number;
 }
 
 export interface Track {
@@ -65,8 +72,10 @@ export interface Enemy {
   defeated: boolean;
   deathTime?: number;
   animPhase: number;
-  /** Added to the walk cycle so neighbouring enemies lead with opposite feet */
+  /** Beats added to the motion cycle so neighbouring enemies lead with opposite feet */
   stepOffset?: number;
+  /** Pitch (Hz) of the musical note this enemy was charted from */
+  pitchHz?: number;
   trailHistory: Array<{ x: number; y: number; alpha: number }>;
 }
 
@@ -153,4 +162,8 @@ export interface AudioSettings {
   scanlines: boolean;
   screenShake: 'none' | 'subtle' | 'normal';
   oneButtonMode: boolean;
+  /** How enemies move while riding the conveyor */
+  enemyMotion: EnemyMotionStyle;
+  /** Hit feedback sound */
+  hitSound: HitSoundMode;
 }

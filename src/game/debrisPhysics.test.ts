@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DebrisPiece, DebrisWorld, massProperties, shatterEnemy, stepDebris } from './debrisPhysics';
+import { enemyPose } from './enemyMotion';
 
 const world: DebrisWorld = { floorY: 68, pitHalfWidth: 40, beltSpeed: 0, gravity: 1500 };
 
@@ -141,7 +142,7 @@ describe('shatterEnemy', () => {
     shatterEnemy(
       {
         x: facing === 1 ? -80 : 80,
-        phase: 0.5,
+        pose: enemyPose('run', 0.5, 'samurai'),
         facing,
         scale: 1,
         color: '#ff0000',

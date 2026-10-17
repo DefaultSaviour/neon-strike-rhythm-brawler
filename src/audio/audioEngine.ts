@@ -1,7 +1,8 @@
-import { Track, BeatNote, Lane, TimingJudgementType, FrequencyBand } from '../types/game';
+import { Track, BeatNote, Lane, TimingJudgementType, FrequencyBand, HitSoundMode } from '../types/game';
 import { audioStorage } from '../utils/audioStorage';
 import { gridForNotes } from './beatGrid';
 import { computeHeardSongTime } from './songClock';
+import { foldIntoOctave, peakHzInBand } from './hitTone';
 
 /** How late the kick/bass onset detector lands after the real attack (see analyzeAudioBuffer step 5b). */
 export const LOW_BAND_DETECTOR_LAG_SEC = 0.015;
@@ -186,6 +187,7 @@ function assignSpectralTiers(notes: BeatNote[], mono: Float32Array, sr: number) 
       logSum += p * Math.log2(k * binHz);
     }
     if (wSum <= 1e-12) continue;
+    note.pitchHz = peakHzInBand(re, im, binHz, lo, hi);
     const centroidLog = logSum / wSum;
     const pos = (centroidLog - Math.log2(lo)) / (Math.log2(hi) - Math.log2(lo));
     notePos[n] = Math.min(1, Math.max(0, pos));
@@ -225,6 +227,7 @@ class AudioEngine {
   private sfxVolume: number = 0.9;
   private urlBufferCache: Map<string, AudioBuffer> = new Map();
   private compressor: DynamicsCompressorNode | null = null;
+  private paused: boolean = false;
   public bassMeter: number = 0;
   public trebleMeter: number = 0;
 
@@ -263,9 +266,30 @@ class AudioEngine {
       this.compressor.connect(this.ctx.destination);
     }
 
-    if (this.ctx.state === 'suspended') {
+    if (this.ctx.state === 'suspended' && !this.paused) {
       this.ctx.resume();
     }
+  }
+
+  /**
+   * Pause: freeze the whole audio clock. The song stops, and because the game
+   * reads its time from this clock, enemies and timing freeze at exactly the
+   * same spot. resume() carries on from there.
+   */
+  public async pause() {
+    if (!this.ctx || this.paused) return;
+    this.paused = true;
+    await this.ctx.suspend();
+  }
+
+  public async resume() {
+    if (!this.ctx || !this.paused) return;
+    this.paused = false;
+    await this.ctx.resume();
+  }
+
+  public isPaused(): boolean {
+    return this.paused;
   }
 
   public setVolume(musicVol: number, sfxVol: number) {
@@ -418,6 +442,11 @@ class AudioEngine {
   public stop() {
     this.playSessionId++;
     this.isLoadingBuffer = false;
+    if (this.paused) {
+      // Un-freeze the clock so the next song (or menu sounds) can play.
+      this.paused = false;
+      this.ctx?.resume();
+    }
     if (this.currentSource) {
       try {
         this.currentSource.stop();
@@ -667,7 +696,56 @@ class AudioEngine {
 
   // SFX
   // Dynamic Song Hit Noise: Instead of an artificial synth click, the song itself surges +25% louder on hit!
-  public playHitSound(judgement: TimingJudgementType, band?: FrequencyBand) {
+  /**
+   * Hit feedback. `mode` picks what plays: the tuned tone, the song volume
+   * surge, both, or nothing. `pitchHz` is the pitch of the struck note.
+   */
+  public playHitSound(
+    judgement: TimingJudgementType,
+    band?: FrequencyBand,
+    pitchHz?: number,
+    mode: HitSoundMode = 'both'
+  ) {
+    if (mode === 'off') return;
+    if (mode === 'both' || mode === 'tone') this.playHitTone(judgement, pitchHz);
+    if (mode === 'both' || mode === 'surge') this.playSongSurge(judgement, band);
+  }
+
+  /** Short plucked note, tuned to the music at the struck beat (see hitTone.ts). */
+  private playHitTone(judgement: TimingJudgementType, pitchHz?: number) {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+    const ctx = this.ctx;
+    const time = ctx.currentTime;
+    const freq = foldIntoOctave(pitchHz ?? 0);
+    const peak = judgement === 'PERFECT' ? 0.22 : judgement === 'GOOD' ? 0.16 : 0.11;
+    const decay = judgement === 'PERFECT' ? 0.28 : 0.2;
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, time);
+    env.gain.exponentialRampToValueAtTime(peak, time + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, time + decay);
+    env.connect(this.sfxGain);
+
+    // Body of the note, plus a quieter octave on top for sparkle on PERFECT.
+    const partials: Array<[OscillatorType, number, number]> = [
+      ['triangle', 1, 1],
+      ['sine', 2, judgement === 'PERFECT' ? 0.45 : 0.2],
+    ];
+    for (const [type, multiple, level] of partials) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq * multiple, time);
+      g.gain.setValueAtTime(level, time);
+      osc.connect(g);
+      g.connect(env);
+      osc.start(time);
+      osc.stop(time + decay + 0.02);
+    }
+  }
+
+  private playSongSurge(judgement: TimingJudgementType, band?: FrequencyBand) {
     this.initContext();
     if (!this.ctx || !this.musicGain) return;
 

@@ -1,0 +1,114 @@
+import { describe, expect, it } from 'vitest';
+import { ENEMY_MOTION_STYLES, EnemyMotionStyle, enemyPose, LIMB, solveTwoBone } from './enemyMotion';
+
+const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+const styles: EnemyMotionStyle[] = ['stand', 'run', 'dance', 'sway'];
+const builds = ['heavy', 'samurai', 'agile'] as const;
+
+describe('solveTwoBone', () => {
+  it('keeps both segments at their exact length when the target is reachable', () => {
+    const { joint, end } = solveTwoBone({ x: 0, y: 0 }, { x: 20, y: 30 }, 25, 25, 1);
+    expect(dist({ x: 0, y: 0 }, joint)).toBeCloseTo(25);
+    expect(dist(joint, end)).toBeCloseTo(25);
+    expect(end.x).toBeCloseTo(20);
+    expect(end.y).toBeCloseTo(30);
+  });
+
+  it('reaches straight toward a target that is too far away', () => {
+    const { end } = solveTwoBone({ x: 0, y: 0 }, { x: 0, y: -200 }, 20, 20, 1);
+    expect(end.y).toBeCloseTo(-40, 3);
+    expect(end.x).toBeCloseTo(0);
+  });
+
+  it('bend flips which side the joint pops out to', () => {
+    const a = solveTwoBone({ x: 0, y: 0 }, { x: 0, y: 40 }, 30, 30, 1).joint;
+    const b = solveTwoBone({ x: 0, y: 0 }, { x: 0, y: 40 }, 30, 30, -1).joint;
+    expect(Math.sign(a.x)).toBe(-Math.sign(b.x));
+  });
+});
+
+describe('enemyPose', () => {
+  it('every style keeps limbs at a constant length (no stretchy arms)', () => {
+    for (const style of styles) {
+      for (const build of builds) {
+        for (let beat = 0; beat < 4; beat += 0.13) {
+          const p = enemyPose(style, beat, build);
+          expect(dist(p.frontShoulder, p.frontElbow)).toBeCloseTo(LIMB.upperArm, 3);
+          expect(dist(p.frontElbow, p.frontHand)).toBeCloseTo(LIMB.forearm, 3);
+          expect(dist(p.pelvis, p.frontKnee)).toBeCloseTo(LIMB.thigh, 3);
+          expect(dist(p.backKnee, p.backFoot)).toBeCloseTo(LIMB.shin, 3);
+        }
+      }
+    }
+  });
+
+  it('feet never go below the floor', () => {
+    for (const style of styles) {
+      for (let beat = 0; beat < 4; beat += 0.1) {
+        const p = enemyPose(style, beat, 'heavy');
+        expect(p.frontFoot.y).toBeLessThanOrEqual(68.001);
+        expect(p.backFoot.y).toBeLessThanOrEqual(68.001);
+      }
+    }
+  });
+
+  it('knees bend forward, like real knees', () => {
+    for (const style of styles) {
+      const p = enemyPose(style, 0.3, 'samurai');
+      const midX = (p.pelvis.x + p.frontFoot.x) / 2;
+      expect(p.frontKnee.x).toBeGreaterThanOrEqual(midX - 0.5);
+    }
+  });
+
+  it('stand keeps both feet planted', () => {
+    for (let beat = 0; beat < 2; beat += 0.1) {
+      const p = enemyPose('stand', beat, 'agile');
+      expect(p.frontFoot.y).toBeCloseTo(68);
+      expect(p.backFoot.y).toBeCloseTo(68);
+    }
+  });
+
+  it('run lifts alternate feet, landing exactly on the beats', () => {
+    const halfway = (k: number) => enemyPose('run', k + 0.5, 'heavy');
+    expect(halfway(0).frontFoot.y).toBeLessThan(55); // front knee up between beats 0 and 1
+    expect(halfway(0).backFoot.y).toBeCloseTo(68);
+    expect(halfway(1).backFoot.y).toBeLessThan(55); // then the other leg
+    expect(halfway(1).frontFoot.y).toBeCloseTo(68);
+    const onBeat = enemyPose('run', 3, 'heavy');
+    expect(onBeat.frontFoot.y).toBeCloseTo(68);
+    expect(onBeat.backFoot.y).toBeCloseTo(68);
+  });
+
+  it('dance raises one arm on each beat, taking turns', () => {
+    const even = enemyPose('dance', 2, 'samurai');
+    const odd = enemyPose('dance', 3, 'samurai');
+    expect(even.frontHand.y).toBeLessThan(even.head.y);
+    expect(even.backHand.y).toBeGreaterThan(even.chest.y);
+    expect(odd.backHand.y).toBeLessThan(odd.head.y);
+    expect(odd.frontHand.y).toBeGreaterThan(odd.chest.y);
+  });
+
+  it('sway keeps both hands above the head and leans side to side', () => {
+    const left = enemyPose('sway', 3, 'agile');
+    const right = enemyPose('sway', 1, 'agile');
+    for (const p of [left, right]) {
+      expect(p.frontHand.y).toBeLessThan(p.head.y);
+      expect(p.backHand.y).toBeLessThan(p.head.y);
+    }
+    expect(right.head.x - left.head.x).toBeGreaterThan(10);
+  });
+
+  it('repeats every two beats, so the motion stays in time for the whole song', () => {
+    for (const style of styles) {
+      const period = style === 'sway' ? 4 : 2;
+      const a = enemyPose(style, 1.37, 'heavy');
+      const b = enemyPose(style, 1.37 + period * 10, 'heavy');
+      expect(b.frontHand.x).toBeCloseTo(a.frontHand.x, 6);
+      expect(b.pelvis.y).toBeCloseTo(a.pelvis.y, 6);
+    }
+  });
+
+  it('lists every style once for the options menu', () => {
+    expect(ENEMY_MOTION_STYLES.map((s) => s.id).sort()).toEqual([...styles].sort());
+  });
+});

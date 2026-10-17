@@ -54,6 +54,14 @@ A high-octane cyberpunk rhythm brawler powered by HTML5 Canvas and Web Audio API
 - **Rigid-body shattering** (`src/game/debrisPhysics.ts`): enemies break into pieces that start from their real skeleton, then spin, bounce and slide with friction. The conveyors carry the pieces into the pit.
 - **Clarity first**: only the next enemy in each lane is at full brightness, debris fades once it cools, and the timing ring is always drawn on top.
 
+## ⏸️ Pause & Options
+
+- **Space** pauses in 2-Button Mode (**Esc / P** in 1-Button Mode, where Space is the strike key). The song freezes exactly where it is and resumes from the same spot.
+- The pause menu lets you change options mid-song:
+  - **Enemy Movement**: Run on the spot, Dance, Hands up sway, or Just stand. Every style moves on the beat (`src/game/enemyMotion.ts`).
+  - **Hit Sound**: a short tone tuned to the pitch of the beat you hit (so it stays in key with the song), the song volume boost, both, or off (`src/audio/hitTone.ts`).
+  - Music and hit-sound volume, and the audio latency offset.
+
 ## 🧪 Tests
 
 ```bash
@@ -68,7 +76,7 @@ npm test
 | **Strike Right** | `[→]` / `[D]` / `[L]` | `[SPACE]` / Any Key | Tap Right Strike Zone |
 | **Unified Strike** | — | `[SPACE]` / `[ENTER]` | Tap Full-Width Strike Bar |
 | **Toggle Mode** | HUD Header / Settings | HUD Header / Settings | HUD Header Toggle |
-| **Pause** | `[ESC]` / `[P]` | `[ESC]` / `[P]` | Top-Right Pause Button |
+| **Pause / Options** | `[SPACE]` / `[ESC]` / `[P]` | `[ESC]` / `[P]` | Top-Right Pause Button |
 | **Restart** | `[R]` | `[R]` | Top-Right Restart Button |
 
 ---

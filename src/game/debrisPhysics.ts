@@ -1,3 +1,5 @@
+import type { EnemyPose, Point } from './enemyMotion';
+
 /**
  * Rigid-body physics for the pieces enemies shatter into.
  *
@@ -245,39 +247,11 @@ export function stepDebris(pieces: DebrisPiece[], world: DebrisWorld, dt: number
 // Shattering an enemy
 // ---------------------------------------------------------------------------
 
-interface Joint {
-  x: number;
-  y: number;
-}
-
-/**
- * A generic stick-figure skeleton of a walking enemy (feet on y = 68), matching
- * the proportions the enemy art is drawn with. `dir` is +1 when facing right.
- */
-export function enemySkeleton(phase: number, dir: number, scale: number) {
-  const bob = Math.abs(Math.sin(phase)) * 5;
-  const legStride = Math.sin(phase) * 20;
-  const armStride = Math.cos(phase) * 22;
-  const s = (x: number, y: number): Joint => ({ x: x * scale, y: 68 - (68 - y) * scale });
-  return {
-    head: s(dir * 8, -48 - bob),
-    chest: s(dir * 4, -22 - bob),
-    pelvis: s(0, 8 - bob * 0.5),
-    frontElbow: s(dir * (18 + armStride * 0.4), -10 - bob),
-    frontHand: s(dir * (32 + armStride * 0.6), -20 - bob),
-    backElbow: s(-dir * (12 + armStride * 0.3), -6 - bob),
-    backHand: s(-dir * (20 + armStride * 0.4), 4 - bob),
-    frontKnee: s(dir * (10 + legStride * 0.5), 38),
-    frontFoot: s(dir * (18 + legStride), 68),
-    backKnee: s(-dir * (6 + legStride * 0.4), 38),
-    backFoot: s(-dir * (14 + legStride * 0.8), 68),
-  };
-}
-
 export interface ShatterOptions {
   /** Enemy position (world x) at the moment it was hit */
   x: number;
-  phase: number;
+  /** The enemy's body pose at the moment it was hit (facing right, see enemyMotion.ts) */
+  pose: EnemyPose;
   /** +1 if the enemy faces right (it's on the left lane), -1 otherwise */
   facing: number;
   scale: number;
@@ -301,7 +275,24 @@ export interface ShatterOptions {
  */
 export function shatterEnemy(opts: ShatterOptions, nextId: () => number): DebrisPiece[] {
   const rnd = opts.random ?? Math.random;
-  const sk = enemySkeleton(opts.phase, opts.facing, opts.scale);
+  // Convert the pose into world space: mirror for facing, scale around the feet.
+  const toWorld = (pt: Point): Point => ({ x: pt.x * opts.facing * opts.scale, y: 68 - (68 - pt.y) * opts.scale });
+  const p = opts.pose;
+  const sk = {
+    head: toWorld(p.head),
+    chest: toWorld(p.chest),
+    pelvis: toWorld(p.pelvis),
+    frontShoulder: toWorld(p.frontShoulder),
+    frontElbow: toWorld(p.frontElbow),
+    frontHand: toWorld(p.frontHand),
+    backShoulder: toWorld(p.backShoulder),
+    backElbow: toWorld(p.backElbow),
+    backHand: toWorld(p.backHand),
+    frontKnee: toWorld(p.frontKnee),
+    frontFoot: toWorld(p.frontFoot),
+    backKnee: toWorld(p.backKnee),
+    backFoot: toWorld(p.backFoot),
+  };
   const pieces: DebrisPiece[] = [];
   const maxLife = opts.maxLife ?? 3;
 
@@ -340,7 +331,7 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
     });
   };
 
-  const bone = (a: Joint, b: Joint, role: DebrisRole, thickness: number, color = opts.color) => {
+  const bone = (a: Point, b: Point, role: DebrisRole, thickness: number, color = opts.color) => {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     make('segment', role, (a.x + b.x) / 2, (a.y + b.y) / 2, Math.atan2(dy, dx), Math.hypot(dx, dy) / 2, thickness, color);
@@ -349,9 +340,9 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
   const sc = opts.scale;
   make('circle', 'head', sk.head.x, sk.head.y, 0, 0, 9 * sc, opts.color);
   bone(sk.chest, sk.pelvis, 'torso', 3.2 * sc);
-  bone(sk.chest, sk.frontElbow, 'limb', 2 * sc);
+  bone(sk.frontShoulder, sk.frontElbow, 'limb', 2 * sc);
   bone(sk.frontElbow, sk.frontHand, 'limb', 2 * sc);
-  bone(sk.chest, sk.backElbow, 'limb', 2 * sc);
+  bone(sk.backShoulder, sk.backElbow, 'limb', 2 * sc);
   bone(sk.backElbow, sk.backHand, 'limb', 2 * sc);
   bone(sk.pelvis, sk.frontKnee, 'limb', 2.2 * sc);
   bone(sk.frontKnee, sk.frontFoot, 'limb', 2.2 * sc);
@@ -359,7 +350,11 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
   bone(sk.backKnee, sk.backFoot, 'limb', 2.2 * sc);
 
   if (opts.hasBlade) {
-    const tip = { x: sk.frontHand.x + opts.facing * 40 * sc, y: sk.frontHand.y + 22 * sc };
+    // Blade continues on from the forearm.
+    const fx = sk.frontHand.x - sk.frontElbow.x;
+    const fy = sk.frontHand.y - sk.frontElbow.y;
+    const len = Math.hypot(fx, fy) || 1;
+    const tip = { x: sk.frontHand.x + (fx / len) * 40 * sc, y: sk.frontHand.y + (fy / len) * 40 * sc };
     bone(sk.frontHand, tip, 'weapon', 1.6 * sc, opts.accent);
   }
 

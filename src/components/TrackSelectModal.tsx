@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Track, HighScoreRecord, AudioSettings } from '../types/game';
+import { GameOptions } from './GameOptions';
 import { PRELOADED_TRACKS, audioEngine } from '../audio/audioEngine';
 import { Play, Upload, Award, Sliders, Volume2, Sparkles, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 
@@ -322,6 +323,8 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
 
           {activeTab === 'settings' && (
             <div className="flex flex-col gap-6 max-w-lg mx-auto">
+              <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['motion', 'hitSound']} />
+
               {/* Music Volume */}
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between text-xs text-slate-300">

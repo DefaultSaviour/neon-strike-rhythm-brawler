@@ -19,6 +19,7 @@ import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGr
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
 import { FLOOR_Y } from './layout';
+import { buildForBand, DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, enemyPose } from './enemyMotion';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -83,7 +84,12 @@ export class GameEngine {
     scanlines: true,
     screenShake: 'subtle',
     oneButtonMode: false,
+    enemyMotion: DEFAULT_ENEMY_MOTION,
+    hitSound: 'both',
   };
+
+  /** True while the song is paused (audio clock frozen, nothing moves) */
+  public paused: boolean = false;
 
   private callbacks: GameEngineCallbacks;
   private isRunning: boolean = false;
@@ -109,6 +115,13 @@ export class GameEngine {
       const saved = localStorage.getItem('neon_strike_settings');
       if (saved) {
         this.settings = { ...this.settings, ...JSON.parse(saved) };
+        // Settings saved by older versions (or edited by hand) may hold values we no longer know.
+        if (!ENEMY_MOTION_STYLES.some((m) => m.id === this.settings.enemyMotion)) {
+          this.settings.enemyMotion = DEFAULT_ENEMY_MOTION;
+        }
+        if (!['both', 'tone', 'surge', 'off'].includes(this.settings.hitSound)) {
+          this.settings.hitSound = 'both';
+        }
         audioEngine.setVolume(this.settings.volume, this.settings.sfxVolume);
       }
     } catch {}
@@ -140,6 +153,7 @@ export class GameEngine {
     this.cameraKick = { x: 0, zoom: 0 };
     this.hitStopRemaining = 0;
     this.songTime = 0;
+    this.paused = false;
     audioEngine.stop();
 
     // Bundled tracks are charted from their audio on first play
@@ -185,8 +199,9 @@ export class GameEngine {
         tier,
         defeated: false,
         animPhase: 0,
-        // Alternate which foot leads so a crowd doesn't march as one blob.
-        stepOffset: index % 2 ? Math.PI : 0,
+        // One beat apart: neighbours lead with opposite feet / arms, still on the beat.
+        stepOffset: index % 2,
+        pitchHz: note.pitchHz,
         trailHistory: [],
       };
     });
@@ -199,7 +214,22 @@ export class GameEngine {
   public stop() {
     this.songSession++;
     this.isRunning = false;
+    this.paused = false;
     audioEngine.stop();
+  }
+
+  /** Freeze the song exactly where it is. Nothing is reset. */
+  public pause() {
+    if (!this.isRunning || this.paused) return;
+    this.paused = true;
+    audioEngine.pause();
+  }
+
+  /** Carry on from where pause() stopped. */
+  public resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    audioEngine.resume();
   }
 
   /** Song time of a press, corrected for event delay and the player's latency setting. */
@@ -213,7 +243,7 @@ export class GameEngine {
    * `timeStamp`, so the press is judged when it happened, not when we got to it.
    */
   public handleInput(lane: Lane, eventTimeStamp?: number) {
-    if (!this.isRunning || !this.track) return;
+    if (!this.isRunning || !this.track || this.paused) return;
 
     if (this.settings.oneButtonMode) {
       this.handleOneButtonInput(eventTimeStamp);
@@ -231,7 +261,7 @@ export class GameEngine {
 
   /** One-button mode: strike whichever lane has the next enemy due. */
   public handleOneButtonInput(eventTimeStamp?: number) {
-    if (!this.isRunning || !this.track) return;
+    if (!this.isRunning || !this.track || this.paused) return;
 
     const time = this.pressTime(eventTimeStamp);
     const target = pickTarget(this.enemies, time, null);
@@ -293,7 +323,7 @@ export class GameEngine {
 
     this.callbacks.onScoreUpdate({ ...this.scoreState });
     this.callbacks.onJudgement(judgement, this.scoreState.combo);
-    audioEngine.playHitSound(judgement, enemy.band);
+    audioEngine.playHitSound(judgement, enemy.band, enemy.pitchHz, this.settings.hitSound);
 
     // Moves progress from basic martial arts -> acrobatic -> superhuman -> god-tier finishers!
     if (judgement === 'PERFECT' || judgement === 'GOOD') {
@@ -347,7 +377,7 @@ export class GameEngine {
     const pieces = shatterEnemy(
       {
         x: enemy.x,
-        phase: enemy.animPhase,
+        pose: enemyPose(this.settings.enemyMotion, enemy.animPhase, buildForBand(enemy.band)),
         facing: enemy.lane === 'left' ? 1 : -1,
         scale: style.scale,
         color: enemy.color,
@@ -470,7 +500,7 @@ export class GameEngine {
    * width in world units (enemies spawn just beyond it).
    */
   public update(deltaTimeSec: number, worldHalfWidth: number) {
-    if (!this.isRunning || !this.track) return;
+    if (!this.isRunning || !this.track || this.paused) return;
 
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
@@ -493,9 +523,10 @@ export class GameEngine {
       // Late enemies press in but never walk through the player.
       if (Math.abs(enemy.x) < minX) enemy.x = Math.sign(enemy.x || (enemy.lane === 'left' ? -1 : 1)) * minX;
 
-      // Footsteps land on the beat: one step per beat (double-time for speeders).
-      const stepsPerBeat = enemy.band === 'high' && enemy.tier === 1 ? 2 : 1;
-      enemy.animPhase = beatPos * Math.PI * stepsPerBeat + (enemy.stepOffset ?? 0);
+      // Motion cycle in beats, so every motion style moves on the beat
+      // (double-time for the speeder units).
+      const speed = enemy.band === 'high' && enemy.tier === 1 ? 2 : 1;
+      enemy.animPhase = beatPos * speed + (enemy.stepOffset ?? 0);
 
       if (Math.abs(enemy.x) < worldHalfWidth + 20) {
         enemy.trailHistory.push({ x: enemy.x, y: enemy.y, alpha: 0.5 });

@@ -34,6 +34,8 @@ const FIGHTER_SCREEN_FRACTION = 0.34;
 const MIN_VISIBLE_WORLD_WIDTH = 440;
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 3.2;
+/** Height of the horizon above the floor line, in world units (a fighter is 145 tall) */
+const HORIZON_ABOVE_FLOOR = 175;
 
 export function computeArenaLayout(width: number, height: number): ArenaLayout {
   const byHeight = (height * FIGHTER_SCREEN_FRACTION) / FIGHTER_HEIGHT;
@@ -42,8 +44,9 @@ export function computeArenaLayout(width: number, height: number): ArenaLayout {
 
   const floorScreenY = height * FLOOR_SCREEN_FRACTION;
   const originY = floorScreenY - FLOOR_Y * scale;
-  // Horizon sits at roughly chest height of the fighters, like a side-on camera.
-  const horizonY = floorScreenY - 70 * scale;
+  // Horizon sits well above the fighters' heads, so they stand against a calm
+  // receding floor instead of the bright sky (easier to read, feels deeper).
+  const horizonY = Math.max(height * 0.2, floorScreenY - HORIZON_ABOVE_FLOOR * scale);
 
   return {
     scale,

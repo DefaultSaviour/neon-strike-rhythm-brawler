@@ -7,6 +7,7 @@ import { NeonCanvas } from './components/NeonCanvas';
 import { HUD } from './components/HUD';
 import { TrackSelectModal } from './components/TrackSelectModal';
 import { GameOverModal } from './components/GameOverModal';
+import { GameOptions } from './components/GameOptions';
 import { Play, Music, Keyboard, Volume2, ShieldAlert, Award, Zap } from 'lucide-react';
 
 export default function App() {
@@ -33,6 +34,8 @@ export default function App() {
     scanlines: true,
     screenShake: 'subtle',
     oneButtonMode: false,
+    enemyMotion: 'run',
+    hitSound: 'both',
   });
 
   const callbacksRef = useRef({
@@ -138,16 +141,19 @@ export default function App() {
     }
   }, [gameStatus, engine]);
 
-  // Pause / Resume
+  // Pause / Resume: freezes the song in place and carries on from the same spot.
   const handleTogglePause = useCallback(() => {
     if (gameStatus === 'PLAYING') {
-      engine.stop();
+      engine.pause();
       setGameStatus('PAUSED');
     } else if (gameStatus === 'PAUSED') {
+      // Drop focus from any option the player clicked, so game keys go to the game.
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      setShowTrackSelect(false);
+      engine.resume();
       setGameStatus('PLAYING');
-      engine.startSong(selectedTrack);
     }
-  }, [gameStatus, engine, selectedTrack]);
+  }, [gameStatus, engine]);
 
   const handleUpdateSettings = (newSettings: Partial<AudioSettings>) => {
     engine.saveSettings(newSettings);
@@ -161,8 +167,9 @@ export default function App() {
   // Keyboard controls listener (Optimized for minimal input latency)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is inside an input field
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      // Ignore typing in text fields (sliders and buttons are fine).
+      const target = e.target as HTMLInputElement | null;
+      if (target?.tagName === 'INPUT' && target.type !== 'range') return;
       // Holding a key down fires repeated keydown events; only the first press counts.
       if (e.repeat) return;
 
@@ -248,7 +255,7 @@ export default function App() {
           onPause={handleTogglePause}
           onRestart={handleRestart}
           onOpenSelect={() => {
-            engine.stop();
+            engine.pause();
             setGameStatus('PAUSED');
             setShowTrackSelect(true);
           }}
@@ -438,38 +445,41 @@ export default function App() {
         </div>
       )}
 
-      {/* Paused Overlay */}
+      {/* Paused Overlay: resume where you left off, and change options mid-song */}
       {gameStatus === 'PAUSED' && !showTrackSelect && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-[#0b0d1e] border border-cyan-500/40 rounded-xl p-6 text-center flex flex-col items-center shadow-2xl">
-            <div className="text-2xl font-black tracking-widest text-cyan-400 uppercase mb-2">
-              PAUSED
-            </div>
-            <div className="text-xs text-slate-400 mb-6 font-mono">
-              Track: {selectedTrack.title}
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md bg-[#0b0d1e] border border-cyan-500/40 rounded-xl p-6 flex flex-col shadow-2xl my-auto">
+            <div className="text-center">
+              <div className="text-2xl font-black tracking-widest text-cyan-400 uppercase">PAUSED</div>
+              <div className="text-xs text-slate-400 mt-1 font-mono">Track: {selectedTrack.title}</div>
             </div>
 
-            <div className="w-full flex flex-col gap-3">
+            <div className="mt-5 p-4 rounded-lg bg-slate-950/70 border border-slate-800">
+              <GameOptions settings={audioSettings} onUpdateSettings={handleUpdateSettings} />
+            </div>
+
+            <div className="mt-5 w-full flex flex-col gap-3">
               <button
                 onClick={handleTogglePause}
                 className="w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all cursor-pointer"
               >
-                Resume (Space)
+                Resume ({audioSettings.oneButtonMode ? 'Esc' : 'Space'})
               </button>
 
-              <button
-                onClick={handleRestart}
-                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer"
-              >
-                Restart Track (R)
-              </button>
-
-              <button
-                onClick={() => setShowTrackSelect(true)}
-                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer"
-              >
-                Track Library & Settings
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleRestart}
+                  className="py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Restart Track (R)
+                </button>
+                <button
+                  onClick={() => setShowTrackSelect(true)}
+                  className="py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Track Library
+                </button>
+              </div>
             </div>
           </div>
         </div>

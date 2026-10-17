@@ -31,4 +31,10 @@ describe('computeArenaLayout', () => {
       expect(headTop).toBeGreaterThan(0);
     }
   });
+
+  it('puts the horizon above the fighters so the background never sits behind their bodies', () => {
+    const l = computeArenaLayout(1600, 900);
+    const headTop = l.floorScreenY - FIGHTER_HEIGHT * l.scale;
+    expect(l.horizonY).toBeLessThan(headTop);
+  });
 });
