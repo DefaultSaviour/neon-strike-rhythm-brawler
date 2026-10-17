@@ -48,6 +48,8 @@ export interface DebrisPiece {
   inPit: boolean;
   /** Seconds this piece has been lying still on the floor (it fades once settled) */
   restTime?: number;
+  /** True once it has ridden a conveyor belt (it then gets time to reach the pit) */
+  rodeBelt?: boolean;
 }
 
 export interface DebrisWorld {
@@ -90,8 +92,17 @@ const HEAT_COOL_RATE = 1.6;
 const REST_BEFORE_FADE = 0.45;
 /** Alpha lost per second while fading (about 0.5 s to vanish) */
 const FADE_RATE = 2;
-const OFFSCREEN_MARGIN = 60;
-const OFFSCREEN_HEIGHT = 900;
+/**
+ * How far past the screen edge a piece may fly before it's removed. Pieces
+ * that land within this margin ride the conveyor back into view and on into
+ * the pit, which is what makes the belts look busy.
+ */
+const OFFSCREEN_MARGIN = 420;
+/** How much longer than its normal life a piece may live while riding a belt to the pit */
+const RIDING_LIFE_FACTOR = 2.5;
+/** Fastest sideways launch speed for a shattered piece (world units/s) */
+const MAX_LAUNCH_VX = 600;
+const OFFSCREEN_HEIGHT = 1400;
 
 /** Contact points in the piece's own (unrotated) coordinates. */
 function localContacts(p: DebrisPiece): Array<{ x: number; y: number }> {
@@ -192,6 +203,35 @@ function collideWithFloor(p: DebrisPiece, world: DebrisWorld): number {
 }
 
 /**
+ * Keep at most `max` pieces, choosing which ones to drop so the screen loses
+ * the least: first pieces that are already fading out, then pieces off the
+ * side of the screen, and only then the oldest of the rest. This keeps the
+ * pieces riding the belts into the pit (the fun part to watch) alive as long
+ * as possible. Mutates the array in place and keeps the original order.
+ */
+export function trimDebris(pieces: DebrisPiece[], max: number, halfWidth: number): void {
+  let excess = pieces.length - max;
+  if (excess <= 0) return;
+  const drop = new Set<DebrisPiece>();
+  const takeWhere = (test: (p: DebrisPiece) => boolean) => {
+    // Array order is oldest first, so this drops the oldest matching pieces.
+    for (const p of pieces) {
+      if (excess <= 0) return;
+      if (!drop.has(p) && test(p)) {
+        drop.add(p);
+        excess--;
+      }
+    }
+  };
+  takeWhere((p) => p.alpha < 1);
+  takeWhere((p) => Math.abs(p.x) > halfWidth);
+  takeWhere(() => true);
+  let w = 0;
+  for (const p of pieces) if (!drop.has(p)) pieces[w++] = p;
+  pieces.length = w;
+}
+
+/**
  * Advance all pieces by `dt` seconds. Mutates the pieces, removes finished ones
  * from the array in place, and reports impacts (for sparks) and pieces that
  * sank into the pit (for embers).
@@ -254,13 +294,20 @@ export function stepDebris(pieces: DebrisPiece[], world: DebrisWorld, dt: number
       continue;
     }
 
-    // Settled pieces (lying still on the floor or riding a belt) fade quickly,
-    // so finished debris doesn't pile up and clutter the fight.
+    // Pieces that have landed and are moving with a conveyor belt ride it all
+    // the way to the pit. Only pieces lying still with no belt under them
+    // fade quickly, so finished debris never just piles up.
+    const belt = beltVelocityAt(p.x, world);
     const onFloor = p.y + p.radius >= world.floorY - 2 && Math.abs(p.vy) < 30;
-    const slide = Math.abs(p.vx - beltVelocityAt(p.x, world));
-    p.restTime = onFloor && slide < 30 ? (p.restTime ?? 0) + dt : 0;
+    const settled = onFloor && Math.abs(p.vx - belt) < 30;
+    const riding = settled && Math.abs(belt) > 1;
+    if (riding) p.rodeBelt = true;
+    p.restTime = settled && !riding ? (p.restTime ?? 0) + dt : 0;
 
-    if (p.life > p.maxLife || p.restTime > REST_BEFORE_FADE) {
+    // Pieces that rode a belt keep extra time to reach the pit and tip in
+    // (with a safety limit), so they never fade out right at the edge.
+    const lifeLimit = p.rodeBelt ? p.maxLife * RIDING_LIFE_FACTOR : p.maxLife;
+    if (p.life > lifeLimit || p.restTime > REST_BEFORE_FADE) {
       p.alpha -= FADE_RATE * dt;
       if (p.alpha <= 0) pieces.splice(i, 1);
     }
@@ -429,6 +476,15 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
     const ry = along * Math.sin(p.angle);
     applyImpulse(p, rx, ry, jx, jy);
     p.vAngle += (rnd() - 0.5) * 6;
+
+    // Cap the sideways speed so even huge combo blasts land on the belts
+    // (just off-screen at worst) and ride back to the pit, instead of flying
+    // away for good. Capped pieces spin faster, so big hits still look wild.
+    if (Math.abs(p.vx) > MAX_LAUNCH_VX) {
+      const excess = Math.abs(p.vx) - MAX_LAUNCH_VX;
+      p.vx = Math.sign(p.vx) * MAX_LAUNCH_VX;
+      p.vAngle *= 1 + Math.min(1, excess / MAX_LAUNCH_VX);
+    }
   }
 
   return pieces;

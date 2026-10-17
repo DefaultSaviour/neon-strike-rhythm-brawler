@@ -64,7 +64,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       engine.update(dt, layout.worldHalfWidth);
 
       // Inward conveyor scrolling (world units)
-      const conveyorSpeed = engine.conveyorSpeed * (engine.beatGrid.bpm / 120) * 0.6;
+      const conveyorSpeed = engine.beltSpeed();
       conveyorOffset = (conveyorOffset + dt * conveyorSpeed) % 40;
 
       // 1 on each beat, fading before the next: drives everything that pulses with the music.
@@ -552,7 +552,7 @@ function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
     // Bright on impact, then fades back so it never competes with incoming enemies.
-    const presence = 0.3 + 0.7 * p.heat;
+    const presence = 0.45 + 0.55 * p.heat;
     ctx.globalAlpha = Math.max(0, p.alpha) * presence;
 
     // Same solid-neon look as the bodies they came from. Fresh pieces glow
