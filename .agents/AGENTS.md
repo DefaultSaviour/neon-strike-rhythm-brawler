@@ -86,3 +86,9 @@
   - **Solid Player Aesthetics**: Matching solid neon body style with tapered solid cyber scarf and crescent-shaped neon slash arcs.
   - **Anatomy-Matched Solid Debris (`src/game/bodyProportions.ts`, `src/game/debrisPhysics.ts`)**: Debris pieces cut at exact limb thickness (`limbScale`) with glowing cut ends. Removed outdated rectangular ghost trails.
   - **81 Unit Tests**: Vitest suite expanded to 81 tests covering color helpers, limb proportions, and debris thickness matching.
+- [x] **Death Explanations & Combo Blast Anti-Clutter Physics**:
+  - **Results Screen Death Explanations (`src/game/timing.ts`, `src/components/GameOverModal.tsx`)**: Analyzes recent keypress history to explain exactly why an enemy breached (e.g. pressed 196ms too early/late, pressed wrong lane, previous press consumed on earlier enemy, or no press detected).
+  - **Dynamic Combo Blast Physics (`src/game/comboFx.ts`)**: Explosion power, shatter dispersal, and particle flash swell proportionally with the combo chain.
+  - **Debris & Spark Anti-Clutter Cleanup (`src/game/debrisPhysics.ts`)**: Settled conveyor floor debris fades after ~0.45s, off-screen fragments are removed, and spark particles are capped at 160 to maintain 60 FPS in dense song sections.
+  - **Non-Stacking Floating Judgements**: Replaces older judgements per lane to eliminate text stacking clutter.
+  - **106 Unit Tests**: Vitest suite expanded to 106 tests covering input resolution, combo FX scaling, timing diagnostics, and death explanation reporting.
