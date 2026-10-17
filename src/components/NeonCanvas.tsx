@@ -10,7 +10,7 @@ import { HIT_WINDOWS } from '../game/timing';
 import { Enemy } from '../types/game';
 import { buildForBand, enemyPose } from '../game/enemyMotion';
 import { drawEnemyArt } from './enemyArt';
-import { drawFighter } from './fighterArt';
+import { drawFighter, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
@@ -749,43 +749,6 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.restore();
   }
 
-  ctx.restore();
-}
-
-/** Crescent-shaped slash: thick in the middle, tapering to points at both ends. */
-function drawSlashCrescent(
-  ctx: CanvasRenderingContext2D,
-  slash: { start: Point2D; end: Point2D; curveOffset: number; color: string }
-) {
-  const midX = (slash.start.x + slash.end.x) / 2;
-  const midY = (slash.start.y + slash.end.y) / 2 + slash.curveOffset;
-  // Push the outer curve away from the chord to give the crescent its thickness.
-  const dx = slash.end.x - slash.start.x;
-  const dy = slash.end.y - slash.start.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len;
-  const ny = dx / len;
-  const side = slash.curveOffset >= 0 ? 1 : -1;
-  const thick = 9;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(slash.start.x, slash.start.y);
-  ctx.quadraticCurveTo(midX + nx * thick * side, midY + ny * thick * side, slash.end.x, slash.end.y);
-  ctx.quadraticCurveTo(midX - nx * thick * 0.4 * side, midY - ny * thick * 0.4 * side, slash.start.x, slash.start.y);
-  ctx.closePath();
-  ctx.fillStyle = colorWithAlpha(slash.color, 0.55);
-  ctx.shadowColor = slash.color;
-  ctx.shadowBlur = 26;
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(slash.start.x, slash.start.y);
-  ctx.quadraticCurveTo(midX + nx * thick * 0.5 * side, midY + ny * thick * 0.5 * side, slash.end.x, slash.end.y);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2.2;
-  ctx.shadowBlur = 12;
-  ctx.stroke();
   ctx.restore();
 }
 

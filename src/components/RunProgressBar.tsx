@@ -8,9 +8,9 @@ import {
   runnerTierCombo,
 } from '../game/runProgress';
 import { fighterTier } from '../game/fighterTier';
-import { playerRunPose, playerVictoryPose } from '../game/motion';
-import { IDLE_POSE } from '../game/animations';
-import { drawFighter } from './fighterArt';
+import { attackChainFrame, playerVictoryPose } from '../game/motion';
+import { IDLE_POSE, getMoveForCombo, getOrientedPose } from '../game/animations';
+import { drawFighter, drawSlashCrescent } from './fighterArt';
 import { bodyFill } from './neonBody';
 
 /**
@@ -208,8 +208,18 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
   const tier = fighterTier(runnerTierCombo(pos));
   let hop = 0;
   let pose;
+  let slashing = false;
   if (!arrived) {
-    pose = playerRunPose(elapsed * 4);
+    // He fights his way along: a non-stop chain of his real attack moves,
+    // picked from the tier he's in (basic strikes early, god-tier finishers late).
+    const tierCombo = runnerTierCombo(pos);
+    const frame = attackChainFrame(
+      elapsed,
+      (i) => getOrientedPose(getMoveForCombo(tierCombo, i).pose, 'right'),
+      IDLE_POSE
+    );
+    pose = frame.pose;
+    slashing = frame.active;
   } else if (run.cleared) {
     pose = playerVictoryPose(2 + sinceArrival * 3);
     hop = Math.abs(Math.sin(sinceArrival * Math.PI * 1.8)) * 10;
@@ -222,6 +232,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
   ctx.scale(RUNNER_SCALE, RUNNER_SCALE);
   ctx.translate(0, -68);
   drawFighter(ctx, pose, { tier, facing: 1, time: elapsed, combo: tier.minCombo });
+  if (slashing && pose.bladeSlash) drawSlashCrescent(ctx, pose.bladeSlash);
   ctx.restore();
 
   // Level-up flash: a ring bursts out and the new tier name pops up as he crosses each quarter line

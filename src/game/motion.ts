@@ -151,12 +151,36 @@ export function playerPoseFromEnemyPose(p: EnemyPose, scarfWave = 0): SkeletonPo
   };
 }
 
-/** The player sprinting (one stride per beat), facing right. */
-export function playerRunPose(beat: number): SkeletonPose {
-  return playerPoseFromEnemyPose(enemyPose('run', beat, 'agile'), beat * Math.PI * 2);
-}
-
 /** The player celebrating: facing you, hands up, bouncing on the beat. */
 export function playerVictoryPose(beat: number): SkeletonPose {
   return playerPoseFromEnemyPose(enemyPose('sway', beat, 'agile'), beat * Math.PI);
+}
+
+/** How long each blow takes in the progress-bar attack chain (seconds) */
+export const CHAIN_STRIKE_SEC = 0.26;
+
+export interface ChainFrame {
+  pose: SkeletonPose;
+  /** True while the blow is landing (draw the slash) */
+  active: boolean;
+  /** Which strike in the chain this is (0, 1, 2...) */
+  strikeIndex: number;
+}
+
+/**
+ * The fighter throwing a non-stop chain of attacks, each one snapping out
+ * from his guard and recovering back to it, so blows flow into each other
+ * with no jumps. `pickMove(i)` chooses the i-th strike's pose (already facing
+ * the right way), so the caller can use moves from the current combo tier.
+ */
+export function attackChainFrame(
+  elapsed: number,
+  pickMove: (strikeIndex: number) => SkeletonPose,
+  rest: SkeletonPose
+): ChainFrame {
+  const t = Math.max(0, elapsed);
+  const strikeIndex = Math.floor(t / CHAIN_STRIKE_SEC);
+  const progress = (t - strikeIndex * CHAIN_STRIKE_SEC) / CHAIN_STRIKE_SEC;
+  const frame = strikeFrame(progress, rest, pickMove(strikeIndex), rest, 0);
+  return { pose: frame.pose, active: frame.active, strikeIndex };
 }

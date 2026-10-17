@@ -65,7 +65,7 @@ A high-octane cyberpunk rhythm brawler powered by HTML5 Canvas and Web Audio API
 
 ## 🏁 Run Progress
 
-The results screen shows a neon line the length of the song. Your fighter (the same character you play) dashes along it, levelling up through his combo tiers each quarter of the way (Basic → Cyber Ninja → Overdrive → God Tier with angel wings for the final 25%), and stops where the run ended: a red X where you died, or a hands-up victory bounce at the flag if you cleared it. A gold **BEST** marker shows your furthest attempt on that song (saved per song in the browser), and the screen tells you when you beat it (`src/game/runProgress.ts`, `src/components/RunProgressBar.tsx`).
+The results screen shows a neon line the length of the song. Your fighter (the same character you play) fights his way along it with a chain of his real attack moves, levelling up through his combo tiers each quarter of the way (Basic → Cyber Ninja → Overdrive → God Tier with angel wings for the final 25%), and stops where the run ended: a red X where you died, or a hands-up victory bounce at the flag if you cleared it. A gold **BEST** marker shows your furthest attempt on that song (saved per song in the browser), and the screen tells you when you beat it (`src/game/runProgress.ts`, `src/components/RunProgressBar.tsx`).
 
 ## 🧪 Tests
 

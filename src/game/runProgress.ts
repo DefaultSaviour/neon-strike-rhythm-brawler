@@ -89,9 +89,12 @@ export function formatSongTime(sec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** Duration of the runner's dash along the bar (seconds). Longer runs take a little longer. */
+/**
+ * Duration of the runner's trip along the bar (seconds). Longer runs take a
+ * little longer, so there's time to see his chain of attacks.
+ */
 export function dashDuration(fraction: number): number {
-  return 0.6 + 1.0 * Math.min(1, Math.max(0, fraction));
+  return 0.8 + 1.6 * Math.min(1, Math.max(0, fraction));
 }
 
 /**
