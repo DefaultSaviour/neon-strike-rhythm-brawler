@@ -202,7 +202,6 @@ export class GameEngine {
         // One beat apart: neighbours lead with opposite feet / arms, still on the beat.
         stepOffset: index % 2,
         pitchHz: note.pitchHz,
-        trailHistory: [],
       };
     });
 
@@ -382,6 +381,7 @@ export class GameEngine {
         scale: style.scale,
         color: enemy.color,
         accent: style.accent,
+        limbScale: style.limbScale,
         hasBlade: enemy.band !== 'sub',
         power: judgementPower * comboPower,
         extraShards,
@@ -527,13 +527,6 @@ export class GameEngine {
       // (double-time for the speeder units).
       const speed = enemy.band === 'high' && enemy.tier === 1 ? 2 : 1;
       enemy.animPhase = beatPos * speed + (enemy.stepOffset ?? 0);
-
-      if (Math.abs(enemy.x) < worldHalfWidth + 20) {
-        enemy.trailHistory.push({ x: enemy.x, y: enemy.y, alpha: 0.5 });
-        if (enemy.trailHistory.length > 4) {
-          enemy.trailHistory.shift();
-        }
-      }
 
       if (timeRemaining < -BREACH_LATE_SEC) {
         this.triggerPlayerDeath();

@@ -1,13 +1,18 @@
 import { EnemyTier, FrequencyBand } from '../types/game';
 import { EnemyPose, Point } from '../game/enemyMotion';
+import { BodyJoints, drawNeonBody, neonHead, neonShape } from './neonBody';
+import { getEnemyStyle } from '../game/enemyStyles';
 
 /**
- * Draws one enemy on top of a shared skeleton pose (see game/enemyMotion.ts).
+ * Draws one enemy on top of a shared skeleton pose (see game/enemyMotion.ts),
+ * in the "solid neon" style (see neonBody.ts).
  *
  * Everything is drawn FACING RIGHT with feet on y = 68; the caller mirrors the
- * canvas for enemies facing left. Each of the 9 types keeps its own gear
- * (horns, hats, blades, wings...) attached to the pose's head, chest and hands,
- * so the gear follows whatever motion style is selected.
+ * canvas for enemies facing left. Drawing happens in three layers so gear sits
+ * correctly around the solid body:
+ *   1. back gear  (wings, capes, flags, ribbons, rocket flames)
+ *   2. body + head
+ *   3. front gear (helmets, horns, hats, visors, blades, shields, halos)
  */
 
 export interface EnemyArtColors {
@@ -17,6 +22,36 @@ export interface EnemyArtColors {
 
 type Ctx = CanvasRenderingContext2D;
 
+/** Everything a gear-drawing function needs. */
+interface GearEnv {
+  ctx: Ctx;
+  pose: EnemyPose;
+  main: string;
+  accent: string;
+  beat: number;
+  flash: boolean;
+  /** Facing the camera: paired gear is mirrored and back gear mostly hidden */
+  front: boolean;
+  sides: Array<1 | -1>;
+  forearmFront: Point;
+  forearmBack: Point;
+  rnd: () => number;
+}
+
+interface EnemyLook {
+  /** Head radius */
+  headR: number;
+  /** Torso proportions (limb thickness comes from enemyStyles.ts) */
+  shoulderHalf: number;
+  waistHalf: number;
+  back?: (g: GearEnv) => void;
+  front?: (g: GearEnv) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Small drawing helpers
+// ---------------------------------------------------------------------------
+
 function line(ctx: Ctx, a: Point, b: Point) {
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
@@ -24,20 +59,15 @@ function line(ctx: Ctx, a: Point, b: Point) {
   ctx.stroke();
 }
 
-function seg(ctx: Ctx, x1: number, y1: number, x2: number, y2: number) {
+function polyline(ctx: Ctx, pts: Point[]) {
   ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
   ctx.stroke();
 }
 
-function circle(ctx: Ctx, c: Point, r: number) {
-  ctx.beginPath();
-  ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-  ctx.stroke();
-}
+const P = (x: number, y: number): Point => ({ x, y });
 
-/** Unit vector from a to b. */
 function dirOf(a: Point, b: Point): Point {
   const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
   return { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
@@ -55,47 +85,351 @@ function along(from: Point, d: Point, length: number, angle = 0): Point {
   return { x: from.x + r.x * length, y: from.y + r.y * length };
 }
 
-/** Run `draw` with a temporary glow style, restoring the old style afterwards. */
-function withGlow(ctx: Ctx, color: string, blur: number, width: number, draw: () => void, glowColor = color) {
+/** Glowing stroke in `color`, with optional white-hot core (blades, energy). */
+function neonStroke(g: GearEnv, color: string, width: number, glow: number, draw: () => void, core = false) {
+  const { ctx } = g;
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur = blur;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = g.flash ? '#ffffff' : color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = glow;
   ctx.lineWidth = width;
   draw();
+  if (core && !g.flash) {
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1, width * 0.35);
+    draw();
+  }
   ctx.restore();
 }
 
-/**
- * Eye slit. Side-on poses put it toward the front of the face (`dx` along
- * +x); front-facing poses centre it on the face.
- */
-function visor(ctx: Ctx, pose: EnemyPose, dx: number, dyUp: number, w: number, hgt: number) {
+/** A blade: a long neon stroke from the hand with a white-hot edge. */
+function blade(g: GearEnv, from: Point, to: Point, width: number) {
+  neonStroke(g, g.accent, width, 18, () => line(g.ctx, from, to), true);
+}
+
+/** Eye slit: toward the front of the face side-on, centred when facing the camera. */
+function visor(g: GearEnv, dx: number, w: number, hgt: number, color = '#ffffff') {
+  const { ctx, pose } = g;
   const x = pose.facingCamera ? pose.head.x - w / 2 : pose.head.x + dx;
-  ctx.fillRect(x, pose.head.y - dyUp, w, hgt);
-}
-
-function drawSkeleton(ctx: Ctx, p: EnemyPose) {
-  line(ctx, p.chest, p.pelvis);
-  line(ctx, p.frontShoulder, p.frontElbow);
-  line(ctx, p.frontElbow, p.frontHand);
-  line(ctx, p.backShoulder, p.backElbow);
-  line(ctx, p.backElbow, p.backHand);
-  line(ctx, p.pelvis, p.frontKnee);
-  line(ctx, p.frontKnee, p.frontFoot);
-  line(ctx, p.pelvis, p.backKnee);
-  line(ctx, p.backKnee, p.backFoot);
-}
-
-function drawCoreHighlight(ctx: Ctx, p: EnemyPose) {
   ctx.save();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.3;
-  ctx.shadowBlur = 0;
-  line(ctx, p.chest, p.pelvis);
-  line(ctx, p.frontShoulder, p.frontElbow);
-  line(ctx, p.pelvis, p.frontKnee);
+  ctx.fillStyle = g.flash ? '#ffffff' : color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.fillRect(x, pose.head.y - hgt / 2 - 0.5, w, hgt);
   ctx.restore();
+}
+
+/** Soft glowing fin/wing: a translucent filled shape with a bright edge. */
+function energyShape(g: GearEnv, pts: Point[], color: string) {
+  const { ctx } = g;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
+  ctx.closePath();
+  ctx.fillStyle = g.flash ? '#ffffff' : color;
+  ctx.globalAlpha *= g.flash ? 1 : 0.22;
+  ctx.fill();
+  ctx.globalAlpha /= g.flash ? 1 : 0.22;
+  ctx.strokeStyle = g.flash ? '#ffffff' : color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 16;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// The 9 enemy looks
+// ---------------------------------------------------------------------------
+
+const LOOKS: Record<FrequencyBand, Record<EnemyTier, EnemyLook>> = {
+  // SUB / KICK: heavy juggernauts with broad chests and thick limbs
+  sub: {
+    1: {
+      // TITAN: forward-curving horns, shoulder pauldrons, chest reactor, stomp rings
+      headR: 10,
+      shoulderHalf: 15,
+      waistHalf: 8,
+      front: (g) => {
+        const { ctx, pose } = g;
+        const h = pose.head;
+        visor(g, 3, 6, 3);
+        for (const sd of g.sides) {
+          const hornBase = g.front ? P(h.x + sd * 6, h.y - 7) : P(h.x - 2, h.y - 8);
+          const tip = g.front ? P(h.x + sd * 24, h.y - 20) : P(h.x + 24, h.y - 18);
+          const bend = g.front ? P(h.x + sd * 14, h.y - 25) : P(h.x + 14, h.y - 25);
+          neonStroke(g, g.accent, 4.5, 12, () => polyline(ctx, [hornBase, bend, tip]), true);
+          // Pauldron on the near shoulder (both shoulders when facing the camera)
+          const s = sd === 1 ? pose.frontShoulder : pose.backShoulder;
+          neonShape(ctx, [P(s.x - sd * 6, s.y - 8), P(s.x + sd * 14, s.y - 6), P(s.x + sd * 12, s.y + 8), P(s.x - sd * 4, s.y + 6)], g.accent, 10, g.flash);
+        }
+        // Chest reactor
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = g.main;
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(pose.chest.x + (g.front ? 0 : 2), pose.chest.y + 6, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        if (pose.stomp > 0.4 && !g.flash) {
+          ctx.save();
+          ctx.globalAlpha *= pose.stomp;
+          neonStroke(g, g.accent, 2, 10, () => {
+            ctx.beginPath();
+            ctx.ellipse(pose.frontFoot.x, 68, 14, 4, 0, 0, Math.PI * 2);
+            ctx.ellipse(pose.backFoot.x, 68, 14, 4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          });
+          ctx.restore();
+        }
+      },
+    },
+    2: {
+      // BREAKER: spine fins and a forearm piston that punches on the beat
+      headR: 8.5,
+      shoulderHalf: 13,
+      waistHalf: 7,
+      back: (g) => {
+        if (g.front) return; // fins are on the back
+        const { pose } = g;
+        const c = pose.chest;
+        for (let s = 0; s < 3; s++) {
+          const t = s / 3;
+          const x = c.x + (pose.pelvis.x - c.x) * t - 6;
+          const y = c.y + (pose.pelvis.y - c.y) * t;
+          energyShape(g, [P(x, y - 3), P(x - 14 - s * 2, y - 10), P(x, y + 4)], g.accent);
+        }
+      },
+      front: (g) => {
+        visor(g, 3, 6, 3);
+        const ext = 8 + Math.sin(Math.PI * 2 * g.beat) * 6;
+        const hand = g.pose.frontHand;
+        neonStroke(g, g.accent, 5, 14, () => line(g.ctx, hand, along(hand, g.forearmFront, 8 + ext)), true);
+      },
+    },
+    3: {
+      // RAMMER: ram horns, arm-mounted battering shield, rocket flames
+      headR: 8.5,
+      shoulderHalf: 13,
+      waistHalf: 7,
+      back: (g) => {
+        if (g.front) return;
+        const c = g.pose.chest;
+        neonStroke(g, g.accent, 3, 16, () => {
+          line(g.ctx, P(c.x - 10, c.y), P(c.x - 36 - g.rnd() * 12, c.y + (g.rnd() - 0.5) * 6));
+          line(g.ctx, P(c.x - 10, c.y + 8), P(c.x - 30 - g.rnd() * 12, c.y + 8 + (g.rnd() - 0.5) * 6));
+        });
+      },
+      front: (g) => {
+        const h = g.pose.head;
+        visor(g, 3, 6, 3);
+        for (const sd of g.sides) {
+          neonStroke(g, g.accent, 4.5, 14, () =>
+            polyline(g.ctx, [P(h.x + sd * (g.front ? 6 : 2), h.y - 4), P(h.x + sd * 18, h.y + 3), P(h.x + sd * 15, h.y + 14)]),
+            true
+          );
+        }
+        const f = g.pose.frontHand;
+        neonShape(g.ctx, [P(f.x - 6, f.y - 20), P(f.x + 12, f.y - 4), P(f.x + 12, f.y + 6), P(f.x - 6, f.y + 18)], g.accent, 16, g.flash);
+      },
+    },
+  },
+
+  // BASSLINE: cyber samurai and blade dancers
+  bass: {
+    1: {
+      // WARLORD: kabuto crest with horns, war flag, heavy odachi
+      headR: 8.5,
+      shoulderHalf: 12,
+      waistHalf: 7,
+      back: (g) => {
+        const { ctx, pose } = g;
+        const c = pose.chest;
+        const h = pose.head;
+        const wave = Math.sin(Math.PI * 1.4 * g.beat) * 6;
+        if (g.front) {
+          neonStroke(g, g.main, 2.5, 8, () => line(ctx, P(c.x, h.y - 16), P(c.x, h.y - 46)));
+          energyShape(g, [P(c.x + 1, h.y - 46), P(c.x + 16 + wave * 0.4, h.y - 42), P(c.x + 1, h.y - 34)], g.accent);
+        } else {
+          neonStroke(g, g.main, 2.5, 8, () => line(ctx, P(c.x - 6, c.y), P(c.x - 12, h.y - 30)));
+          energyShape(g, [P(c.x - 12, h.y - 30), P(c.x - 30 + wave, h.y - 26), P(c.x - 28 + wave, h.y - 2), P(c.x - 10, h.y - 6)], g.accent);
+        }
+      },
+      front: (g) => {
+        const h = g.pose.head;
+        neonShape(g.ctx, [P(h.x + 18, h.y - 3), P(h.x, h.y - 17), P(h.x - 18, h.y - 3)], g.main, 12, g.flash);
+        neonStroke(g, g.accent, 3.2, 14, () => {
+          line(g.ctx, P(h.x, h.y - 17), P(h.x + 16, h.y - 30));
+          line(g.ctx, P(h.x, h.y - 17), P(h.x - 16, h.y - 30));
+        });
+        visor(g, 2, 7, 3);
+        blade(g, g.pose.frontHand, along(g.pose.frontHand, g.forearmFront, 60, 0.55), 5);
+      },
+    },
+    2: {
+      // RONIN: kasa hat, flowing cape, katana
+      headR: 8,
+      shoulderHalf: 11,
+      waistHalf: 6.5,
+      back: (g) => {
+        if (g.front) return;
+        const c = g.pose.chest;
+        const wave = Math.sin(Math.PI * 1.5 * g.beat) * 10;
+        energyShape(g, [P(c.x - 4, c.y - 2), P(c.x - 40, c.y + 16 + wave), P(c.x - 62, c.y + 40 + wave * 1.3), P(c.x - 34, c.y + 30 + wave), P(c.x - 4, c.y + 14)], g.main);
+      },
+      front: (g) => {
+        const h = g.pose.head;
+        neonShape(g.ctx, [P(h.x + 20, h.y - 3), P(h.x, h.y - 15), P(h.x - 20, h.y - 3)], g.main, 12, g.flash);
+        visor(g, 2, 7, 2.5, g.accent);
+        blade(g, g.pose.frontHand, along(g.pose.frontHand, g.forearmFront, 46, 0.45), 4);
+      },
+    },
+    3: {
+      // ACID DANCER: ninja cowl, ribbon streamers, a reverse-grip blade in each hand
+      headR: 7.5,
+      shoulderHalf: 10,
+      waistHalf: 6,
+      back: (g) => {
+        const h = g.pose.head;
+        for (let r = 0; r < 2; r++) {
+          const wave = Math.sin(Math.PI * 2 * g.beat + r * 1.5) * 12;
+          const sd = g.front && r === 1 ? 1 : -1;
+          const len = g.front ? 0.6 : 1;
+          neonStroke(g, r === 0 ? g.main : g.accent, 2.5, 16, () =>
+            polyline(g.ctx, [P(h.x + sd * 6, h.y + (g.front ? 0 : r * 6)), P(h.x + sd * 34 * len, h.y + 10 + wave), P(h.x + sd * 62 * len, h.y + 22 + wave * 1.4)])
+          );
+        }
+      },
+      front: (g) => {
+        const h = g.pose.head;
+        neonShape(
+          g.ctx,
+          [P(h.x + (g.front ? 12 : 14), h.y - (g.front ? 3 : 1)), P(h.x, h.y - 13), P(h.x - 12, h.y - (g.front ? 3 : 6))],
+          g.main,
+          10,
+          g.flash
+        );
+        visor(g, 2, 7, 2.5, g.accent);
+        for (const [hand, fore] of [
+          [g.pose.frontHand, g.forearmFront],
+          [g.pose.backHand, g.forearmBack],
+        ] as const) {
+          const tip = along(hand, fore, 26, -1.9);
+          neonStroke(g, g.accent, 3.6, 18, () => polyline(g.ctx, [hand, tip, along(tip, fore, 12, -0.6)]), true);
+        }
+      },
+    },
+  },
+
+  // HIGHS: plasma speeders, wraiths and seraphs (slim and light)
+  high: {
+    1: {
+      // SPEEDER: aerodynamic helmet, forearm plasma blade, boot jets
+      headR: 8,
+      shoulderHalf: 10,
+      waistHalf: 5.5,
+      back: (g) => {
+        if (g.front) return;
+        const f = g.pose.backFoot;
+        neonStroke(g, g.main, 3, 14, () => line(g.ctx, P(f.x - 2, f.y - 3), P(f.x - 28 - g.rnd() * 14, f.y - 3 + (g.rnd() - 0.5) * 5)));
+      },
+      front: (g) => {
+        const h = g.pose.head;
+        const shape = g.front
+          ? [P(h.x - 12, h.y + 6), P(h.x, h.y - 13), P(h.x + 12, h.y + 6)]
+          : [P(h.x + 16, h.y + 1), P(h.x - 12, h.y - 11), P(h.x - 13, h.y + 8)];
+        neonShape(g.ctx, shape, g.main, 14, g.flash);
+        visor(g, 3, 7, 2.5);
+        neonStroke(g, g.main, 4, 18, () => line(g.ctx, g.pose.frontElbow, along(g.pose.frontHand, g.forearmFront, 26)), true);
+      },
+    },
+    2: {
+      // WRAITH: swept energy wings, plasma claws, hover discs under the feet
+      headR: 8,
+      shoulderHalf: 10,
+      waistHalf: 5.5,
+      back: (g) => {
+        const c = g.pose.chest;
+        for (const sd of g.sides) {
+          energyShape(g, [P(c.x, c.y - 6), P(c.x - sd * 38, c.y - 34), P(c.x - sd * 50, c.y - 14), P(c.x - sd * 30, c.y - 8)], g.accent);
+        }
+      },
+      front: (g) => {
+        visor(g, 3, 6, 2.5);
+        const { pose } = g;
+        const tip = along(pose.frontHand, g.forearmFront, 22, -0.3);
+        neonStroke(g, g.accent, 3, 16, () => {
+          polyline(g.ctx, [pose.frontHand, tip, along(tip, g.forearmFront, 10, 0.4)]);
+          line(g.ctx, pose.backHand, along(pose.backHand, g.forearmBack, 16, 0.3));
+        }, true);
+        neonStroke(g, g.accent, 2.5, 16, () => {
+          g.ctx.beginPath();
+          g.ctx.ellipse(pose.frontFoot.x, pose.frontFoot.y + 3, 8, 2.5, 0, 0, Math.PI * 2);
+          g.ctx.ellipse(pose.backFoot.x, pose.backFoot.y + 3, 8, 2.5, 0, 0, Math.PI * 2);
+          g.ctx.stroke();
+        });
+      },
+    },
+    3: {
+      // SERAPH: crested helmet, spinning halo, quad wings, beam sabers, sparkle
+      headR: 8,
+      shoulderHalf: 10,
+      waistHalf: 5.5,
+      back: (g) => {
+        const c = g.pose.chest;
+        const pulse = Math.exp(-((g.beat % 1) * 5)) * 6;
+        for (const sd of g.sides) {
+          energyShape(g, [P(c.x, c.y - 8), P(c.x - sd * (42 + pulse), c.y - 42), P(c.x - sd * (58 + pulse), c.y - 26)], g.accent);
+          energyShape(g, [P(c.x, c.y), P(c.x - sd * (38 + pulse), c.y - 14), P(c.x - sd * (52 + pulse), c.y + 4)], g.accent);
+        }
+      },
+      front: (g) => {
+        const { ctx, pose } = g;
+        const h = pose.head;
+        visor(g, 3, 7, 3);
+        neonStroke(g, g.accent, 2.5, 20, () => {
+          ctx.beginPath();
+          ctx.ellipse(h.x, h.y - 14, 14, 4.5, Math.sin(Math.PI * g.beat) * 0.25, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+        blade(g, pose.frontHand, along(pose.frontHand, g.forearmFront, 36, -0.5), 4);
+        blade(g, pose.backHand, along(pose.backHand, g.forearmBack, 28, 0.5), 4);
+        if (!g.flash) {
+          ctx.fillStyle = '#ffffff';
+          for (let sp = 0; sp < 2; sp++) {
+            ctx.fillRect(pose.chest.x + (g.rnd() - 0.5) * 40, pose.chest.y + (g.rnd() - 0.5) * 40, 2.5, 2.5);
+          }
+        }
+      },
+    },
+  },
+};
+
+/** Map the enemy pose onto the shared body-joint names (front = near side). */
+export function enemyBodyJoints(p: EnemyPose): BodyJoints {
+  return {
+    head: p.head,
+    chest: p.chest,
+    pelvis: p.pelvis,
+    nearShoulder: p.frontShoulder,
+    nearElbow: p.frontElbow,
+    nearHand: p.frontHand,
+    farShoulder: p.backShoulder,
+    farElbow: p.backElbow,
+    farHand: p.backHand,
+    nearHip: p.pelvis,
+    nearKnee: p.frontKnee,
+    nearFoot: p.frontFoot,
+    farHip: p.pelvis,
+    farKnee: p.backKnee,
+    farFoot: p.backFoot,
+  };
 }
 
 /**
@@ -111,280 +445,32 @@ export function drawEnemyArt(
   beat: number,
   flash: boolean
 ) {
-  const { main, accent } = colors;
-  const h = pose.head;
-  const c = pose.chest;
-  const rnd = flash ? () => 0.5 : Math.random;
-  const forearmFront = dirOf(pose.frontElbow, pose.frontHand);
-  const forearmBack = dirOf(pose.backElbow, pose.backHand);
-  // Side-on poses draw paired gear once; facing the camera, it's mirrored onto both sides.
+  const look = LOOKS[band][tier];
   const front = pose.facingCamera;
-  const sides: Array<1 | -1> = front ? [1, -1] : [1];
+  const g: GearEnv = {
+    ctx,
+    pose,
+    main: colors.main,
+    accent: colors.accent,
+    beat,
+    flash,
+    front,
+    sides: front ? [1, -1] : [1],
+    forearmFront: dirOf(pose.frontElbow, pose.frontHand),
+    forearmBack: dirOf(pose.backElbow, pose.backHand),
+    rnd: flash ? () => 0.5 : Math.random,
+  };
+  const glow = band === 'high' && tier === 3 ? 18 : 12;
 
-  // ---------------------------------------------------------------------------
-  // SUB / KICK: heavy juggernauts
-  // ---------------------------------------------------------------------------
-  if (band === 'sub') {
-    circle(ctx, h, tier === 1 ? 10 : 8.5);
-    ctx.fillStyle = '#ffffff';
-    visor(ctx, pose, 4, 2, 5, 3);
-
-    if (tier === 1) {
-      // TITAN: forward-curving horns, shoulder pauldrons, chest reactor, stomp rings
-      withGlow(ctx, accent, 12, 3.8, () => {
-        for (const sd of sides) {
-          if (front) {
-            seg(ctx, h.x + sd * 6, h.y - 7, h.x + sd * 14, h.y - 24);
-            seg(ctx, h.x + sd * 14, h.y - 24, h.x + sd * 24, h.y - 20);
-          } else {
-            seg(ctx, h.x - 2, h.y - 8, h.x + 14, h.y - 24);
-            seg(ctx, h.x + 14, h.y - 24, h.x + 24, h.y - 18);
-            seg(ctx, h.x - 8, h.y - 8, h.x + 6, h.y - 20);
-          }
-        }
-      });
-      for (const sd of sides) {
-        seg(ctx, c.x - sd * 4, c.y - 8, c.x + sd * 10, c.y - 6);
-        seg(ctx, c.x + sd * 10, c.y - 6, c.x + sd * 14, c.y + 6);
-      }
-      if (!front) seg(ctx, c.x - 16, c.y - 8, c.x - 26, c.y - 4);
-      ctx.fillStyle = main;
-      ctx.fillRect(c.x - 2, c.y - 4, 8, 8);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(c.x, c.y - 2, 4, 4);
-      if (pose.stomp > 0.4) {
-        ctx.save();
-        ctx.globalAlpha *= pose.stomp;
-        withGlow(ctx, accent, 10, 2, () => {
-          ctx.beginPath();
-          ctx.ellipse(pose.frontFoot.x, 68, 14, 4, 0, 0, Math.PI * 2);
-          ctx.ellipse(pose.backFoot.x, 68, 14, 4, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        }, main);
-        ctx.restore();
-      }
-    } else if (tier === 2) {
-      // BREAKER: spine fins and a forearm piston that punches on the beat
-      for (let s = 0; s < (front ? 0 : 3); s++) {
-        // Spine fins are on the back, so they're hidden when facing the camera.
-        const t = s / 3;
-        const sx = c.x + (pose.pelvis.x - c.x) * t;
-        const sy = c.y + (pose.pelvis.y - c.y) * t;
-        seg(ctx, sx - 2, sy, sx - 12 - s * 2, sy - 7);
-      }
-      const pistonExt = 6 + Math.sin(Math.PI * 2 * beat) * 6;
-      withGlow(ctx, accent, 14, 3.2, () => line(ctx, pose.frontHand, along(pose.frontHand, forearmFront, 10 + pistonExt)));
-    } else {
-      // RAMMER: ram horns, arm-mounted battering shield, rocket flames
-      withGlow(ctx, accent, 14, 4, () => {
-        for (const sd of sides) {
-          seg(ctx, h.x + sd * (front ? 6 : 2), h.y - 4, h.x + sd * 18, h.y + 4);
-          seg(ctx, h.x + sd * 18, h.y + 4, h.x + sd * 16, h.y + 14);
-        }
-      });
-      withGlow(ctx, accent, 16, 4.2, () => {
-        const f = pose.frontHand;
-        ctx.beginPath();
-        ctx.moveTo(f.x - 6, f.y - 18);
-        ctx.lineTo(f.x + 12, f.y);
-        ctx.lineTo(f.x - 6, f.y + 16);
-        ctx.closePath();
-        ctx.stroke();
-      }, main);
-      if (!front) {
-        // Back-mounted rocket flames (hidden behind the body when facing the camera)
-        withGlow(ctx, accent, 16, 2.5, () => {
-          seg(ctx, c.x - 8, c.y - 4, c.x - 35 - rnd() * 12, c.y - 4 + (rnd() - 0.5) * 6);
-          seg(ctx, c.x - 8, c.y + 4, c.x - 30 - rnd() * 12, c.y + 4 + (rnd() - 0.5) * 6);
-        }, main);
-      }
-    }
-
-    drawSkeleton(ctx, pose);
-    drawCoreHighlight(ctx, pose);
-    return;
-  }
-
-  // ---------------------------------------------------------------------------
-  // BASSLINE: cyber samurai and blade dancers
-  // ---------------------------------------------------------------------------
-  if (band === 'bass') {
-    if (tier === 1) {
-      // WARLORD: kabuto crest with horns, war flag, heavy odachi
-      ctx.beginPath();
-      ctx.moveTo(h.x + 20, h.y - 4);
-      ctx.lineTo(h.x, h.y - 18);
-      ctx.lineTo(h.x - 20, h.y - 4);
-      ctx.closePath();
-      ctx.stroke();
-      withGlow(ctx, accent, 14, 3.2, () => {
-        seg(ctx, h.x, h.y - 18, h.x + 16, h.y - 30);
-        seg(ctx, h.x, h.y - 18, h.x - 16, h.y - 30);
-      });
-      circle(ctx, h, 8.5);
-      ctx.fillStyle = '#ffffff';
-      visor(ctx, pose, 3, 2, 6, 3);
-
-      const flagWave = Math.sin(Math.PI * 1.4 * beat) * 6;
-      if (front) {
-        // Flag pole rises straight up behind the head
-        seg(ctx, c.x, h.y - 18, c.x, h.y - 44);
-        withGlow(ctx, accent, 0, 2, () => ctx.strokeRect(c.x + 1, h.y - 44, 14 + flagWave * 0.4, 12), main);
-      } else {
-        seg(ctx, c.x - 6, c.y, c.x - 12, h.y - 28);
-        withGlow(ctx, accent, 0, 2, () => ctx.strokeRect(c.x - 28 + flagWave, h.y - 26, 16, 26), main);
-      }
-
-      // Odachi: long blade held out from the lead hand
-      withGlow(ctx, accent, 22, 4.2, () => line(ctx, pose.frontHand, along(pose.frontHand, forearmFront, 58, 0.55)));
-    } else if (tier === 2) {
-      // RONIN: kasa hat, flowing cape, katana
-      ctx.beginPath();
-      ctx.moveTo(h.x + 18, h.y - 4);
-      ctx.lineTo(h.x, h.y - 14);
-      ctx.lineTo(h.x - 18, h.y - 4);
-      ctx.closePath();
-      ctx.stroke();
-      circle(ctx, h, 8);
-      ctx.fillStyle = '#ffffff';
-      visor(ctx, pose, 2, 1, 6, 2.5);
-
-      if (!front) {
-        // Cape trails behind (hidden behind the body when facing the camera)
-        const capeWave = Math.sin(Math.PI * 1.5 * beat) * 10;
-        ctx.beginPath();
-        ctx.moveTo(c.x - 8, c.y);
-        ctx.lineTo(c.x - 38, c.y + 15 + capeWave);
-        ctx.lineTo(c.x - 60, c.y + 36 + capeWave * 1.3);
-        ctx.stroke();
-      }
-
-      withGlow(ctx, accent, 20, 3.2, () => line(ctx, pose.frontHand, along(pose.frontHand, forearmFront, 44, 0.45)));
-    } else {
-      // ACID DANCER: ninja cowl, ribbon streamers, a reverse-grip blade in each hand
-      ctx.beginPath();
-      ctx.moveTo(h.x + (front ? 12 : 14), h.y - (front ? 4 : 2));
-      ctx.lineTo(h.x, h.y - 12);
-      ctx.lineTo(h.x - 12, h.y - (front ? 4 : 6));
-      ctx.closePath();
-      ctx.stroke();
-      circle(ctx, h, 7.5);
-      ctx.fillStyle = accent;
-      visor(ctx, pose, 2, 1, 6, 2.5);
-
-      // Ribbons stream behind; facing the camera, one flows out from each side.
-      for (let r = 0; r < 2; r++) {
-        const wave = Math.sin(Math.PI * 2 * beat + r * 1.5) * 12;
-        const sd = front && r === 1 ? 1 : -1;
-        const len = front ? 0.6 : 1;
-        withGlow(ctx, r === 0 ? main : accent, 16, 2, () => {
-          ctx.beginPath();
-          ctx.moveTo(h.x + sd * 6, h.y + (front ? 0 : r * 6));
-          ctx.lineTo(h.x + sd * 34 * len, h.y + 10 + wave);
-          ctx.lineTo(h.x + sd * 62 * len, h.y + 22 + wave * 1.4);
-          ctx.stroke();
-        }, main);
-      }
-
-      withGlow(ctx, accent, 18, 3.4, () => {
-        for (const [hand, fore] of [
-          [pose.frontHand, forearmFront],
-          [pose.backHand, forearmBack],
-        ] as const) {
-          const tip = along(hand, fore, 26, -1.9);
-          line(ctx, hand, tip);
-          line(ctx, tip, along(tip, fore, 12, -0.6));
-        }
-      });
-    }
-
-    drawSkeleton(ctx, pose);
-    drawCoreHighlight(ctx, pose);
-    return;
-  }
-
-  // ---------------------------------------------------------------------------
-  // HIGHS: plasma speeders, wraiths and seraphs
-  // ---------------------------------------------------------------------------
-  if (tier === 1) {
-    // SPEEDER: aerodynamic visor, forearm plasma blade, boot jets
-    ctx.beginPath();
-    if (front) {
-      // Head-on: a symmetric arrowhead visor
-      ctx.moveTo(h.x - 12, h.y + 6);
-      ctx.lineTo(h.x, h.y - 12);
-      ctx.lineTo(h.x + 12, h.y + 6);
-    } else {
-      ctx.moveTo(h.x + 16, h.y);
-      ctx.lineTo(h.x - 12, h.y - 10);
-      ctx.lineTo(h.x - 14, h.y + 8);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    withGlow(ctx, main, 18, 3.5, () => line(ctx, pose.frontElbow, along(pose.frontHand, forearmFront, 26)));
-    if (!front) {
-      // Boot jets fire backwards (out of sight when facing the camera)
-      withGlow(ctx, main, 14, 2.5, () => {
-        const f = pose.backFoot;
-        seg(ctx, f.x - 2, f.y - 2, f.x - 26 - rnd() * 14, f.y - 2 + (rnd() - 0.5) * 5);
-      });
-    }
-  } else if (tier === 2) {
-    // WRAITH: swept energy wings, plasma claws, hover discs under the feet
-    circle(ctx, h, 8);
-    ctx.fillStyle = '#ffffff';
-    visor(ctx, pose, 4, 2, 5, 2.5);
-    withGlow(ctx, accent, 18, 3.4, () => {
-      for (const sd of sides) {
-        seg(ctx, c.x, c.y - 6, c.x - sd * 36, c.y - 32);
-        seg(ctx, c.x - sd * 36, c.y - 32, c.x - sd * 48, c.y - 14);
-        seg(ctx, c.x, c.y - 2, c.x - sd * 32, c.y - 10);
-      }
-    }, main);
-    withGlow(ctx, accent, 16, 2.8, () => {
-      const tip = along(pose.frontHand, forearmFront, 22, -0.3);
-      line(ctx, pose.frontHand, tip);
-      line(ctx, tip, along(tip, forearmFront, 10, 0.4));
-      line(ctx, pose.backHand, along(pose.backHand, forearmBack, 16, 0.3));
-    });
-    withGlow(ctx, accent, 16, 2.5, () => {
-      ctx.beginPath();
-      // The renderer lifts wraiths a few units, so the discs float just under their feet.
-      ctx.ellipse(pose.frontFoot.x, pose.frontFoot.y + 3, 8, 2.5, 0, 0, Math.PI * 2);
-      ctx.ellipse(pose.backFoot.x, pose.backFoot.y + 3, 8, 2.5, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-  } else {
-    // SERAPH: crested helmet, spinning halo, quad wings, beam sabers, sparkle
-    circle(ctx, h, 8);
-    ctx.fillStyle = '#ffffff';
-    visor(ctx, pose, 4, 2, 6, 3);
-    withGlow(ctx, accent, 20, 2.5, () => {
-      ctx.beginPath();
-      ctx.ellipse(h.x, h.y - 14, 14, 4.5, Math.sin(Math.PI * beat) * 0.25, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-    const wingPulse = Math.exp(-((beat % 1) * 5)) * 6;
-    withGlow(ctx, accent, 24, 3.6, () => {
-      for (const sd of sides) {
-        seg(ctx, c.x, c.y - 8, c.x - sd * (42 + wingPulse), c.y - 42);
-        seg(ctx, c.x - sd * (42 + wingPulse), c.y - 42, c.x - sd * (58 + wingPulse), c.y - 26);
-        seg(ctx, c.x, c.y, c.x - sd * (38 + wingPulse), c.y - 14);
-        seg(ctx, c.x - sd * (38 + wingPulse), c.y - 14, c.x - sd * (52 + wingPulse), c.y + 4);
-      }
-    });
-    withGlow(ctx, '#ffffff', 22, 3.8, () => {
-      line(ctx, pose.frontHand, along(pose.frontHand, forearmFront, 36, -0.5));
-      line(ctx, pose.backHand, along(pose.backHand, forearmBack, 28, 0.5));
-    }, accent);
-    if (!flash) {
-      ctx.fillStyle = '#ffffff';
-      for (let sp = 0; sp < 2; sp++) {
-        ctx.fillRect(c.x + (rnd() - 0.5) * 40, c.y + (rnd() - 0.5) * 40, 2.5, 2.5);
-      }
-    }
-  }
-
-  drawSkeleton(ctx, pose);
-  drawCoreHighlight(ctx, pose);
+  look.back?.(g);
+  drawNeonBody(ctx, enemyBodyJoints(pose), {
+    color: colors.main,
+    glow,
+    shoulderHalf: look.shoulderHalf,
+    waistHalf: look.waistHalf,
+    limbScale: getEnemyStyle(band, tier).limbScale,
+    flash,
+  });
+  neonHead(ctx, pose.head, look.headR, { color: colors.main, glow, flash });
+  look.front?.(g);
 }

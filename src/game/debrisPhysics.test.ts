@@ -188,4 +188,17 @@ describe('shatterEnemy', () => {
     const limbs = shatter(1).filter((p) => p.role === 'limb');
     expect(limbs.some((p) => Math.abs(p.vAngle) > 5)).toBe(true);
   });
+
+  it('cuts pieces as thick as the drawn limbs: chunky enemies leave chunky debris', () => {
+    const make = (limbScale: number) =>
+      shatterEnemy(
+        { x: 0, pose: enemyPose('stand', 0, 'heavy'), facing: 1, scale: 1, limbScale, color: '#ff0000', accent: '#ffffff', hasBlade: false, power: 1, extraShards: 0, random },
+        () => ++id
+      ).filter((p) => p.role === 'limb');
+    const slim = make(0.9);
+    const heavy = make(1.3);
+    expect(heavy[0].radius / slim[0].radius).toBeCloseTo(1.3 / 0.9, 5);
+    // Thigh piece is half the drawn thigh width (radius vs full width)
+    expect(Math.max(...heavy.map((p) => p.radius))).toBeCloseTo((8 * 1.3) / 2, 5);
+  });
 });
