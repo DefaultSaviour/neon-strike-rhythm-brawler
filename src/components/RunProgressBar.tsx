@@ -9,7 +9,8 @@ import {
 } from '../game/runProgress';
 import { fighterTier } from '../game/fighterTier';
 import { attackChainFrame, playerVictoryPose } from '../game/motion';
-import { IDLE_POSE, getMoveForCombo, getOrientedPose } from '../game/animations';
+import { getMoveForCombo, getOrientedPose } from '../game/animations';
+import { getHero, HeroDefinition, HeroId } from '../game/heroes';
 import { drawFighter, drawSlashCrescent } from './fighterArt';
 import { bodyFill } from './neonBody';
 
@@ -22,6 +23,8 @@ import { bodyFill } from './neonBody';
 
 interface RunProgressBarProps {
   run: RunProgress;
+  /** The hero you played, so the runner is the same character */
+  heroId?: HeroId;
 }
 
 const HEIGHT = 150;
@@ -37,7 +40,7 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run }) => {
+export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run, heroId }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -59,12 +62,12 @@ export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run }) => {
     const draw = (now: number) => {
       const elapsed = reduced ? animLength : (now - start) / 1000;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawFrame(ctx, width, run, elapsed);
+      drawFrame(ctx, width, run, elapsed, getHero(heroId));
       if (elapsed < animLength) frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-  }, [run]);
+  }, [run, heroId]);
 
   const best = run.previousBest;
   return (
@@ -97,7 +100,7 @@ export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run }) => {
 // Drawing
 // ---------------------------------------------------------------------------
 
-function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgress, elapsed: number) {
+function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgress, elapsed: number, hero: HeroDefinition) {
   ctx.clearRect(0, 0, width, HEIGHT);
   const barY = HEIGHT - 30;
   const x0 = PAD_X;
@@ -215,8 +218,8 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
     const tierCombo = runnerTierCombo(pos);
     const frame = attackChainFrame(
       elapsed,
-      (i) => getOrientedPose(getMoveForCombo(tierCombo, i).pose, 'right'),
-      IDLE_POSE
+      (i) => getOrientedPose(getMoveForCombo(tierCombo, i, hero.moves).pose, 'right'),
+      hero.idlePose
     );
     pose = frame.pose;
     slashing = frame.active;
@@ -224,14 +227,14 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
     pose = playerVictoryPose(2 + sinceArrival * 3);
     hop = Math.abs(Math.sin(sinceArrival * Math.PI * 1.8)) * 10;
   } else {
-    pose = IDLE_POSE;
+    pose = hero.idlePose;
   }
   ctx.save();
   // World units have the feet at y = 68. Map so the feet sit on the bar.
   ctx.translate(runnerX, barY - 3 - hop);
   ctx.scale(RUNNER_SCALE, RUNNER_SCALE);
   ctx.translate(0, -68);
-  drawFighter(ctx, pose, { tier, facing: 1, time: elapsed, combo: tier.minCombo });
+  drawFighter(ctx, pose, { tier, facing: 1, time: elapsed, combo: tier.minCombo, hero: hero.id });
   if (slashing && pose.bladeSlash) drawSlashCrescent(ctx, pose.bladeSlash);
   ctx.restore();
 

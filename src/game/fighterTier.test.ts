@@ -15,8 +15,8 @@ describe('fighterTier', () => {
     expect(fighterTier(9999).name).toBe('GOD TIER');
   });
 
-  it('only the top tier has angel wings, and effects only build up', () => {
-    expect(FIGHTER_TIERS.filter((t) => t.wings).map((t) => t.name)).toEqual(['GOD TIER']);
+  it('only the top tier is ascended (wings / dragon spirit), and effects only build up', () => {
+    expect(FIGHTER_TIERS.filter((t) => t.ascended).map((t) => t.name)).toEqual(['GOD TIER']);
     for (let i = 1; i < FIGHTER_TIERS.length; i++) {
       expect(FIGHTER_TIERS[i].minCombo).toBeGreaterThan(FIGHTER_TIERS[i - 1].minCombo);
       expect(FIGHTER_TIERS[i].glow).toBeGreaterThanOrEqual(FIGHTER_TIERS[i - 1].glow);

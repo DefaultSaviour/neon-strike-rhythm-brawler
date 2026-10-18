@@ -111,7 +111,7 @@ export function runnerPositionAt(elapsed: number, target: number): number {
 /**
  * The bar is split (behind the scenes) into 4 quarters. The runner levels up
  * through the fighter's combo tiers as he crosses each one, reaching god tier
- * (angel wings) for the final 25%. Values are combos to feed fighterTier().
+ * (each hero's top-level form: wings, dragon spirit...) for the final 25%. Values are combos to feed fighterTier().
  */
 export const QUARTER_TIER_COMBOS = [0, 16, 30, 50] as const; // basic, cyber ninja, overdrive, god tier
 

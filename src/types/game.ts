@@ -3,6 +3,7 @@
  */
 
 import type { EnemyMotionStyle } from '../game/enemyMotion';
+import type { HeroId } from '../game/heroes';
 
 export type Lane = 'left' | 'right';
 
@@ -113,6 +114,8 @@ export interface SkeletonPose {
   rightKnee: Point2D;
   rightFoot: Point2D;
   scarf?: Point2D[];
+  /** A weapon held in the lead hand during this pose (drawn by fighterArt) */
+  prop?: 'nunchaku';
   bladeSlash?: {
     start: Point2D;
     end: Point2D;
@@ -163,6 +166,8 @@ export interface AudioSettings {
   oneButtonMode: boolean;
   /** How enemies move while riding the conveyor */
   enemyMotion: EnemyMotionStyle;
+  /** Which hero you play (see game/heroes.ts) */
+  hero: HeroId;
   /** Hit feedback sound */
   hitSound: HitSoundMode;
 }

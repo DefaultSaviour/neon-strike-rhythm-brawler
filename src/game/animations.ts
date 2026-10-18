@@ -867,6 +867,7 @@ export function getOrientedPose(pose: SkeletonPose, direction: 'left' | 'right')
     rightKnee: mirrorX(pose.leftKnee),
     rightFoot: mirrorX(pose.leftFoot),
     scarf: pose.scarf ? pose.scarf.map(mirrorX) : undefined,
+    prop: pose.prop,
     bladeSlash: pose.bladeSlash
       ? {
           start: mirrorX(pose.bladeSlash.start),
@@ -907,11 +908,18 @@ export function lerpPose(a: SkeletonPose, b: SkeletonPose, t: number): SkeletonP
     rightKnee: lerpPt(a.rightKnee, b.rightKnee),
     rightFoot: lerpPt(a.rightFoot, b.rightFoot),
     scarf: lerpPts(a.scarf, b.scarf),
+    prop: b.prop,
     bladeSlash: b.bladeSlash,
   };
 }
 
-export function getMoveForCombo(combo: number, cycleIndex: number): AttackMove {
+/**
+ * The move to throw at this combo: moves unlock in tiers as the chain grows
+ * (basic -> acrobatic -> superhuman -> overdrive -> god-tier finishers), and
+ * successive hits cycle through the current tier's moves. `moves` is the
+ * hero's move list (the original striker's by default).
+ */
+export function getMoveForCombo(combo: number, cycleIndex: number, moves: AttackMove[] = ATTACK_MOVES): AttackMove {
   let targetTier: 1 | 2 | 3 | 4 | 5 = 1;
   if (combo >= 50) targetTier = 5;
   else if (combo >= 30) targetTier = 4;
@@ -919,6 +927,10 @@ export function getMoveForCombo(combo: number, cycleIndex: number): AttackMove {
   else if (combo >= 6) targetTier = 2;
   else targetTier = 1;
 
-  const tierMoves = ATTACK_MOVES.filter((m) => m.tier === targetTier);
-  return tierMoves[cycleIndex % tierMoves.length] || ATTACK_MOVES[0];
+  // Use the highest tier at or below the target that this hero has moves for.
+  for (let tier = targetTier; tier >= 1; tier--) {
+    const tierMoves = moves.filter((m) => m.tier === tier);
+    if (tierMoves.length > 0) return tierMoves[cycleIndex % tierMoves.length];
+  }
+  return moves[0] ?? ATTACK_MOVES[0];
 }

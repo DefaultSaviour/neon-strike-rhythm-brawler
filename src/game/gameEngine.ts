@@ -10,11 +10,12 @@ import {
   SkeletonPose,
   AudioSettings,
 } from '../types/game';
-import { ATTACK_MOVES, IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
+import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
+import { DEFAULT_HERO, getHero, HeroDefinition, HEROES } from './heroes';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
-import { DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
+import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
@@ -103,6 +104,7 @@ export class GameEngine {
     screenShake: 'subtle',
     oneButtonMode: false,
     enemyMotion: DEFAULT_ENEMY_MOTION,
+    hero: DEFAULT_HERO,
     hitSound: 'both',
   };
 
@@ -128,6 +130,11 @@ export class GameEngine {
     this.loadSettings();
   }
 
+  /** The hero being played (from the settings). */
+  public get hero(): HeroDefinition {
+    return getHero(this.settings.hero);
+  }
+
   public loadSettings() {
     try {
       const saved = localStorage.getItem('neon_strike_settings');
@@ -136,6 +143,9 @@ export class GameEngine {
         // Settings saved by older versions (or edited by hand) may hold values we no longer know.
         if (!ENEMY_MOTION_STYLES.some((m) => m.id === this.settings.enemyMotion)) {
           this.settings.enemyMotion = DEFAULT_ENEMY_MOTION;
+        }
+        if (!HEROES.some((h) => h.id === this.settings.hero)) {
+          this.settings.hero = DEFAULT_HERO;
         }
         if (!['both', 'tone', 'surge', 'off'].includes(this.settings.hitSound)) {
           this.settings.hitSound = 'both';
@@ -361,7 +371,7 @@ export class GameEngine {
       this.currentMoveIndex++;
     }
 
-    const currentMove = getMoveForCombo(this.scoreState.combo, this.currentMoveIndex);
+    const currentMove = getMoveForCombo(this.scoreState.combo, this.currentMoveIndex, this.hero.moves);
     this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
 
     const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
@@ -449,7 +459,7 @@ export class GameEngine {
     });
 
     // A whiff: quick jab into empty air with only a small lunge.
-    this.startStrike(lane, getOrientedPose(ATTACK_MOVES[0].pose, lane), 0.16, LUNGE_DISTANCE * 0.4);
+    this.startStrike(lane, getOrientedPose(this.hero.moves[0].pose, lane), 0.16, LUNGE_DISTANCE * 0.4);
   }
 
   private spawnHitParticles(
@@ -584,7 +594,7 @@ export class GameEngine {
       floorY: FLOOR_Y,
       pitHalfWidth: this.pitRadius,
       beltSpeed: this.beltSpeed(),
-      gravity: 1500,
+      gravity: DEBRIS_GRAVITY,
       halfWidth: worldHalfWidth,
     };
     if (fxDt > 0) {
@@ -648,7 +658,7 @@ export class GameEngine {
     // 4. PLAYER ANIMATION
     const pulse = beatPulse(effectiveTime, this.beatGrid, 5);
     const sway = Math.sin(beatPos * Math.PI) * 1.5;
-    const restPose = idleBouncePose(IDLE_POSE, pulse, sway);
+    const restPose = idleBouncePose(this.hero.idlePose, pulse, sway);
 
     if (this.isAttacking) {
       const progress = (this.animClock - this.strikeStart) / this.strikeDuration;
