@@ -1,6 +1,7 @@
 import { AttackMove, SkeletonPose } from '../types/game';
 import { ATTACK_MOVES, IDLE_POSE } from './animations';
 import { BABA_YAGA_IDLE, BABA_YAGA_MOVES } from './heroMoves/babaYaga';
+import { DRUNKEN_MASTER_IDLE, DRUNKEN_MASTER_MOVES } from './heroMoves/drunkenMaster';
 import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDragon';
 import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
 
@@ -11,7 +12,7 @@ import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -51,6 +52,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Bullet-time kung fu: impossible dodges, and he floats while he kicks',
     idlePose: THE_ONE_IDLE,
     moves: THE_ONE_MOVES,
+  },
+  {
+    id: 'drunkenMaster',
+    label: 'Drunken Master',
+    description: 'Drunken boxing: he staggers, stumbles and swigs, and every wild swing lands',
+    idlePose: DRUNKEN_MASTER_IDLE,
+    moves: DRUNKEN_MASTER_MOVES,
   },
 ];
 

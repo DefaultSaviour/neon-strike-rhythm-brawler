@@ -40,6 +40,7 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
     if (opts.hero === 'dragon') drawDragonSpirit(ctx, pose, opts.time);
     else if (opts.hero === 'babaYaga') drawGoldCoinHalo(ctx, pose, opts.time);
     else if (opts.hero === 'theOne') drawCodeRain(ctx, pose, opts.time);
+    else if (opts.hero === 'drunkenMaster') drawGourdOrbit(ctx, pose, opts.time, 'back');
     else drawAngelWings(ctx, pose, opts.time);
   }
 
@@ -114,6 +115,10 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   if (opts.hero === 'dragon') drawLittleDragonOutfit(ctx, pose, tier);
   if (opts.hero === 'babaYaga') drawBabaYagaOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'theOne') drawTheOneOutfit(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'drunkenMaster') drawDrunkenOutfit(ctx, pose, tier, opts.facing, combo);
+  if (pose.prop === 'gourd' || pose.prop === 'gourdSwing' || pose.prop === 'bench') drawDrunkenProps(ctx, pose, opts.facing);
+  // ...and the front half of the Drunken Master's orbit, passing in front of him
+  if (tier.ascended && opts.hero === 'drunkenMaster') drawGourdOrbit(ctx, pose, opts.time, 'front');
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
   if (pose.prop === 'pistol' || pose.prop === 'pistols' || pose.prop === 'shotgun' || pose.prop === 'pencil') {
     drawHandWeapons(ctx, pose, opts.facing, tier.ascended && opts.hero === 'babaYaga');
@@ -123,6 +128,8 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   ctx.save();
   if (opts.hero === 'theOne') {
     drawSunglasses(ctx, pose, opts.facing);
+  } else if (opts.hero === 'drunkenMaster') {
+    drawSleepyEyes(ctx, pose, opts.facing);
   } else {
     ctx.fillStyle = tier.visorColor;
     ctx.shadowColor = tier.visorColor;
@@ -468,6 +475,256 @@ function drawSunglasses(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
   ctx.moveTo(h.x - facing * 0.8, h.y - 1.5);
   ctx.lineTo(h.x - facing * 7, h.y - 2.5);
   ctx.stroke();
+}
+
+/**
+ * A wine gourd: a small neck where it is held and two round bulbs hanging
+ * away from it along `down` (a unit vector). Outlined dark so it reads
+ * against the neon body.
+ */
+function drawGourd(ctx: Ctx, neck: Point2D, down: Point2D, scale = 1) {
+  const at = (d: number) => ({ x: neck.x + down.x * d * scale, y: neck.y + down.y * d * scale });
+  const top = at(5);
+  const bottom = at(13);
+  ctx.save();
+  ctx.fillStyle = '#c8741e';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = '#ffb347';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(top.x, top.y, 3.8 * scale, 0, Math.PI * 2);
+  ctx.moveTo(bottom.x + 6 * scale, bottom.y);
+  ctx.arc(bottom.x, bottom.y, 6 * scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fill();
+  // Red cord tied round the waist of the gourd
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#ff3b3b';
+  ctx.lineWidth = 1.6 * scale;
+  ctx.beginPath();
+  const waist = at(8.5);
+  ctx.moveTo(waist.x - down.y * 3 * scale, waist.y + down.x * 3 * scale);
+  ctx.lineTo(waist.x + down.y * 3 * scale, waist.y - down.x * 3 * scale);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Where the Drunken Master's two orbiting gourds are (top-level form), and whether each is in front of him. */
+export function gourdOrbit(pose: SkeletonPose, time: number) {
+  return [0, Math.PI].map((phase) => {
+    const a = time * 2.2 + phase;
+    return {
+      x: pose.chest.x + Math.cos(a) * 46,
+      y: pose.chest.y + 8 + Math.sin(a) * 14,
+      angle: a,
+      front: Math.sin(a) > 0,
+    };
+  });
+}
+
+/**
+ * The Drunken Master's top-level form: two big glowing wine gourds orbiting
+ * him on a tilted ring, trailing drops of wine. Drawn in two halves, so the
+ * gourds pass behind him and then in front of him.
+ */
+function drawGourdOrbit(ctx: Ctx, pose: SkeletonPose, time: number, half: 'back' | 'front') {
+  ctx.save();
+  if (half === 'back') {
+    // The faint orbit ring itself
+    ctx.strokeStyle = 'rgba(255, 179, 71, 0.35)';
+    ctx.shadowColor = '#ffb347';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(pose.chest.x, pose.chest.y + 8, 46, 14, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  for (const g of gourdOrbit(pose, time)) {
+    if (g.front !== (half === 'front')) continue;
+    // Drops of wine flung off behind it along the orbit
+    ctx.fillStyle = '#ffcf7a';
+    ctx.shadowColor = '#ffb347';
+    ctx.shadowBlur = 8;
+    for (let i = 1; i <= 4; i++) {
+      const a = g.angle - i * 0.28;
+      ctx.globalAlpha = 0.8 - i * 0.17;
+      ctx.beginPath();
+      ctx.arc(pose.chest.x + Math.cos(a) * 46, pose.chest.y + 8 + Math.sin(a) * 14, 2.4 - i * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // Tumbling as it flies
+    const spin = g.angle * 1.5;
+    drawGourd(ctx, { x: g.x - Math.sin(spin) * 10, y: g.y - Math.cos(spin) * 10 }, { x: Math.sin(spin), y: Math.cos(spin) }, 1.7);
+  }
+  ctx.restore();
+}
+
+/**
+ * The Drunken Master: an open shirt (two light edges down the chest), a red
+ * sash with a tail, messy spiky hair, and cheeks that flush redder as the
+ * combo grows.
+ */
+function drawDrunkenOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1, combo: number) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // Open shirt: the two front edges, falling open from the collar
+  ctx.strokeStyle = '#f2e6cc';
+  ctx.shadowColor = '#f2e6cc';
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  for (const side of [-1, 1]) {
+    ctx.moveTo(c.x + nx * 8 * side, c.y + ny * 8 * side);
+    ctx.lineTo(c.x + sx * 0.45 + nx * 3 * side, c.y + sy * 0.45 + ny * 3 * side);
+    ctx.lineTo(p.x - (sx / sl) * 3 + nx * 5 * side, p.y - (sy / sl) * 3 + ny * 5 * side);
+  }
+  ctx.stroke();
+  // Red sash round the waist, its tail hanging down behind
+  const back = -facing;
+  ctx.strokeStyle = '#ff3b3b';
+  ctx.shadowColor = '#ff3b3b';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 3.4;
+  ctx.beginPath();
+  ctx.moveTo(p.x - (sx / sl) * 4 + nx * 8, p.y - (sy / sl) * 4 + ny * 8);
+  ctx.lineTo(p.x - (sx / sl) * 4 - nx * 8, p.y - (sy / sl) * 4 - ny * 8);
+  ctx.stroke();
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(p.x + back * 5, p.y - 3);
+  ctx.quadraticCurveTo(p.x + back * 12, p.y + 6, p.x + back * 10, p.y + 16);
+  ctx.stroke();
+  // Messy hair: a ragged mop of spikes
+  const h = pose.head;
+  ctx.fillStyle = '#0d0d16';
+  ctx.strokeStyle = tier.color;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 5;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  const spikes = [
+    [-11, 0],
+    [-13, -8],
+    [-7, -7],
+    [-6, -15],
+    [-1, -10],
+    [3, -16],
+    [5, -9],
+    [11, -12],
+    [9, -4],
+    [11, 0],
+  ];
+  ctx.moveTo(h.x - 10, h.y + 1);
+  for (const [x, y] of spikes) ctx.lineTo(h.x + x * facing, h.y + y);
+  ctx.quadraticCurveTo(h.x, h.y - 6, h.x - 10 * facing, h.y + 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Flushed cheek: redder as the combo climbs
+  const flush = Math.min(1, 0.2 + combo / 55);
+  ctx.fillStyle = `rgba(255, 60, 70, ${flush.toFixed(2)})`;
+  ctx.shadowColor = '#ff3b3b';
+  ctx.shadowBlur = 6 * flush;
+  ctx.beginPath();
+  ctx.ellipse(h.x + facing * 4, h.y + 3.5, 3.2, 2.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Half-closed, sleepy eyes where the visor would be. */
+function drawSleepyEyes(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  const h = pose.head;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const dx of [2.5, 7]) {
+    ctx.moveTo(h.x + facing * (dx - 2), h.y - 1);
+    ctx.quadraticCurveTo(h.x + facing * dx, h.y + 0.6, h.x + facing * (dx + 2), h.y - 1);
+  }
+  ctx.stroke();
+}
+
+/**
+ * The Drunken Master's props. The gourd hangs from his rear hand (or is
+ * tipped to his lips when the hand is up by his face); for the gourd combos
+ * it swings out from the lead hand on its string; the bench plank is gripped
+ * in both hands. Big swings spill drops of wine.
+ */
+function drawDrunkenProps(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  const { lead, rear } = arms(pose, facing);
+  ctx.save();
+  ctx.lineCap = 'round';
+  let spillAt: Point2D | undefined;
+  if (pose.prop === 'gourdSwing') {
+    // Out on its string, toward where the swing lands
+    const { dir } = weaponAt(lead.hand, lead.elbow, 1);
+    const aim = pose.bladeSlash?.end ?? { x: lead.hand.x + dir.x * 20, y: lead.hand.y + dir.y * 20 };
+    const ax = aim.x - lead.hand.x;
+    const ay = aim.y - lead.hand.y;
+    const al = Math.hypot(ax, ay) || 1;
+    const down = { x: ax / al, y: ay / al };
+    const neck = { x: lead.hand.x + down.x * 14, y: lead.hand.y + down.y * 14 };
+    ctx.strokeStyle = '#ff3b3b';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(lead.hand.x, lead.hand.y);
+    ctx.lineTo(neck.x, neck.y);
+    ctx.stroke();
+    drawGourd(ctx, neck, down, 1.1);
+    spillAt = { x: neck.x + down.x * 16, y: neck.y + down.y * 16 };
+  } else {
+    if (pose.prop === 'bench') {
+      // Plank through both hands, sticking out well past the lead hand
+      const dx = lead.hand.x - rear.hand.x;
+      const dy = lead.hand.y - rear.hand.y;
+      const fallback = weaponAt(lead.hand, lead.elbow, 1).dir;
+      const l = Math.hypot(dx, dy);
+      const d = l > 3 ? { x: dx / l, y: dy / l } : fallback;
+      ctx.beginPath();
+      ctx.moveTo(rear.hand.x - d.x * 8, rear.hand.y - d.y * 8);
+      ctx.lineTo(lead.hand.x + d.x * 30, lead.hand.y + d.y * 30);
+      ctx.strokeStyle = '#05050c';
+      ctx.lineWidth = 9;
+      ctx.stroke();
+      ctx.strokeStyle = '#b8875a';
+      ctx.shadowColor = '#ffb347';
+      ctx.shadowBlur = 6;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      if (pose.bladeSlash) spillAt = { x: lead.hand.x + d.x * 30, y: lead.hand.y + d.y * 30 };
+    }
+    // The gourd in his rear hand: tipped to his lips, or hanging by its neck
+    const atMouth = rear.hand.y < pose.chest.y - 6;
+    const down = atMouth ? { x: -facing * 0.6, y: -0.8 } : { x: 0, y: 1 };
+    drawGourd(ctx, rear.hand, down, 1);
+  }
+  // Spilled drops of wine on the big swings
+  if (spillAt && pose.bladeSlash) {
+    ctx.fillStyle = '#ffcf7a';
+    ctx.shadowColor = '#ffb347';
+    ctx.shadowBlur = 8;
+    for (const [ox, oy, r] of [
+      [4, -6, 2.4],
+      [-6, -3, 1.8],
+      [8, 4, 1.6],
+    ]) {
+      ctx.beginPath();
+      ctx.arc(spillAt.x + ox * facing, spillAt.y + oy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 /** Where Baba Yaga's gold coin halo sits and how wide it looks as it spins (1 = face on). */

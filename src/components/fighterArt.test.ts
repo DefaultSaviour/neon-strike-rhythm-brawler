@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { codeRainStreaks, coinHalo, dragonSpiritPath } from './fighterArt';
+import { codeRainStreaks, coinHalo, dragonSpiritPath, gourdOrbit } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -58,5 +58,21 @@ describe("The One's code rain (top-level form)", () => {
     const a = codeRainStreaks(pose, 0);
     const b = codeRainStreaks(pose, 0.1);
     expect(b.filter((s, i) => s.y > a[i].y).length).toBeGreaterThan(a.length / 2);
+  });
+});
+
+describe("the Drunken Master's orbiting gourds (top-level form)", () => {
+  const pose = getHero('drunkenMaster').idlePose;
+
+  it('two gourds on opposite sides of him, one in front and one behind', () => {
+    const [a, b] = gourdOrbit(pose, 0.4);
+    expect(Math.sign(a.x - pose.chest.x)).toBe(-Math.sign(b.x - pose.chest.x));
+    expect(a.front).not.toBe(b.front);
+  });
+
+  it('circle round him over time, passing in front and then behind', () => {
+    const fronts = [0, 0.5, 1, 1.5, 2, 2.5].map((t) => gourdOrbit(pose, t)[0].front);
+    expect(fronts).toContain(true);
+    expect(fronts).toContain(false);
   });
 });
