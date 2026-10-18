@@ -69,13 +69,27 @@ function supportArm(k: Key): LimbAngles {
   return { upper: deg(toward + bend), lower: deg(toward - bend) };
 }
 
+/** How long each hit is held so it reads at game speed, and how long the final pose is held. */
+const HIT_HOLD_MS = 80;
+const FINAL_HOLD_MS = 200;
+
 let nextId = 201;
-/** A move made of keyframes: the first one is the hit, then the follow-ups. Guns stay in hand throughout. */
+/**
+ * A move made of keyframes: the first one is the hit, then the follow-ups.
+ * Guns stay in hand throughout. After every hit the pose is HELD for a beat
+ * (a repeat of the same pose with no trail), and the last pose is held
+ * longer, so each shape stays on screen long enough to see.
+ */
 function combo(tier: AttackMove['tier'], name: string, description: string, keys: Key[]): AttackMove {
-  const sequence = keys.map((k) => {
+  const sequence = keys.flatMap((k, i) => {
     const spec: Key = { prop: 'pistol', ...k };
     if (spec.support) spec.backArm = supportArm(spec);
-    return buildKey(spec, TRAIL, k.ms ?? 0);
+    const key = buildKey(spec, TRAIL, k.ms ?? 0);
+    const last = i === keys.length - 1;
+    const hold = last ? FINAL_HOLD_MS : k.trail ? HIT_HOLD_MS : 0;
+    if (!hold) return [key];
+    const { trail: _trail, shot: _shot, ...still } = key;
+    return [key, { ...still, ms: hold }];
   });
   const durationMs = 50 + sequence.slice(1).reduce((s, k) => s + k.ms, 0) + 140;
   return { id: nextId++, tier, name, description, durationMs, pose: keyToPlayerPose(sequence[0]), sequence };

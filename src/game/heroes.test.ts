@@ -133,6 +133,20 @@ describe('Baba Yaga', () => {
     }
   });
 
+  it('holds every hit for a beat, and holds the final pose before recovering', () => {
+    for (const m of baba.moves) {
+      const seq = m.sequence!;
+      seq.forEach((k, i) => {
+        if (!k.trail || i === seq.length - 1) return;
+        expect(seq[i + 1].pose).toEqual(k.pose);
+        expect(seq[i + 1].trail).toBeUndefined();
+      });
+      const [before, last] = seq.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
   it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
     for (const m of baba.moves) {
       expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
@@ -145,7 +159,9 @@ describe('Baba Yaga', () => {
   it('keeps every move simple: a few big poses and at most two shots (finishers a little more)', () => {
     for (const m of baba.moves) {
       const finisher = m.tier === 5;
-      expect(m.sequence!.length).toBeLessThanOrEqual(finisher ? 4 : 3);
+      // Holds repeat the pose before them; only count the real poses.
+      const poses = m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+      expect(poses.length).toBeLessThanOrEqual(finisher ? 4 : 3);
       expect(m.sequence!.filter((k) => k.shot).length).toBeLessThanOrEqual(finisher ? 3 : 2);
     }
   });
@@ -170,12 +186,12 @@ describe('Baba Yaga', () => {
   });
 
   it('the muzzle flash sits at the end of the gun that is firing', () => {
-    const dual = baba.moves.find((m) => m.name === 'Dual Pistols')!.sequence!.map((k) => keyToPlayerPose(k));
+    const dual = baba.moves.find((m) => m.name === 'Dual Pistols')!.sequence!.filter((k) => k.shot).map((k) => keyToPlayerPose(k));
     // Lead hand fires first, then the rear hand
-    expect(dist(muzzlePoint(dual[0], 1)!, dual[0].leftHand)).toBeCloseTo(13, 3);
-    expect(dist(muzzlePoint(dual[1], 1)!, dual[1].rightHand)).toBeCloseTo(13, 3);
+    expect(dist(muzzlePoint(dual[0], 1)!, dual[0].leftHand)).toBeCloseTo(18, 3);
+    expect(dist(muzzlePoint(dual[1], 1)!, dual[1].rightHand)).toBeCloseTo(18, 3);
     const blast = keyToPlayerPose(baba.moves.find((m) => m.name === 'Shotgun Blast')!.sequence![0]);
-    expect(dist(muzzlePoint(blast, 1)!, blast.leftHand)).toBeCloseTo(26, 3);
+    expect(dist(muzzlePoint(blast, 1)!, blast.leftHand)).toBeCloseTo(32, 3);
     expect(muzzlePoint(baba.idlePose, 1)).toBeUndefined();
   });
 
