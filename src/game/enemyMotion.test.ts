@@ -108,7 +108,7 @@ describe('enemyPose', () => {
 
   it('hands-up bends knees and elbows on the beat and straightens between beats', () => {
     const onBeat = enemyPose('sway', 2, 'samurai');
-    const between = enemyPose('sway', 2.8, 'samurai');
+    const between = enemyPose('sway', 2.5, 'samurai'); // halfway between two beats
     // Knees bend = hip comes closer to the foot.
     expect(onBeat.frontFoot.y - onBeat.pelvis.y).toBeLessThan(between.frontFoot.y - between.pelvis.y - 4);
     // Elbows bend = hand comes closer to the shoulder.
@@ -155,9 +155,29 @@ describe('enemyPose', () => {
     expect(p.frontKnee.x).toBeGreaterThan(p.pelvis.x + 15);
   });
 
+  it('hands-up sways smoothly: no sudden jumps from one frame to the next', () => {
+    // At 60 frames per second and 180 BPM a frame is 0.05 beats. Smooth motion
+    // moves a hand a few units per frame; the old snapping fold jumped ~19.
+    let prev = enemyPose('sway', 0, 'agile');
+    for (let beat = 0.05; beat <= 4; beat += 0.05) {
+      const p = enemyPose('sway', beat, 'agile');
+      for (const k of ['head', 'pelvis', 'frontHand', 'backHand', 'frontElbow', 'backElbow'] as const) {
+        expect(Math.hypot(p[k].x - prev[k].x, p[k].y - prev[k].y)).toBeLessThan(8);
+      }
+      prev = p;
+    }
+  });
+
+  it('hands-up sways to each side exactly on the beat', () => {
+    const onBeat = enemyPose('sway', 2, 'agile');
+    const nearBeat = enemyPose('sway', 2.1, 'agile');
+    expect(onBeat.chest.x).toBeGreaterThanOrEqual(nearBeat.chest.x); // furthest out on the beat itself
+    expect(enemyPose('sway', 2.5, 'agile').chest.x).toBeCloseTo(0, 6); // crossing the middle between beats
+  });
+
   it('hands-up: both arms wave the same way together, in time with the sway', () => {
-    const left = enemyPose('sway', 3, 'agile'); // swayed to -x
-    const right = enemyPose('sway', 1, 'agile'); // swayed to +x
+    const right = enemyPose('sway', 2, 'agile'); // even beats: swayed to +x
+    const left = enemyPose('sway', 3, 'agile'); // odd beats: swayed to -x
     expect(right.frontHand.x).toBeGreaterThan(left.frontHand.x + 5);
     expect(right.backHand.x).toBeGreaterThan(left.backHand.x + 5);
   });

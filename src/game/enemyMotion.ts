@@ -15,7 +15,7 @@ export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway' | 'handstand';
 export const ENEMY_MOTION_STYLES: Array<{ id: EnemyMotionStyle; label: string; description: string }> = [
   { id: 'run', label: 'Run on the spot', description: 'High knees and sprinter arms swinging from the shoulder, one step per beat' },
   { id: 'dance', label: 'Dance', description: 'Each enemy busts out its signature move: the Moonwalk, YMCA, the Floss, Thriller...' },
-  { id: 'sway', label: 'Hands up', description: 'Facing you, arms waving overhead like a crowd, knees and elbows pumping on the beat' },
+  { id: 'sway', label: 'Hands up', description: 'Facing you, hands in the air, swaying side to side on the beat like a crowd' },
   { id: 'stand', label: 'Just stand', description: 'Guard up, riding the conveyor, nodding on the beat' },
   { id: 'handstand', label: 'Handstand', description: 'Upside down on their hands, legs scissoring in the air, elbows dipping on the beat' },
 ];
@@ -208,26 +208,29 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     armBendBack = -1;
     stomp = pulse;
   } else if (style === 'sway') {
-    // Hands-up crowd pose, FACING THE CAMERA, like a crowd at a concert:
-    // both arms up, waving side to side together over two beats (rotating
-    // around the shoulders, forearms whipping a little further around the
-    // elbows). On every beat the whole body pumps: knees bend, and the
-    // forearms fold in around the elbows, then everything straightens.
+    // Hands-up crowd groove, FACING THE CAMERA, like a crowd at a concert.
+    // The whole body sways to one side ON each beat and the other side on
+    // the next, dipping into the knees as it lands on the beat and rising
+    // as it crosses the middle between beats. Both arms ride the sway
+    // overhead (rotating around the shoulders) and the forearms ease in
+    // around the elbows into each beat. Everything is smooth: no snapping.
     facingCamera = true;
-    const wave = Math.sin((Math.PI * beat) / 2);
-    const sway = wave * 3;
-    const dip = pulse * 7;
+    const side = Math.cos(Math.PI * beat); // +1 on even beats, -1 on odd beats
+    const groove = (1 + Math.cos(2 * Math.PI * beat)) / 2; // 1 on every beat, 0 halfway between
+    const sway = side * 4;
+    const dip = groove * 7;
     pelvis = { x: sway * 0.5, y: 8 + dip };
     chest = { x: sway, y: -22 + dip };
     head = { x: sway * 1.3, y: -48 + dip };
     frontFootTarget = { x: 13, y: FLOOR };
     backFootTarget = { x: -13, y: FLOOR };
     shoulderSpread = 9;
-    const fold = pulse * 55;
-    const frontUpper = -58 + wave * 8;
-    const backUpper = -122 + wave * 8;
-    const frontArm = armByAngles({ x: chest.x + shoulderSpread, y: chest.y + 1 }, frontUpper, frontUpper - fold + wave * 6);
-    const backArm = armByAngles({ x: chest.x - shoulderSpread, y: chest.y + 1 }, backUpper, backUpper + fold + wave * 6);
+    const fold = groove * 55;
+    const lean = side * 10;
+    const frontUpper = -55 + lean;
+    const backUpper = -125 + lean;
+    const frontArm = armByAngles({ x: chest.x + shoulderSpread, y: chest.y + 1 }, frontUpper, frontUpper - fold);
+    const backArm = armByAngles({ x: chest.x - shoulderSpread, y: chest.y + 1 }, backUpper, backUpper + fold);
     frontHandTarget = frontArm.hand;
     backHandTarget = backArm.hand;
     armBendFront = frontArm.bend;
