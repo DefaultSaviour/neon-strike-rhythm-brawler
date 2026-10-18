@@ -26,6 +26,7 @@ import {
   DragHandle,
   ENEMY_KEYS,
   EnemyKey,
+  HIP_ZONE,
   handleAt,
   handlePosition,
   MAX_POSES,
@@ -39,6 +40,7 @@ import {
 } from '../game/customAnimation';
 import { getBundledAnimations, getSavedAnimations, setSavedAnimations } from '../game/animationLibrary';
 import { getEnemyStyle } from '../game/enemyStyles';
+import { SIGNATURE_DANCE_NAMES } from '../game/signatureDances';
 import { drawEnemyArt } from './enemyArt';
 import { studioView } from './studioView';
 
@@ -59,7 +61,7 @@ const GRAB_RADIUS_PX = 14;
 const HANDLE_HINTS: Record<DragHandle, string> = {
   head: 'Head: drag to tilt',
   chest: 'Chest: drag to lean the body',
-  pelvis: 'Hips: drag to move the whole body (feet stay planted)',
+  pelvis: 'Hips: drag to move the body. They stay inside the shaded timing zone so the enemy stays in time',
   frontHand: 'Front hand: drag to place',
   backHand: 'Back hand: drag to place',
   frontFoot: 'Front foot: drag to place',
@@ -82,9 +84,14 @@ function bandTier(key: EnemyKey): { band: FrequencyBand; tier: EnemyTier } {
   return { band: band as FrequencyBand, tier: Number(tier) as EnemyTier };
 }
 
-/** What to show when opening an enemy + stance: your saved version, else the bundled one, else the built-in moves. */
+/** The moves that ship with the game for this enemy + stance (its signature dance, or the built-in maths). */
+function originalAnimation(key: EnemyKey, style: EnemyMotionStyle): CustomAnimation {
+  return getBundledAnimations()[key]?.[style] ?? builtInAnimation(style, bandTier(key).band);
+}
+
+/** What to show when opening an enemy + stance: your saved version, else the original. */
 function startingAnimation(saved: AnimationLibrary, key: EnemyKey, style: EnemyMotionStyle): CustomAnimation {
-  return saved[key]?.[style] ?? getBundledAnimations()[key]?.[style] ?? builtInAnimation(style, bandTier(key).band);
+  return saved[key]?.[style] ?? originalAnimation(key, style);
 }
 
 function withPose(anim: CustomAnimation, index: number, rig: PoseRig): CustomAnimation {
@@ -118,6 +125,17 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number) {
     ctx.lineTo(w, s);
   }
   ctx.stroke();
+  // Timing zone: the hips must stay inside it (see HIP_ZONE)
+  const zoneLeft = view.toScreen({ x: -HIP_ZONE, y: 0 }).x;
+  const zoneRight = view.toScreen({ x: HIP_ZONE, y: 0 }).x;
+  const zoneFloor = view.toScreen({ x: 0, y: FLOOR }).y;
+  ctx.fillStyle = 'rgba(0, 229, 255, 0.06)';
+  ctx.fillRect(zoneLeft, 0, zoneRight - zoneLeft, zoneFloor);
+  ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('timing zone', (zoneLeft + zoneRight) / 2, 14);
+  ctx.textAlign = 'left';
   // Centre line and floor
   const floor = view.toScreen({ x: 0, y: FLOOR }).y;
   const centre = view.toScreen({ x: 0, y: 0 }).x;
@@ -567,7 +585,8 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
               onPointerLeave={() => !dragRef.current && setHover(null)}
             />
             <div className="absolute top-2 left-3 text-xs text-slate-400 pointer-events-none">
-              {enemyName} · {stanceLabel} · {playing ? `Pose ${playIndex + 1}` : `Pose ${sel + 1} of ${draft.poses.length}`}
+              {enemyName} · {stanceLabel}
+              {stance === 'dance' && ` (signature: ${SIGNATURE_DANCE_NAMES[enemy]})`} · {playing ? `Pose ${playIndex + 1}` : `Pose ${sel + 1} of ${draft.poses.length}`}
               {dirty && <span className="text-amber-300"> · unsaved</span>}
             </div>
           </div>
@@ -624,7 +643,7 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
             <div className="grid grid-cols-2 gap-2">
               <SmallButton onClick={undo} disabled={history.length === 0} icon={<Undo2 className="w-3.5 h-3.5" />} label="Undo" />
               <SmallButton
-                onClick={() => commit(builtInAnimation(stance, band))}
+                onClick={() => commit(originalAnimation(enemy, stance))}
                 icon={<RotateCcw className="w-3.5 h-3.5" />}
                 label="Start over"
                 title="Replace the poses with the original moves (you can Undo)"

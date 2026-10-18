@@ -44,6 +44,16 @@ export const MAX_POSES = 16;
 /** Where joints may be dragged (pose units, feet on y = 68, facing right). */
 export const EDIT_BOUNDS = { minX: -75, maxX: 75, minY: -115, maxY: FLOOR } as const;
 
+/**
+ * How far (pose units) the hips may move left or right of centre. An enemy's
+ * position on screen is what tells the player when to hit, so a dance must
+ * not carry the body sideways or it would look early / late. Hands, feet and
+ * leaning are free; only the hips are kept in this zone.
+ */
+export const HIP_ZONE = 8;
+/** The hips can't sink lower than this (a deep squat). */
+export const LOWEST_HIPS = FLOOR - 20;
+
 export function enemyKey(band: FrequencyBand, tier: EnemyTier): EnemyKey {
   return `${band}-${tier}`;
 }
@@ -78,12 +88,45 @@ export function rigFromPose(p: EnemyPose): PoseRig {
   };
 }
 
+/** Pull every point inside the editing area (nothing below the floor). */
+function keepInBounds(rig: PoseRig): PoseRig {
+  return {
+    ...rig,
+    pelvis: clampToBounds(rig.pelvis),
+    chest: clampToBounds(rig.chest),
+    head: clampToBounds(rig.head),
+    frontHand: clampToBounds(rig.frontHand),
+    backHand: clampToBounds(rig.backHand),
+    frontFoot: clampToBounds(rig.frontFoot),
+    backFoot: clampToBounds(rig.backFoot),
+  };
+}
+
+/** Slide the whole pose sideways so the hips are back inside HIP_ZONE (see above). */
+export function keepHipsInZone(rig: PoseRig): PoseRig {
+  const x = Math.min(HIP_ZONE, Math.max(-HIP_ZONE, rig.pelvis.x));
+  const dx = x - rig.pelvis.x;
+  if (dx === 0) return rig;
+  const shift = (p: Point): Point => ({ x: p.x + dx, y: p.y });
+  return settleRig({
+    ...rig,
+    pelvis: shift(rig.pelvis),
+    chest: shift(rig.chest),
+    head: shift(rig.head),
+    frontHand: shift(rig.frontHand),
+    backHand: shift(rig.backHand),
+    frontFoot: shift(rig.frontFoot),
+    backFoot: shift(rig.backFoot),
+  });
+}
+
 /**
  * Snap hand and foot targets to where the limbs actually reach, so the stored
  * rig always matches what's on screen (a hand dragged out of reach stops at
  * the end of the straight arm).
  */
 export function settleRig(rig: PoseRig): PoseRig {
+  rig = keepInBounds(rig);
   const p = assemblePose(rig, 0, false);
   return { ...rig, frontHand: p.frontHand, backHand: p.backHand, frontFoot: p.frontFoot, backFoot: p.backFoot };
 }
@@ -248,7 +291,8 @@ function rotateAround(p: Point, centre: Point, angle: number): Point {
 
 /**
  * Drag one joint to `target` and return the new rig (the old one is untouched).
- *  - pelvis: moves the whole upper body with it; the feet stay planted.
+ *  - pelvis: moves the whole upper body with it; the feet stay planted. It
+ *    can only move inside the timing zone (HIP_ZONE).
  *  - chest:  swings around the pelvis (the spine keeps its length), carrying head and hands.
  *  - head:   swings around the chest (the neck keeps its length).
  *  - hands / feet: go where you drag them, as far as the limb reaches.
@@ -261,8 +305,10 @@ export function moveHandle(rig: PoseRig, handle: DragHandle, target: Point): Pos
   const next: PoseRig = { ...rig, bends: { ...rig.bends } };
 
   if (handle === 'pelvis') {
-    const d = { x: to.x - rig.pelvis.x, y: to.y - rig.pelvis.y };
-    next.pelvis = to;
+    // The hips stay inside the timing zone (see HIP_ZONE) and above a deep squat.
+    const hips = { x: Math.min(HIP_ZONE, Math.max(-HIP_ZONE, to.x)), y: Math.min(LOWEST_HIPS, to.y) };
+    const d = { x: hips.x - rig.pelvis.x, y: hips.y - rig.pelvis.y };
+    next.pelvis = hips;
     next.chest = add(rig.chest, d);
     next.head = add(rig.head, d);
     next.frontHand = add(rig.frontHand, d);
@@ -395,7 +441,11 @@ function parseAnimation(v: unknown): CustomAnimation | null {
   if (typeof bpp !== 'number' || !Number.isFinite(bpp) || bpp < 0.125 || bpp > 8) return null;
   const poses = v.poses.slice(0, MAX_POSES).map(parseRig);
   if (poses.length === 0 || poses.some((p) => p === null)) return null;
-  return { beatsPerPose: bpp, facingCamera: v.facingCamera === true, poses: poses as PoseRig[] };
+  return {
+    beatsPerPose: bpp,
+    facingCamera: v.facingCamera === true,
+    poses: (poses as PoseRig[]).map(keepHipsInZone),
+  };
 }
 
 /**

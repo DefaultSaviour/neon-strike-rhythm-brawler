@@ -14,7 +14,7 @@ export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway';
 
 export const ENEMY_MOTION_STYLES: Array<{ id: EnemyMotionStyle; label: string; description: string }> = [
   { id: 'run', label: 'Run on the spot', description: 'Knees up, arms pumping, one step per beat' },
-  { id: 'dance', label: 'Dance', description: 'Bounce on the beat, hips sway, arms point up in turn' },
+  { id: 'dance', label: 'Dance', description: 'Each enemy busts out its signature move: the Moonwalk, YMCA, the Floss, Thriller...' },
   { id: 'sway', label: 'Hands up', description: 'Facing you, hands in the air, knees and elbows pumping on the beat' },
   { id: 'stand', label: 'Just stand', description: 'Guard up, riding the conveyor, nodding on the beat' },
 ];
