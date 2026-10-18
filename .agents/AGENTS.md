@@ -160,6 +160,24 @@
     - Severed weapons and armor shards arc high over the player's head with realistic gravity and air drag, landing on the conveyor belt behind them.
     - Balanced debris cap maintains smooth 60 FPS performance even during high-combo sequences.
   - **211 Unit Tests**: Vitest suite expanded to 211 tests covering hero roster validity, kung-fu move kinematics, dragon spirit coiling, and ballistic debris trajectory calculations.
+- [x] **Fighting-Game Combos & Street Fighter / Mortal Kombat Little Dragon**:
+  - **Multi-Keyframe Hero Combos (`src/game/combo.ts`, `src/game/gameEngine.ts`)**:
+    - Hero moves can now execute multi-keyframe strike sequences after the input trigger.
+    - Initial strike snaps in within 50ms to strictly preserve rhythm hit timing.
+    - Follow-up keyframes (follow-up strikes, spinning kicks, flips, recoveries) rotate bones around joint pivots via `blendPoses`.
+    - Seamless combo interruption: subsequent beat inputs immediately interrupt and launch the next move from the current pose without hitching.
+  - **Rebuilt Street Fighter / Mortal Kombat Moveset (`src/game/heroMoves/littleDragon.ts`)**:
+    - The Little Dragon moves overhauled into grounded, impactful fighting-game combos:
+      - *Tier 1*: Jab-Cross, Double Snap Kick, Elbow Backfist, Palm Shove, Dragon Sweep.
+      - *Tier 2*: Rising Dragon Uppercut (Shoryuken), Hurricane Kick (Tatsumaki), Lightning Legs (Chun-Li), Flash Kick (Guile), Bicycle Kick (Liu Kang).
+      - *Tier 3*: Shadow Slide Kick (Johnny Cage), Tiger Knee (Sagat), Hundred-Hand Slap (E. Honda), Split Punch (Johnny Cage).
+      - *Tier 4*: Nunchaku Fury, Axe and Spin, Dragon Rush (dash straight, uppercut, hook), Scissor Takedown.
+      - *Tier 5*: Rising Storm (uppercut, spin kick, axe kick), Dragon Flurry (6-hit chain ending in flying kick), Final Dragon (flying kick, rebound flip, landing and beckoning).
+  - **Pose Builder Enhancements (`src/game/heroMoves/poseBuilder.ts`)**:
+    - Added `safeFold` protection to prevent fully collapsed limbs during extreme rotational bends.
+    - Added support for hit trails originating from elbows.
+  - **217 Unit Tests**: Vitest suite expanded to 217 tests covering combo keyframe playback, snap timing, mirror symmetry, ground bounds, and combo interruption.
+
 
 
 
