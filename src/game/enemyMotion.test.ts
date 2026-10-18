@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMY_MOTION_STYLES, EnemyMotionStyle, enemyPose, LIMB, solveTwoBone } from './enemyMotion';
+import { armByAngles, ENEMY_MOTION_STYLES, EnemyMotionStyle, enemyPose, LIMB, solveTwoBone } from './enemyMotion';
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 const styles: EnemyMotionStyle[] = ['stand', 'run', 'dance', 'sway'];
@@ -130,6 +130,46 @@ describe('enemyPose', () => {
       expect(b.frontHand.x).toBeCloseTo(a.frontHand.x, 6);
       expect(b.pelvis.y).toBeCloseTo(a.pelvis.y, 6);
     }
+  });
+
+  it('run: arms swing around the shoulders, elbows held bent, opposite to the legs', () => {
+    const angle = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.atan2(b.y - a.y, b.x - a.x);
+    const elbowBend = (p: ReturnType<typeof enemyPose>) => {
+      const d = angle(p.frontElbow, p.frontHand) - angle(p.frontShoulder, p.frontElbow);
+      return Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
+    };
+    const frontKneeUp = enemyPose('run', 0.5, 'samurai'); // front knee up...
+    const backKneeUp = enemyPose('run', 1.5, 'samurai');
+    // ...so the front arm is swung BACK (elbow behind the shoulder), and vice versa.
+    expect(frontKneeUp.frontElbow.x).toBeLessThan(frontKneeUp.frontShoulder.x - 5);
+    expect(backKneeUp.frontElbow.x).toBeGreaterThan(backKneeUp.frontShoulder.x + 5);
+    // The elbow stays bent at roughly a right angle all through the swing.
+    for (let beat = 0; beat < 2; beat += 0.1) {
+      expect(elbowBend(enemyPose('run', beat, 'agile'))).toBeGreaterThan(Math.PI / 4);
+    }
+  });
+
+  it('run: the lifted knee drives up high', () => {
+    const p = enemyPose('run', 0.5, 'heavy');
+    expect(p.frontKnee.y).toBeLessThan(p.pelvis.y + 20);
+    expect(p.frontKnee.x).toBeGreaterThan(p.pelvis.x + 15);
+  });
+
+  it('hands-up: both arms wave the same way together, in time with the sway', () => {
+    const left = enemyPose('sway', 3, 'agile'); // swayed to -x
+    const right = enemyPose('sway', 1, 'agile'); // swayed to +x
+    expect(right.frontHand.x).toBeGreaterThan(left.frontHand.x + 5);
+    expect(right.backHand.x).toBeGreaterThan(left.backHand.x + 5);
+  });
+
+  it('armByAngles puts the elbow and hand where the angles say, and the IK agrees', () => {
+    const shoulder = { x: 0, y: 0 };
+    const { hand, bend } = armByAngles(shoulder, 90, 0); // upper arm straight down, forearm forward
+    expect(hand.x).toBeCloseTo(LIMB.forearm, 6);
+    expect(hand.y).toBeCloseTo(LIMB.upperArm, 6);
+    const { joint } = solveTwoBone(shoulder, hand, LIMB.upperArm, LIMB.forearm, bend);
+    expect(joint.x).toBeCloseTo(0, 6);
+    expect(joint.y).toBeCloseTo(LIMB.upperArm, 6);
   });
 
   it('lists every style once for the options menu', () => {

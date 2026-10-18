@@ -1,10 +1,10 @@
-import { FLOOR, Point, PoseRig } from './enemyMotion';
+import { FLOOR, LIMB, Point, PoseRig } from './enemyMotion';
 import { AnimationLibrary, CustomAnimation, EnemyKey, settleRig } from './customAnimation';
 
 /**
  * Each enemy's signature dance (used for the "Dance" stance).
  *
- *   Titan        Gangnam Style   (horse ride, then the lasso)
+ *   Titan        Gangnam Style   (horse ride, then the lasso spinning overhead)
  *   Breaker      The Running Man
  *   Rammer       The Dab
  *   Warlord      YMCA
@@ -12,7 +12,7 @@ import { AnimationLibrary, CustomAnimation, EnemyKey, settleRig } from './custom
  *   Acid Dancer  The Moonwalk
  *   Speeder      The Floss
  *   Wraith       Thriller        (zombie claws)
- *   Seraph       Disco Point     (Saturday Night Fever)
+ *   Seraph       Disco Point     (Saturday Night Fever) + the disco roll
  *
  * Coordinates are pose units: the enemy faces RIGHT (+x), y points DOWN and
  * the feet stand on y = 68. For dances facing the camera, +x is the enemy's
@@ -24,14 +24,27 @@ import { AnimationLibrary, CustomAnimation, EnemyKey, settleRig } from './custom
 const SPINE = 30;
 const NECK = 26;
 
+/**
+ * An arm given by its joint angles instead of a hand position, for moves that
+ * spin around the pivots: `upper` is the upper arm's direction from the
+ * shoulder and `fore` the forearm's direction from the elbow, in degrees
+ * (0 = toward +x, 90 = straight down, -90 = straight up). Poses blend by
+ * rotating each bone (see blendPoses), so stepping `fore` round in 90 degree
+ * steps spins the forearm in full circles around the elbow.
+ */
+interface ArmAngles {
+  upper: number;
+  fore: number;
+}
+
 interface PoseSpec {
   pelvis: Point;
   /** Body lean in degrees: + leans toward +x */
   lean?: number;
   /** Extra head tilt in degrees on top of the lean */
   tilt?: number;
-  frontHand: Point;
-  backHand: Point;
+  frontHand: Point | ArmAngles;
+  backHand: Point | ArmAngles;
   frontFoot: Point;
   backFoot: Point;
   /**
@@ -71,6 +84,17 @@ function rig(spec: PoseSpec, facingCamera: boolean): PoseRig {
     const m = midpoint(shoulder, hand);
     return { x: m.x + side * 8, y: m.y + 8 };
   };
+  /** Turn a hand position or arm angles into the hand point plus which side the elbow sits on. */
+  const arm = (shoulder: Point, given: Point | ArmAngles, hint: Point | undefined, side: number) => {
+    if ('upper' in given) {
+      const elbow = { x: shoulder.x + Math.cos(rad(given.upper)) * LIMB.upperArm, y: shoulder.y + Math.sin(rad(given.upper)) * LIMB.upperArm };
+      const hand = { x: elbow.x + Math.cos(rad(given.fore)) * LIMB.forearm, y: elbow.y + Math.sin(rad(given.fore)) * LIMB.forearm };
+      return { hand, bend: bendToward(shoulder, hand, elbow) };
+    }
+    return { hand: given, bend: bendToward(shoulder, given, hint ?? elbowHint(shoulder, given, side)) };
+  };
+  const front = arm(frontShoulder, spec.frontHand, spec.frontElbow, 1);
+  const back = arm(backShoulder, spec.backHand, spec.backElbow, -1);
   const kneeHint = (foot: Point, side: number) => {
     const m = midpoint(pelvis, foot);
     return facingCamera ? { x: m.x + side * 10, y: m.y } : { x: m.x + 10, y: m.y };
@@ -80,13 +104,13 @@ function rig(spec: PoseSpec, facingCamera: boolean): PoseRig {
     pelvis,
     chest,
     head,
-    frontHand: spec.frontHand,
-    backHand: spec.backHand,
+    frontHand: front.hand,
+    backHand: back.hand,
     frontFoot: spec.frontFoot,
     backFoot: spec.backFoot,
     bends: {
-      frontArm: bendToward(frontShoulder, spec.frontHand, spec.frontElbow ?? elbowHint(frontShoulder, spec.frontHand, 1)),
-      backArm: bendToward(backShoulder, spec.backHand, spec.backElbow ?? elbowHint(backShoulder, spec.backHand, -1)),
+      frontArm: front.bend,
+      backArm: back.bend,
       frontLeg: bendToward(pelvis, spec.frontFoot, spec.frontKnee ?? kneeHint(spec.frontFoot, 1)),
       backLeg: bendToward(pelvis, spec.backFoot, spec.backKnee ?? kneeHint(spec.backFoot, -1)),
     },
@@ -105,10 +129,10 @@ const F = FLOOR;
 // reins, hopping from foot to foot; then one hand twirls a lasso overhead.
 // ---------------------------------------------------------------------------
 const reins = { frontHand: { x: -5, y: -4 }, backHand: { x: 5, y: -4 }, frontElbow: { x: 20, y: -4 }, backElbow: { x: -20, y: -4 } };
-const lasso = (x: number, y: number) => ({
-  frontHand: { x, y },
+/** Upper arm raised, forearm whirling round the elbow: `fore` steps round 90 degrees per pose. */
+const lasso = (fore: number) => ({
+  frontHand: { upper: -75, fore },
   backHand: { x: -5, y: -2 },
-  frontElbow: { x: 26, y: -30 },
   backElbow: { x: -20, y: -4 },
 });
 const GANGNAM = dance(true, 0.5, [
@@ -116,10 +140,10 @@ const GANGNAM = dance(true, 0.5, [
   { pelvis: { x: 1, y: 11 }, tilt: 4, ...reins, frontFoot: { x: 16, y: F - 12 }, backFoot: { x: -17, y: F } },
   { pelvis: { x: 0, y: 16 }, tilt: 0, ...reins, frontFoot: { x: 17, y: F }, backFoot: { x: -17, y: F } },
   { pelvis: { x: -1, y: 11 }, tilt: -4, ...reins, frontFoot: { x: 17, y: F }, backFoot: { x: -16, y: F - 12 } },
-  { pelvis: { x: 0, y: 16 }, tilt: 0, ...lasso(14, -60), frontFoot: { x: 17, y: F }, backFoot: { x: -17, y: F } },
-  { pelvis: { x: 1, y: 11 }, tilt: 3, ...lasso(26, -56), frontFoot: { x: 16, y: F - 12 }, backFoot: { x: -17, y: F } },
-  { pelvis: { x: 0, y: 16 }, tilt: 0, ...lasso(8, -62), frontFoot: { x: 17, y: F }, backFoot: { x: -17, y: F } },
-  { pelvis: { x: -1, y: 11 }, tilt: -3, ...lasso(22, -58), frontFoot: { x: 17, y: F }, backFoot: { x: -16, y: F - 12 } },
+  { pelvis: { x: 0, y: 16 }, tilt: 0, ...lasso(-90), frontFoot: { x: 17, y: F }, backFoot: { x: -17, y: F } },
+  { pelvis: { x: 1, y: 11 }, tilt: 3, ...lasso(0), frontFoot: { x: 16, y: F - 12 }, backFoot: { x: -17, y: F } },
+  { pelvis: { x: 0, y: 16 }, tilt: 0, ...lasso(90), frontFoot: { x: 17, y: F }, backFoot: { x: -17, y: F } },
+  { pelvis: { x: -1, y: 11 }, tilt: -3, ...lasso(180), frontFoot: { x: 17, y: F }, backFoot: { x: -16, y: F - 12 } },
 ]);
 
 // ---------------------------------------------------------------------------
@@ -353,29 +377,49 @@ const THRILLER = dance(true, 0.5, [
 // ---------------------------------------------------------------------------
 // SERAPH: Disco Point. One hand on the hip, the other points high to the
 // side, then sweeps down across the body; the hips pop the other way.
+// Then the disco roll: forearms circling each other in front of the chest.
 // ---------------------------------------------------------------------------
 const hipHand = { backHand: { x: -12, y: 6 }, backElbow: { x: -26, y: -10 } };
+const pointUp: PoseSpec = {
+  pelvis: { x: -4, y: 9 },
+  lean: 6,
+  tilt: 8,
+  frontHand: { x: 36, y: -58 },
+  ...hipHand,
+  frontFoot: { x: 14, y: F },
+  backFoot: { x: -12, y: F },
+};
+const pointDown: PoseSpec = {
+  pelvis: { x: 4, y: 12 },
+  lean: -6,
+  tilt: -10,
+  frontHand: { x: -22, y: 18 },
+  frontElbow: { x: 20, y: 0 },
+  ...hipHand,
+  frontFoot: { x: 16, y: F - 6 },
+  frontKnee: { x: 4, y: 40 },
+  backFoot: { x: -12, y: F },
+};
+/**
+ * The disco roll: elbows held out by the sides while both forearms circle
+ * round each other in front of the chest, half a turn apart.
+ */
+const roll = (fore: number, bob: number): PoseSpec => ({
+  pelvis: { x: 0, y: 10 + bob },
+  frontHand: { upper: 70, fore },
+  backHand: { upper: 110, fore: fore + 180 },
+  frontFoot: { x: 13, y: F },
+  backFoot: { x: -13, y: F },
+});
 const DISCO = dance(true, 0.5, [
-  {
-    pelvis: { x: -4, y: 9 },
-    lean: 6,
-    tilt: 8,
-    frontHand: { x: 36, y: -58 },
-    ...hipHand,
-    frontFoot: { x: 14, y: F },
-    backFoot: { x: -12, y: F },
-  },
-  {
-    pelvis: { x: 4, y: 12 },
-    lean: -6,
-    tilt: -10,
-    frontHand: { x: -22, y: 18 },
-    frontElbow: { x: 20, y: 0 },
-    ...hipHand,
-    frontFoot: { x: 16, y: F - 6 },
-    frontKnee: { x: 4, y: 40 },
-    backFoot: { x: -12, y: F },
-  },
+  pointUp,
+  pointDown,
+  pointUp,
+  pointDown,
+  roll(180, 0),
+  roll(270, 3),
+  roll(0, 0),
+  roll(90, 3),
 ]);
 
 /** Every enemy's signature move, keyed by enemy, in the "Dance" stance slot. */

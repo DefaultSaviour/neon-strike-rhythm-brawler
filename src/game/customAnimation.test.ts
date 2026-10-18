@@ -10,6 +10,7 @@ import {
   enemyPoseFor,
   handleAt,
   handlePosition,
+  lerpAngle,
   HIP_ZONE,
   LOWEST_HIPS,
   KeyValueStore,
@@ -83,6 +84,56 @@ describe('sampleAnimation', () => {
     const mid = sampleAnimation(anim, 0.25).pelvis.x;
     expect(mid).toBeGreaterThanOrEqual(Math.min(a, b) - 1e-9);
     expect(mid).toBeLessThanOrEqual(Math.max(a, b) + 1e-9);
+  });
+});
+
+describe('blending rotates around the pivots', () => {
+  const base = rigFromPose(enemyPose('stand', 0, 'samurai'));
+  const shoulderOf = (r: typeof base) => ({ x: r.chest.x + r.shoulderSpread, y: r.chest.y + 1 });
+  const reach = LIMB.upperArm + LIMB.forearm;
+
+  it('lerpAngle takes the short way round', () => {
+    const a = (350 * Math.PI) / 180;
+    const b = (10 * Math.PI) / 180;
+    const mid = lerpAngle(a, b, 0.5);
+    expect(Math.cos(mid)).toBeCloseTo(1, 6); // through 0 deg, not 180 deg
+  });
+
+  it('a straight arm sweeps round in an arc instead of cutting across', () => {
+    const sh = shoulderOf(base);
+    const up = moveHandle(base, 'frontHand', { x: sh.x, y: sh.y - 60 });
+    const out = moveHandle(base, 'frontHand', { x: sh.x + 60, y: sh.y });
+    const anim: CustomAnimation = { beatsPerPose: 1, facingCamera: false, poses: [up, out] };
+    const mid = sampleAnimation(anim, 0.5);
+    // A straight-line blend would pull the hand in to ~0.71 of the reach; an arc keeps it at full reach.
+    expect(dist(mid.frontShoulder, mid.frontHand)).toBeCloseTo(reach, 1);
+    expectLimbLengths(mid);
+  });
+
+  it('a forearm can spin all the way round its elbow', () => {
+    // Keep the upper arm still and point the forearm up, forward, down, back.
+    const pose0 = sampleAnimation({ beatsPerPose: 1, facingCamera: false, poses: [base] }, 0);
+    const elbow = pose0.frontElbow;
+    const spokes = [0, 1, 2, 3].map((q) => {
+      const a = -Math.PI / 2 + (q * Math.PI) / 2;
+      const hand = { x: elbow.x + Math.cos(a) * LIMB.forearm, y: elbow.y + Math.sin(a) * LIMB.forearm };
+      // Pick the elbow side that keeps the elbow where it is (as the signature dances do).
+      const sh = pose0.frontShoulder;
+      const cross = (hand.x - sh.x) * (elbow.y - sh.y) - (hand.y - sh.y) * (elbow.x - sh.x);
+      return { ...base, frontHand: hand, bends: { ...base.bends, frontArm: cross >= 0 ? (1 as const) : (-1 as const) } };
+    });
+    const anim: CustomAnimation = { beatsPerPose: 1, facingCamera: false, poses: spokes };
+    let turned = 0;
+    let prev: number | null = null;
+    for (let beat = 0; beat <= 4; beat += 0.05) {
+      const p = sampleAnimation(anim, beat);
+      expectLimbLengths(p);
+      const angle = Math.atan2(p.frontHand.y - p.frontElbow.y, p.frontHand.x - p.frontElbow.x);
+      if (prev !== null) turned += Math.atan2(Math.sin(angle - prev), Math.cos(angle - prev));
+      prev = angle;
+    }
+    // One full turn over the loop, always the same way round.
+    expect(Math.abs(turned)).toBeCloseTo(2 * Math.PI, 1);
   });
 });
 
