@@ -279,25 +279,53 @@ const swipe = (x: number, pelvisX: number) => ({
 const BATUSI = dance(true, 0.5, [swipe(0, 0), swipe(16, -4), swipe(0, 0), swipe(-16, 4)]);
 
 // ---------------------------------------------------------------------------
-// ACID DANCER: The Moonwalk. One foot slides back flat while the other is up
-// on its toes with the knee bent; then they swap. The body stays put (the
-// conveyor does the travelling), arms loose, leaning back slightly.
+// ACID DANCER: The Moonwalk. A quick pop up onto one toe with the knee
+// snapped forward, then a long smooth glide as the other foot slides flat
+// all the way back until the leg is straight; swap and repeat. Each loop ends
+// with Michael Jackson's toe stand and a hand to the hat brim. The body stays
+// put (the conveyor does the travelling), leaning forward into the glide.
 // ---------------------------------------------------------------------------
-const toes = F - 11;
-const moonArms = (swing: number) => ({
-  frontHand: { x: 10 + swing, y: 8 },
-  backHand: { x: -10 + swing, y: 6 },
-  frontElbow: { x: 0, y: 0 },
-  backElbow: { x: -16, y: -4 },
+const toes = F - 12;
+const glideArms = (swing: number) => ({
+  frontHand: { upper: 100 - swing, fore: 20 - swing },
+  backHand: { upper: 80 + swing, fore: 10 + swing },
 });
-const MOONWALK = dance(false, 0.5, [
-  // front foot flat and forward, back foot up on its toes with the knee bent forward
-  { pelvis: { x: 0, y: 10 }, lean: 6, ...moonArms(3), frontFoot: { x: 10, y: F }, backFoot: { x: -6, y: toes }, backKnee: { x: 30, y: 30 } },
-  // the flat foot slides back past the bent one
-  { pelvis: { x: 0, y: 12 }, lean: 6, ...moonArms(0), frontFoot: { x: -20, y: F }, backFoot: { x: 4, y: toes }, backKnee: { x: 30, y: 30 } },
-  // swap: the other foot drops flat in front, the back one pops up onto its toes
-  { pelvis: { x: 0, y: 10 }, lean: 6, ...moonArms(-3), frontFoot: { x: -6, y: toes }, frontKnee: { x: 30, y: 30 }, backFoot: { x: 10, y: F } },
-  { pelvis: { x: 0, y: 12 }, lean: 6, ...moonArms(0), frontFoot: { x: 4, y: toes }, frontKnee: { x: 30, y: 30 }, backFoot: { x: -20, y: F } },
+const popKnee = { x: 34, y: 34 };
+/** One foot flat at `slide` (sliding back), the other up on its toes under the body. */
+const glide = (flat: 'front' | 'back', slide: number, toeX: number, swing: number): PoseSpec => ({
+  pelvis: { x: 0, y: 11 },
+  lean: 9,
+  tilt: -4,
+  ...glideArms(swing),
+  ...(flat === 'front'
+    ? { frontFoot: { x: slide, y: F }, backFoot: { x: toeX, y: toes }, backKnee: popKnee }
+    : { backFoot: { x: slide, y: F }, frontFoot: { x: toeX, y: toes }, frontKnee: popKnee }),
+});
+const toeStand: PoseSpec = {
+  pelvis: { x: 2, y: 9 },
+  lean: 4,
+  tilt: 6,
+  // hand up to the hat brim, the other arm tucked at the waist
+  frontHand: { x: 12, y: -52 },
+  frontElbow: { x: 24, y: -36 },
+  backHand: { upper: 95, fore: 15 },
+  frontFoot: { x: 4, y: F - 14 },
+  frontKnee: { x: 30, y: 36 },
+  backFoot: { x: -2, y: F - 14 },
+  backKnee: { x: 26, y: 36 },
+};
+const MOONWALK = dance(false, 0.25, [
+  // front foot glides back while the back foot stays popped up on its toes...
+  glide('front', 12, -2, 10),
+  glide('front', -4, 0, 0),
+  glide('front', -24, 2, -10),
+  // ...swap: the back foot drops flat in front and glides, the front pops up
+  glide('back', 12, -2, -10),
+  glide('back', -4, 0, 0),
+  glide('back', -24, 2, 10),
+  // toe stand
+  toeStand,
+  { ...toeStand, pelvis: { x: 2, y: 7 } },
 ]);
 
 // ---------------------------------------------------------------------------

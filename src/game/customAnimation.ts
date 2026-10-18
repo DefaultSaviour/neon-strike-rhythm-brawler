@@ -32,6 +32,8 @@ export interface CustomAnimation {
   beatsPerPose: number;
   /** True for front-on poses (paired gear is mirrored, like the "Hands up" stance) */
   facingCamera: boolean;
+  /** True for upside-down poses like the handstand (gear is drawn hanging toward the floor) */
+  upsideDown?: boolean;
   poses: PoseRig[];
 }
 
@@ -204,6 +206,7 @@ export function blendPoses(a: EnemyPose, b: EnemyPose, t: number, stomp: number,
     backFoot: backLeg.end,
     stomp,
     facingCamera,
+    upsideDown: a.upsideDown,
   };
 }
 
@@ -226,9 +229,10 @@ export function sampleAnimation(anim: CustomAnimation, beat: number): EnemyPose 
   const eased = t * t * (3 - 2 * t);
   // A little stomp pulse as each pose lands (drives dust rings in the game).
   const stomp = Math.exp(-t * 5);
-  const from = assemblePose(anim.poses[index], stomp, anim.facingCamera);
+  const upsideDown = anim.upsideDown === true;
+  const from = assemblePose(anim.poses[index], stomp, anim.facingCamera, upsideDown);
   if (eased === 0) return from;
-  const to = assemblePose(anim.poses[next], stomp, anim.facingCamera);
+  const to = assemblePose(anim.poses[next], stomp, anim.facingCamera, upsideDown);
   return blendPoses(from, to, eased, stomp, anim.facingCamera);
 }
 
@@ -241,12 +245,14 @@ export function builtInAnimation(style: EnemyMotionStyle, band: FrequencyBand): 
   const beatsPerPose = 0.5;
   const poses: PoseRig[] = [];
   let facingCamera = false;
+  let upsideDown = false;
   for (let i = 0; i < count; i++) {
     const p = enemyPose(style, i * beatsPerPose, buildForBand(band));
     facingCamera = p.facingCamera;
+    upsideDown = p.upsideDown === true;
     poses.push(rigFromPose(p));
   }
-  return { beatsPerPose, facingCamera, poses };
+  return upsideDown ? { beatsPerPose, facingCamera, upsideDown, poses } : { beatsPerPose, facingCamera, poses };
 }
 
 /** The pose the game should draw: the custom animation if there is one, else the built-in stance. */
@@ -500,6 +506,7 @@ function parseAnimation(v: unknown): CustomAnimation | null {
   return {
     beatsPerPose: bpp,
     facingCamera: v.facingCamera === true,
+    ...(v.upsideDown === true ? { upsideDown: true } : {}),
     poses: (poses as PoseRig[]).map(keepHipsInZone),
   };
 }

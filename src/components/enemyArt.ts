@@ -1,5 +1,5 @@
 import { EnemyTier, FrequencyBand } from '../types/game';
-import { EnemyPose, Point } from '../game/enemyMotion';
+import { EnemyPose, FLOOR as FLOOR_Y, Point } from '../game/enemyMotion';
 import { BodyJoints, drawNeonBody, neonHead, neonShape } from './neonBody';
 import { getEnemyStyle } from '../game/enemyStyles';
 
@@ -411,6 +411,31 @@ const LOOKS: Record<FrequencyBand, Record<EnemyTier, EnemyLook>> = {
   },
 };
 
+/**
+ * Mirror a pose top-to-bottom (y -> -y). Doing it twice gives back the same
+ * pose, which is how upside-down poses are drawn (see drawEnemyArt).
+ */
+export function flipPoseVertically(p: EnemyPose): EnemyPose {
+  const f = (q: Point): Point => ({ x: q.x, y: -q.y });
+  return {
+    ...p,
+    head: f(p.head),
+    chest: f(p.chest),
+    pelvis: f(p.pelvis),
+    frontShoulder: f(p.frontShoulder),
+    frontElbow: f(p.frontElbow),
+    frontHand: f(p.frontHand),
+    backShoulder: f(p.backShoulder),
+    backElbow: f(p.backElbow),
+    backHand: f(p.backHand),
+    frontKnee: f(p.frontKnee),
+    frontFoot: f(p.frontFoot),
+    backKnee: f(p.backKnee),
+    backFoot: f(p.backFoot),
+    upsideDown: !p.upsideDown,
+  };
+}
+
 /** Map the enemy pose onto the shared body-joint names (front = near side). */
 export function enemyBodyJoints(p: EnemyPose): BodyJoints {
   return {
@@ -445,6 +470,21 @@ export function drawEnemyArt(
   beat: number,
   flash: boolean
 ) {
+  if (pose.upsideDown) {
+    // Handstand: draw the body the right way up, then flip the canvas, so the
+    // joints land where they really are AND hats / helmets / halos hang
+    // toward the floor like they would on an upside-down body.
+    ctx.save();
+    // Anything hanging past the floor (long horns, crests, halos) is cut off
+    // at the floor line instead of poking through it.
+    ctx.beginPath();
+    ctx.rect(-1000, -1000, 2000, 1000 + FLOOR_Y);
+    ctx.clip();
+    ctx.scale(1, -1);
+    drawEnemyArt(ctx, flipPoseVertically(pose), band, tier, colors, beat, flash);
+    ctx.restore();
+    return;
+  }
   const look = LOOKS[band][tier];
   const front = pose.facingCamera;
   const g: GearEnv = {
