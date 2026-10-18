@@ -1,13 +1,14 @@
 import React from 'react';
 import { AudioSettings, HitSoundMode } from '../types/game';
 import { ENEMY_MOTION_STYLES } from '../game/enemyMotion';
+import { HEROES } from '../game/heroes';
 
 /**
  * Quick in-game options, shared by the pause menu and the Settings tab.
  * Pick which sections to show with `sections`.
  */
 
-export type OptionSection = 'motion' | 'hitSound' | 'volume' | 'latency';
+export type OptionSection = 'hero' | 'motion' | 'hitSound' | 'volume' | 'latency';
 
 const HIT_SOUND_OPTIONS: Array<{ id: HitSoundMode; label: string; description: string }> = [
   { id: 'both', label: 'Tone + boost', description: 'A note in key with the song, plus a short music volume boost' },
@@ -98,10 +99,19 @@ function Slider({
 export const GameOptions: React.FC<GameOptionsProps> = ({
   settings,
   onUpdateSettings,
-  sections = ['motion', 'hitSound', 'volume', 'latency'],
+  sections = ['hero', 'motion', 'hitSound', 'volume', 'latency'],
 }) => {
   return (
     <div className="flex flex-col gap-5 text-left">
+      {sections.includes('hero') && (
+        <ChoiceGrid
+          title="Hero"
+          options={HEROES.map((h) => ({ id: h.id, label: h.label, description: h.description }))}
+          value={settings.hero}
+          onChange={(hero) => onUpdateSettings({ hero })}
+        />
+      )}
+
       {sections.includes('motion') && (
         <ChoiceGrid
           title="Enemy Movement"

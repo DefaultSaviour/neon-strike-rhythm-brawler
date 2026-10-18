@@ -730,6 +730,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     facing: engine.attackDirection === 'left' ? -1 : 1,
     time: performance.now() / 1000,
     corePulse: audioEngine.bassMeter,
+    hero: engine.settings.hero,
   });
 
   // Blade slash, in front of the body: a glowing crescent with a white-hot edge
@@ -739,7 +740,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
 
   // Move & tier banner
   if (engine.isAttacking && combo > 0) {
-    const move = getMoveForCombo(combo, engine.currentMoveIndex);
+    const move = getMoveForCombo(combo, engine.currentMoveIndex, engine.hero.moves);
     ctx.save();
     ctx.font = '800 9px "Outfit", sans-serif';
     ctx.fillStyle = tier.color;

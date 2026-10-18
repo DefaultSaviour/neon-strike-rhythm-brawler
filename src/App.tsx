@@ -40,6 +40,7 @@ export default function App() {
     oneButtonMode: false,
     enemyMotion: 'run',
     hitSound: 'both',
+    hero: 'striker',
   });
 
   const callbacksRef = useRef({
@@ -507,6 +508,7 @@ export default function App() {
           cleared={clearedOutcome}
           deathReport={deathReport}
           runProgress={engine.lastRun}
+          heroId={audioSettings.hero}
           track={selectedTrack}
           scoreState={scoreState}
           highScoreRecord={engine.getHighScore(selectedTrack.id)}

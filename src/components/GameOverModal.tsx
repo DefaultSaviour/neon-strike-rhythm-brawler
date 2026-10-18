@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { GameScoreState, Track, HighScoreRecord } from '../types/game';
 import type { DeathReport } from '../game/timing';
 import type { RunProgress } from '../game/runProgress';
+import type { HeroId } from '../game/heroes';
 import { RunProgressBar } from './RunProgressBar';
 import { RotateCcw, Music, Trophy, Flame, Target } from 'lucide-react';
 
@@ -23,6 +24,8 @@ interface GameOverModalProps {
   deathReport?: DeathReport | null;
   /** How far through the song this run got (drives the progress bar) */
   runProgress?: RunProgress | null;
+  /** The hero you played (the progress-bar runner is drawn as them) */
+  heroId?: HeroId;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -38,6 +41,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onApplyLatencyOffset,
   deathReport = null,
   runProgress = null,
+  heroId,
 }) => {
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
   // Freeze the suggestion when the screen opens: once applied, the setting
@@ -130,7 +134,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           )}
           {runProgress && (
             <div className="mt-4 w-full self-stretch">
-              <RunProgressBar run={runProgress} />
+              <RunProgressBar run={runProgress} heroId={heroId} />
             </div>
           )}
         </div>

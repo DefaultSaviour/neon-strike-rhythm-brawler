@@ -49,6 +49,7 @@ export function blendPose(a: SkeletonPose, b: SkeletonPose, t: number): Skeleton
     rightKnee: mix(a.rightKnee, b.rightKnee),
     rightFoot: mix(a.rightFoot, b.rightFoot),
     scarf: mixList(a.scarf, b.scarf),
+    prop: b.prop ?? a.prop,
     bladeSlash: b.bladeSlash ?? a.bladeSlash,
   };
 }

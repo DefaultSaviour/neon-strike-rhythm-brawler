@@ -323,7 +323,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
 
           {activeTab === 'settings' && (
             <div className="flex flex-col gap-6 max-w-lg mx-auto">
-              <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['motion', 'hitSound']} />
+              <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['hero', 'motion', 'hitSound']} />
 
               {/* Music Volume */}
               <div className="flex flex-col gap-2">

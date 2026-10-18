@@ -1,5 +1,6 @@
 import { Point2D, SkeletonPose } from '../types/game';
 import { FighterTier } from '../game/fighterTier';
+import type { HeroId } from '../game/heroes';
 import { bodyFill, drawNeonBody, neonHead, neonLimb } from './neonBody';
 
 /**
@@ -23,6 +24,8 @@ export interface FighterDrawOptions {
   combo?: number;
   /** Random source for the lightning crackle */
   random?: () => number;
+  /** Which hero's outfit to draw (default: the original Neon Striker) */
+  hero?: HeroId;
 }
 
 type Ctx = CanvasRenderingContext2D;
@@ -122,6 +125,10 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   );
   neonHead(ctx, pose.head, 9, { color: tier.color, glow: tier.glow });
 
+  // 5b. Hero outfit details on top of the body
+  if (opts.hero === 'dragon') drawLittleDragonOutfit(ctx, pose, tier);
+  if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
+
   // 6. Visor and pulsing chest core
   ctx.save();
   ctx.fillStyle = tier.visorColor;
@@ -135,6 +142,79 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   ctx.beginPath();
   ctx.arc(pose.chest.x, pose.chest.y + 4, core, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The Little Dragon: a stripe down the side of the tracksuit (yellow, or dark
+ * when the combo glow is itself yellow) and a mop of black hair.
+ */
+function drawLittleDragonOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier) {
+  const yellowish = tier.color === '#ffe600' || tier.color === '#fff1a8';
+  const stripe = yellowish ? '#1a1a1a' : '#ffe600';
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = stripe;
+  ctx.lineWidth = 1.8;
+  ctx.shadowColor = stripe;
+  ctx.shadowBlur = yellowish ? 0 : 6;
+  ctx.beginPath();
+  ctx.moveTo(pose.chest.x, pose.chest.y + 2);
+  ctx.lineTo(pose.pelvis.x, pose.pelvis.y);
+  ctx.lineTo(pose.leftKnee.x, pose.leftKnee.y);
+  ctx.lineTo(pose.leftFoot.x, pose.leftFoot.y);
+  ctx.stroke();
+  // Hair: a black bowl cut, a little bigger than the head, with a straight
+  // fringe across the forehead, so it reads as its own shape.
+  const h = pose.head;
+  ctx.fillStyle = '#0d0d16';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y - 0.5, 11.5, Math.PI * 0.92, Math.PI * 2.08);
+  ctx.lineTo(h.x + 9, h.y - 3.5);
+  ctx.lineTo(h.x - 9, h.y - 3.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Nunchaku in the lead hand: one handle gripped, the other swung out along the strike. */
+function drawNunchaku(ctx: Ctx, pose: SkeletonPose) {
+  const hand = pose.leftHand;
+  const fx = hand.x - pose.leftElbow.x;
+  const fy = hand.y - pose.leftElbow.y;
+  const fl = Math.hypot(fx, fy) || 1;
+  const grip = { x: hand.x + (fx / fl) * 10, y: hand.y + (fy / fl) * 10 };
+  const aim = pose.bladeSlash?.end ?? { x: grip.x + (fx / fl) * 20, y: grip.y + (fy / fl) * 20 };
+  const ax = aim.x - grip.x;
+  const ay = aim.y - grip.y;
+  const al = Math.hypot(ax, ay) || 1;
+  const link = { x: grip.x + (ax / al) * 5, y: grip.y + (ay / al) * 5 };
+  const tip = { x: link.x + (ax / al) * 12, y: link.y + (ay / al) * 12 };
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#ffb347';
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = '#ffb347';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(hand.x, hand.y);
+  ctx.lineTo(grip.x, grip.y);
+  ctx.moveTo(link.x, link.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#d0d0e0';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([1.5, 1.5]);
+  ctx.beginPath();
+  ctx.moveTo(grip.x, grip.y);
+  ctx.lineTo(link.x, link.y);
+  ctx.stroke();
   ctx.restore();
 }
 
