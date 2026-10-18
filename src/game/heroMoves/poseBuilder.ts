@@ -1,5 +1,5 @@
-import { SkeletonPose } from '../../types/game';
-import { assemblePose, FLOOR, LIMB, limbByAngles, Point } from '../enemyMotion';
+import { MoveKey, SkeletonPose } from '../../types/game';
+import { assemblePose, EnemyPose, FLOOR, LIMB, limbByAngles, Point } from '../enemyMotion';
 import { playerPoseFromEnemyPose } from '../motion';
 
 /**
@@ -20,7 +20,7 @@ export interface LimbAngles {
 
 /** A trail for the hit effect, swept by the end of one limb. */
 export interface TrailSpec {
-  from: 'frontHand' | 'backHand' | 'frontFoot' | 'backFoot' | 'frontKnee';
+  from: 'frontHand' | 'backHand' | 'frontFoot' | 'backFoot' | 'frontKnee' | 'frontElbow';
   /** How far the trail reaches past the limb (world units) */
   reach?: number;
   /** Bend of the crescent (+ curves one way, - the other) */
@@ -51,10 +51,22 @@ function isAngles(v: LimbAngles | Point): v is LimbAngles {
   return 'upper' in v;
 }
 
+/**
+ * A limb folded exactly back on itself puts the hand / foot right on the
+ * shoulder / hip, where the joint maths can't tell which way the elbow goes.
+ * Nudge it a few degrees open so the pose always stays well defined.
+ */
+export function safeFold(a: LimbAngles): LimbAngles {
+  const diff = ((((a.lower - a.upper) % 360) + 540) % 360) - 180;
+  if (Math.abs(diff) <= 176) return a;
+  return { upper: a.upper, lower: a.lower - Math.sign(diff || 1) * 4 };
+}
+
 /** A leg from its angles, or planted at a point (knee bent forward). Never below the floor. */
 function leg(pelvis: Point, given: LimbAngles | Point): { foot: Point; bend: 1 | -1 } {
   if (isAngles(given)) {
-    const { end, bend } = limbByAngles(pelvis, given.upper, given.lower, LIMB.thigh, LIMB.shin);
+    const safe = safeFold(given);
+    const { end, bend } = limbByAngles(pelvis, safe.upper, safe.lower, LIMB.thigh, LIMB.shin);
     if (end.y <= FLOOR) return { foot: end, bend };
     // Would poke through the floor: keep the same knee side, stand on the floor instead.
     return { foot: { x: end.x, y: FLOOR }, bend };
@@ -62,7 +74,8 @@ function leg(pelvis: Point, given: LimbAngles | Point): { foot: Point; bend: 1 |
   return { foot: { x: given.x, y: Math.min(FLOOR, given.y) }, bend: -1 };
 }
 
-export function buildFighterPose(spec: FighterSpec, trailColor: string): SkeletonPose {
+/** Build one keyframe (enemy-style skeleton plus its trail) from joint angles. */
+export function buildKey(spec: FighterSpec, trailColor: string, ms = 0): MoveKey {
   const lean = rad(spec.lean ?? 0);
   const tilt = rad((spec.lean ?? 0) + (spec.tilt ?? 0));
   const pelvis = spec.pelvis;
@@ -70,12 +83,14 @@ export function buildFighterPose(spec: FighterSpec, trailColor: string): Skeleto
   const head = { x: chest.x + Math.sin(tilt) * NECK, y: chest.y - Math.cos(tilt) * NECK };
   const frontShoulder = { x: chest.x + SHOULDER_SPREAD, y: chest.y + 1 };
   const backShoulder = { x: chest.x - SHOULDER_SPREAD, y: chest.y + 1 };
-  const frontArm = limbByAngles(frontShoulder, spec.frontArm.upper, spec.frontArm.lower, LIMB.upperArm, LIMB.forearm);
-  const backArm = limbByAngles(backShoulder, spec.backArm.upper, spec.backArm.lower, LIMB.upperArm, LIMB.forearm);
+  const fa = safeFold(spec.frontArm);
+  const ba = safeFold(spec.backArm);
+  const frontArm = limbByAngles(frontShoulder, fa.upper, fa.lower, LIMB.upperArm, LIMB.forearm);
+  const backArm = limbByAngles(backShoulder, ba.upper, ba.lower, LIMB.upperArm, LIMB.forearm);
   const frontLeg = leg(pelvis, spec.frontLeg);
   const backLeg = leg(pelvis, spec.backLeg);
 
-  const enemyStyle = assemblePose(
+  const pose = assemblePose(
     {
       pelvis,
       chest,
@@ -90,15 +105,29 @@ export function buildFighterPose(spec: FighterSpec, trailColor: string): Skeleto
     0,
     false
   );
-  const pose = playerPoseFromEnemyPose(enemyStyle);
+  return {
+    pose,
+    ms,
+    ...(spec.trail ? { trail: trailFor(pose, spec.trail, trailColor) } : {}),
+    ...(spec.prop ? { prop: spec.prop } : {}),
+  };
+}
+
+/** A keyframe as the player's skeleton (no scarf), with its trail and weapon. */
+export function keyToPlayerPose(key: MoveKey): SkeletonPose {
+  const pose = playerPoseFromEnemyPose(key.pose);
   delete pose.scarf;
-  if (spec.prop) pose.prop = spec.prop;
-  if (spec.trail) pose.bladeSlash = trailFor(enemyStyle, spec.trail, trailColor);
+  if (key.prop) pose.prop = key.prop;
+  if (key.trail) pose.bladeSlash = key.trail;
   return pose;
 }
 
+export function buildFighterPose(spec: FighterSpec, trailColor: string): SkeletonPose {
+  return keyToPlayerPose(buildKey(spec, trailColor));
+}
+
 /** The glowing crescent swept by a limb: from partway down the limb to just past its end. */
-function trailFor(p: ReturnType<typeof assemblePose>, trail: TrailSpec, color: string): NonNullable<SkeletonPose['bladeSlash']> {
+function trailFor(p: EnemyPose, trail: TrailSpec, color: string): NonNullable<SkeletonPose['bladeSlash']> {
   const [joint, end] =
     trail.from === 'frontHand'
       ? [p.frontElbow, p.frontHand]
@@ -108,7 +137,9 @@ function trailFor(p: ReturnType<typeof assemblePose>, trail: TrailSpec, color: s
           ? [p.frontKnee, p.frontFoot]
           : trail.from === 'backFoot'
             ? [p.backKnee, p.backFoot]
-            : [p.pelvis, p.frontKnee];
+            : trail.from === 'frontElbow'
+              ? [p.frontShoulder, p.frontElbow]
+              : [p.pelvis, p.frontKnee];
   const dx = end.x - joint.x;
   const dy = end.y - joint.y;
   const len = Math.hypot(dx, dy) || 1;
