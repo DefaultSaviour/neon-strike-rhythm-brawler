@@ -40,7 +40,7 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
     if (opts.hero === 'dragon') drawDragonSpirit(ctx, pose, opts.time);
     else if (opts.hero === 'babaYaga') drawGoldCoinHalo(ctx, pose, opts.time);
     else if (opts.hero === 'theOne') drawCodeRain(ctx, pose, opts.time);
-    else if (opts.hero === 'drunkenMaster') drawGourdOrbit(ctx, pose, opts.time, 'back');
+    else if (opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'back');
     else drawAngelWings(ctx, pose, opts.time);
   }
 
@@ -117,8 +117,8 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   if (opts.hero === 'theOne') drawTheOneOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'drunkenMaster') drawDrunkenOutfit(ctx, pose, tier, opts.facing, combo);
   if (pose.prop === 'gourd' || pose.prop === 'gourdSwing' || pose.prop === 'bench') drawDrunkenProps(ctx, pose, opts.facing);
-  // ...and the front half of the Drunken Master's orbit, passing in front of him
-  if (tier.ascended && opts.hero === 'drunkenMaster') drawGourdOrbit(ctx, pose, opts.time, 'front');
+  // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
+  if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
   if (pose.prop === 'pistol' || pose.prop === 'pistols' || pose.prop === 'shotgun' || pose.prop === 'pencil') {
     drawHandWeapons(ctx, pose, opts.facing, tier.ascended && opts.hero === 'babaYaga');
@@ -510,53 +510,103 @@ function drawGourd(ctx: Ctx, neck: Point2D, down: Point2D, scale = 1) {
   ctx.restore();
 }
 
-/** Where the Drunken Master's two orbiting gourds are (top-level form), and whether each is in front of him. */
-export function gourdOrbit(pose: SkeletonPose, time: number) {
-  return [0, Math.PI].map((phase) => {
-    const a = time * 2.2 + phase;
-    return {
-      x: pose.chest.x + Math.cos(a) * 46,
-      y: pose.chest.y + 8 + Math.sin(a) * 14,
-      angle: a,
-      front: Math.sin(a) > 0,
-    };
-  });
+/** How fast the Drunken Master's dizzy halo spins (radians per second): faster as the combo climbs. */
+export function dizzySpeed(combo: number): number {
+  return 2.6 + Math.min(4, combo * 0.04);
 }
 
 /**
- * The Drunken Master's top-level form: two big glowing wine gourds orbiting
- * him on a tilted ring, trailing drops of wine. Drawn in two halves, so the
- * gourds pass behind him and then in front of him.
+ * The items circling the Drunken Master's head in his top-level form, on a
+ * tilted ring: stars and little birds, and whether each is in front of his
+ * head right now.
  */
-function drawGourdOrbit(ctx: Ctx, pose: SkeletonPose, time: number, half: 'back' | 'front') {
-  ctx.save();
-  if (half === 'back') {
-    // The faint orbit ring itself
-    ctx.strokeStyle = 'rgba(255, 179, 71, 0.35)';
-    ctx.shadowColor = '#ffb347';
-    ctx.shadowBlur = 10;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(pose.chest.x, pose.chest.y + 8, 46, 14, 0, 0, Math.PI * 2);
-    ctx.stroke();
+export function dizzyHalo(pose: SkeletonPose, time: number, combo: number) {
+  const kinds = ['star', 'bird', 'star', 'star', 'bird', 'star'] as const;
+  const centre = { x: pose.head.x, y: pose.head.y - 16 };
+  return kinds.map((kind, i) => {
+    const a = time * dizzySpeed(combo) + (i / kinds.length) * Math.PI * 2;
+    return { kind, x: centre.x + Math.cos(a) * 34, y: centre.y + Math.sin(a) * 10, front: Math.sin(a) > 0 };
+  });
+}
+
+/** A fat cartoon five-point star. */
+function drawCartoonStar(ctx: Ctx, x: number, y: number, r: number) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    const t = -Math.PI / 2 + (i * Math.PI) / 5;
+    ctx.lineTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr);
   }
-  for (const g of gourdOrbit(pose, time)) {
-    if (g.front !== (half === 'front')) continue;
-    // Drops of wine flung off behind it along the orbit
-    ctx.fillStyle = '#ffcf7a';
-    ctx.shadowColor = '#ffb347';
-    ctx.shadowBlur = 8;
-    for (let i = 1; i <= 4; i++) {
-      const a = g.angle - i * 0.28;
-      ctx.globalAlpha = 0.8 - i * 0.17;
-      ctx.beginPath();
-      ctx.arc(pose.chest.x + Math.cos(a) * 46, pose.chest.y + 8 + Math.sin(a) * 14, 2.4 - i * 0.3, 0, Math.PI * 2);
-      ctx.fill();
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+}
+
+/** A little cartoon bird: round body, a flapping wing, a beak. */
+function drawCartoonBird(ctx: Ctx, x: number, y: number, flap: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1.4, 1.4);
+  ctx.translate(-x, -y);
+  ctx.fillStyle = '#7fd8ff';
+  ctx.beginPath();
+  ctx.arc(x, y, 4.2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fill();
+  // Wing flapping up and down
+  ctx.beginPath();
+  ctx.moveTo(x - 1, y);
+  ctx.lineTo(x - 6, y - 4 * flap);
+  ctx.lineTo(x + 2, y - 1);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+  // Beak
+  ctx.fillStyle = '#ffb347';
+  ctx.beginPath();
+  ctx.moveTo(x + 4, y - 1);
+  ctx.lineTo(x + 7.5, y);
+  ctx.lineTo(x + 4, y + 1.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The Drunken Master's top-level form: a cartoon "dizzy halo" of stars and
+ * little birds circling his head, spinning faster as the combo grows. Drawn
+ * in two halves round the head, so they pass behind it and then in front.
+ */
+function drawDizzyHalo(ctx: Ctx, pose: SkeletonPose, time: number, combo: number, half: 'back' | 'front') {
+  const items = dizzyHalo(pose, time, combo);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.6;
+  ctx.shadowColor = '#fff1a8';
+  ctx.shadowBlur = 10;
+  if (half === 'back') {
+    // The dizzy ring itself: a faint tilted loop round the head
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 241, 168, 0.4)';
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.ellipse(pose.head.x, pose.head.y - 16, 34, 10, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  const flap = Math.sin(time * 18) > 0 ? 1 : -0.4;
+  for (const it of items) {
+    if (it.front !== (half === 'front')) continue;
+    // Items behind the head are a touch smaller and dimmer, for depth
+    const depth = it.front ? 1 : 0.8;
+    ctx.globalAlpha = it.front ? 1 : 0.75;
+    if (it.kind === 'star') {
+      ctx.fillStyle = '#ffe14a';
+      drawCartoonStar(ctx, it.x, it.y, 8.5 * depth);
+    } else {
+      drawCartoonBird(ctx, it.x, it.y, flap);
     }
-    ctx.globalAlpha = 1;
-    // Tumbling as it flies
-    const spin = g.angle * 1.5;
-    drawGourd(ctx, { x: g.x - Math.sin(spin) * 10, y: g.y - Math.cos(spin) * 10 }, { x: Math.sin(spin), y: Math.cos(spin) }, 1.7);
   }
   ctx.restore();
 }
