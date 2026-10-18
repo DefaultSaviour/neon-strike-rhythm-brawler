@@ -9,6 +9,7 @@ import {
   FLOOR,
   LIMB,
   LimbBends,
+  solveTwoBone,
   Point,
   PoseRig,
 } from './enemyMotion';
@@ -139,18 +140,70 @@ function lerpPoint(a: Point, b: Point, t: number): Point {
   return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
 }
 
-/** Blend two rigs. Elbow / knee bend directions switch halfway through. */
-export function lerpRig(a: PoseRig, b: PoseRig, t: number): PoseRig {
+/** Blend two angles (radians) the short way round, so 350 deg -> 10 deg passes through 0. */
+export function lerpAngle(a: number, b: number, t: number): number {
+  const d = Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  return a + d * t;
+}
+
+interface Polar {
+  angle: number;
+  length: number;
+}
+
+function polar(from: Point, to: Point): Polar {
+  return { angle: Math.atan2(to.y - from.y, to.x - from.x), length: Math.hypot(to.x - from.x, to.y - from.y) };
+}
+
+/** Rotate around `pivot`: blend the direction and length of a bone between two poses. */
+function swing(pivot: Point, a: Polar, b: Polar, t: number): Point {
+  const angle = lerpAngle(a.angle, b.angle, t);
+  const length = lerp(a.length, b.length, t);
+  return { x: pivot.x + Math.cos(angle) * length, y: pivot.y + Math.sin(angle) * length };
+}
+
+/**
+ * Blend between two poses the way a real body moves: every bone ROTATES
+ * around its pivot instead of sliding in a straight line.
+ *  - The spine swings around the hips and the head around the neck.
+ *  - Upper arms rotate around the shoulders and forearms around the elbows,
+ *    so arms sweep in arcs and can spin all the way round (a lasso, a disco roll).
+ *  - Feet slide in straight lines so planted feet stay on the floor; the
+ *    knees follow by IK.
+ */
+export function blendPoses(a: EnemyPose, b: EnemyPose, t: number, stomp: number, facingCamera: boolean): EnemyPose {
+  const pelvis = lerpPoint(a.pelvis, b.pelvis, t);
+  const chest = swing(pelvis, polar(a.pelvis, a.chest), polar(b.pelvis, b.chest), t);
+  const head = swing(chest, polar(a.chest, a.head), polar(b.chest, b.head), t);
+  const spread = lerp((a.frontShoulder.x - a.backShoulder.x) / 2, (b.frontShoulder.x - b.backShoulder.x) / 2, t);
+  const frontShoulder = { x: chest.x + spread, y: chest.y + 1 };
+  const backShoulder = { x: chest.x - spread, y: chest.y + 1 };
+
+  const frontElbow = swing(frontShoulder, polar(a.frontShoulder, a.frontElbow), polar(b.frontShoulder, b.frontElbow), t);
+  const frontHand = swing(frontElbow, polar(a.frontElbow, a.frontHand), polar(b.frontElbow, b.frontHand), t);
+  const backElbow = swing(backShoulder, polar(a.backShoulder, a.backElbow), polar(b.backShoulder, b.backElbow), t);
+  const backHand = swing(backElbow, polar(a.backElbow, a.backHand), polar(b.backElbow, b.backHand), t);
+
+  const knees = t < 0.5 ? a : b;
+  const frontLeg = solveTwoBone(pelvis, lerpPoint(a.frontFoot, b.frontFoot, t), LIMB.thigh, LIMB.shin, bendOf(knees.pelvis, knees.frontFoot, knees.frontKnee));
+  const backLeg = solveTwoBone(pelvis, lerpPoint(a.backFoot, b.backFoot, t), LIMB.thigh, LIMB.shin, bendOf(knees.pelvis, knees.backFoot, knees.backKnee));
+
   return {
-    pelvis: lerpPoint(a.pelvis, b.pelvis, t),
-    chest: lerpPoint(a.chest, b.chest, t),
-    head: lerpPoint(a.head, b.head, t),
-    frontHand: lerpPoint(a.frontHand, b.frontHand, t),
-    backHand: lerpPoint(a.backHand, b.backHand, t),
-    frontFoot: lerpPoint(a.frontFoot, b.frontFoot, t),
-    backFoot: lerpPoint(a.backFoot, b.backFoot, t),
-    bends: t < 0.5 ? { ...a.bends } : { ...b.bends },
-    shoulderSpread: lerp(a.shoulderSpread, b.shoulderSpread, t),
+    head,
+    chest,
+    pelvis,
+    frontShoulder,
+    frontElbow,
+    frontHand,
+    backShoulder,
+    backElbow,
+    backHand,
+    frontKnee: frontLeg.joint,
+    frontFoot: frontLeg.end,
+    backKnee: backLeg.joint,
+    backFoot: backLeg.end,
+    stomp,
+    facingCamera,
   };
 }
 
@@ -165,15 +218,18 @@ export function animationPhase(anim: CustomAnimation, beat: number): { index: nu
 
 /**
  * The enemy's pose `beat` beats into the song. Each pose is hit exactly on
- * its beat, then eases into the next one (smoothstep: slow out, slow in).
+ * its beat, then eases into the next one (smoothstep: slow out, slow in),
+ * with every bone rotating around its pivot (see blendPoses).
  */
 export function sampleAnimation(anim: CustomAnimation, beat: number): EnemyPose {
   const { index, next, t } = animationPhase(anim, beat);
   const eased = t * t * (3 - 2 * t);
-  const rig = lerpRig(anim.poses[index], anim.poses[next], eased);
   // A little stomp pulse as each pose lands (drives dust rings in the game).
   const stomp = Math.exp(-t * 5);
-  return assemblePose(rig, stomp, anim.facingCamera);
+  const from = assemblePose(anim.poses[index], stomp, anim.facingCamera);
+  if (eased === 0) return from;
+  const to = assemblePose(anim.poses[next], stomp, anim.facingCamera);
+  return blendPoses(from, to, eased, stomp, anim.facingCamera);
 }
 
 /**
