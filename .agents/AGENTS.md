@@ -148,6 +148,19 @@
   - **Smooth Hands-Up Groove**: Overhauled sway and forearm fold kinematics so the body sways strictly on beat with zero frame-jumping or snapping.
   - **Inverted Handstand Foot Gear Suppression (`src/components/enemyArt.ts`)**: Skips floor-oriented foot gear (Speeder boot jets, Wraith hover discs, Titan stomp shockwaves) when enemies are inverted in handstands.
   - **194 Unit Tests**: Vitest suite expanded to 194 tests covering snap-and-hold robot timing, headbang peak velocity, zombie reach, and smooth hands-up interpolation.
+- [x] **Hero System & The Little Dragon + Upgraded Debris Explosions**:
+  - **Hero System (`src/game/heroes.ts`, `src/components/fighterArt.ts`, `src/game/heroMoves/poseBuilder.ts`)**:
+    - Selectable player heroes configurable via Options in both Pause Menu and Track Select.
+    - Each hero features distinct idle stances, custom outfits, attack movesets across 5 combo tiers, and unique top-level Ascended forms (combo 50+ / God Tier).
+    - **Neon Striker**: Original cyber-brawler with plasma angel wings at God Tier.
+    - **The Little Dragon**: Inspired by 70s kung-fu cinema; yellow tracksuit stripe, black bowl cut, and 21 distinct moves (Lead Straight, Finger Jab, One-Inch Punch, Flying Side Kick, Nunchaku Whirlwind, Dragon's Roar, etc.). Ascended form summons a revolving golden dragon spirit coiling from hips to head.
+    - Results screen progress-bar runner dynamically adapts to chosen hero outfit and ascended form.
+  - **High-Impact Debris Explosions (`src/game/debrisPhysics.ts`)**:
+    - Enemy heads pop vertically straight up while spinning.
+    - Severed weapons and armor shards arc high over the player's head with realistic gravity and air drag, landing on the conveyor belt behind them.
+    - Balanced debris cap maintains smooth 60 FPS performance even during high-combo sequences.
+  - **211 Unit Tests**: Vitest suite expanded to 211 tests covering hero roster validity, kung-fu move kinematics, dragon spirit coiling, and ballistic debris trajectory calculations.
+
 
 
 
