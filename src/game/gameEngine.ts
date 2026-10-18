@@ -8,6 +8,7 @@ import {
   GameScoreState,
   HighScoreRecord,
   SkeletonPose,
+  MoveKey,
   AudioSettings,
 } from '../types/game';
 import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
@@ -19,6 +20,7 @@ import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, tri
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
+import { comboDuration, comboFrame } from './combo';
 import { FLOOR_Y } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { recordRunProgress, RunProgress } from './runProgress';
@@ -124,6 +126,8 @@ export class GameEngine {
   private strikeDuration: number = 0.2;
   private strikeFromPose: SkeletonPose = { ...IDLE_POSE };
   private strikeLunge: number = 0;
+  /** Keyframes of the combo being played, or null for a single-pose strike */
+  private strikeKeys: MoveKey[] | null = null;
 
   constructor(callbacks: GameEngineCallbacks) {
     this.callbacks = callbacks;
@@ -372,7 +376,11 @@ export class GameEngine {
     }
 
     const currentMove = getMoveForCombo(this.scoreState.combo, this.currentMoveIndex, this.hero.moves);
-    this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
+    if (currentMove.sequence) {
+      this.startStrike(lane, getOrientedPose(currentMove.pose, lane), comboDuration(currentMove.sequence), LUNGE_DISTANCE, currentMove.sequence);
+    } else {
+      this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
+    }
 
     const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
     // One judgement word per side: the newest replaces the last, so they never stack up.
@@ -399,8 +407,9 @@ export class GameEngine {
   }
 
   /** Begin a strike animation from wherever the fighter currently is. */
-  private startStrike(lane: Lane, pose: SkeletonPose, durationSec: number, lunge: number) {
+  private startStrike(lane: Lane, pose: SkeletonPose, durationSec: number, lunge: number, keys: MoveKey[] | null = null) {
     this.isAttacking = true;
+    this.strikeKeys = keys;
     this.attackDirection = lane;
     this.strikeFromPose = this.currentPose;
     this.lastAttackPose = pose;
@@ -668,7 +677,12 @@ export class GameEngine {
         this.playerOffsetX = 0;
         this.currentPose = restPose;
       } else {
-        const frame = strikeFrame(progress, this.strikeFromPose, this.lastAttackPose, restPose, this.strikeLunge);
+        const lane = this.attackDirection;
+        const frame = this.strikeKeys
+          ? comboFrame(this.animClock - this.strikeStart, this.strikeFromPose, this.strikeKeys, restPose, this.strikeLunge, (p) =>
+              getOrientedPose(p, lane)
+            )
+          : strikeFrame(progress, this.strikeFromPose, this.lastAttackPose, restPose, this.strikeLunge);
         this.currentPose = frame.pose;
         this.playerOffsetX = frame.lungeX;
         this.strikeActive = frame.active;

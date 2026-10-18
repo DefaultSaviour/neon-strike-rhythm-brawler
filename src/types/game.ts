@@ -2,7 +2,7 @@
  * Game types and state definitions for Neon Strike: Rhythm Brawler
  */
 
-import type { EnemyMotionStyle } from '../game/enemyMotion';
+import type { EnemyMotionStyle, EnemyPose } from '../game/enemyMotion';
 import type { HeroId } from '../game/heroes';
 
 export type Lane = 'left' | 'right';
@@ -124,12 +124,30 @@ export interface SkeletonPose {
   };
 }
 
+/** One keyframe of a multi-hit move (see AttackMove.sequence). */
+export interface MoveKey {
+  /** The body at this keyframe, facing right (enemy-style skeleton) */
+  pose: EnemyPose;
+  /** Trail swept by the striking limb on the way into this keyframe */
+  trail?: SkeletonPose['bladeSlash'];
+  /** Milliseconds to reach this keyframe from the previous one (ignored for the first) */
+  ms: number;
+  /** Weapon in the lead hand at this keyframe */
+  prop?: SkeletonPose['prop'];
+}
+
 export interface AttackMove {
   id: number;
   name: string;
   description: string;
   durationMs: number;
+  /** The impact pose (the first hit), facing right */
   pose: SkeletonPose;
+  /**
+   * Optional combo: keyframes played after the first hit lands (wind-down,
+   * follow-up hits, landing). The first keyframe is the impact pose.
+   */
+  sequence?: MoveKey[];
   impactOffset?: Point2D;
   tier: 1 | 2 | 3 | 4 | 5; // 1: Basic, 2: Advanced Acrobatic, 3: Superhuman Cyber, 4: Overdrive Master, 5: God-Tier Finisher
 }
