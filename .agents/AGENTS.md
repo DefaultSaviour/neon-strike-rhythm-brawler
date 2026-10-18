@@ -107,4 +107,21 @@
   - **Upper-Bone Arc Posing**: Dragging an elbow or knee swings the upper arm/thigh around the shoulder/hip toward the pointer, while the forearm/shin naturally rides along pointing in the same direction.
   - **Automatic Bend Inversion**: Sweeping past straight dynamically flips the bend side without requiring a separate toggle.
   - **159 Unit Tests**: Vitest suite expanded to 159 tests covering elbow/knee drag angle calculation and IK rig preservation.
+- [x] **Signature Dances for All 9 Enemies & Hip Timing Zone**:
+  - **9 Unique Signature Dances (`src/game/signatureDances.ts`, `src/game/bundledAnimations.ts`)**: Distinct iconic dance choreography in the `Dance` stance for every enemy variant:
+    - Titan: Gangnam Style (horse ride & lasso)
+    - Breaker: The Running Man
+    - Rammer: The Dab
+    - Warlord: YMCA
+    - Ronin: The Batusi (60s Batman)
+    - Acid Dancer: The Moonwalk
+    - Speeder: The Floss
+    - Wraith: Thriller
+    - Seraph: Disco Point (Saturday Night Fever)
+  - **Hip Timing Zone & Pose Clamping (`src/game/customAnimation.ts`, `src/components/AnimationStudio.tsx`)**:
+    - Hips are strictly held within a narrow ±8 pose units zone (`HIP_ZONE`) so lateral dance motion does not alter visual hit-timing precision.
+    - Animation Studio displays a shaded "timing zone" indicator, preventing hip dragging outside the corridor, clamping deep squats, and guarding ground limits.
+    - Loaded and imported animations auto-center hips into the timing zone.
+  - **173 Unit Tests**: Vitest suite expanded to 173 tests verifying whole-loop timing zone compliance, limb length invariance, floor boundaries, and squat limits for all 9 signature dances.
+
 
