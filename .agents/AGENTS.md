@@ -97,3 +97,8 @@
   - **Attacking Progress Runner (`src/components/fighterArt.ts`, `src/game/motion.ts`)**: Instead of a generic marker, the actual player fighter avatar attacks his way along the progress track.
   - **Quarter-Track Fighter Level-Ups (`src/game/fighterTier.ts`)**: The progress runner dynamically levels up in appearance, aura intensity, and plasma wings as completion advances past 25%, 50%, 75%, and 100%.
   - **128 Unit Tests**: Vitest suite expanded to 128 tests covering progress math, best-attempt record storage, fighter tiers, and runner motion frames.
+- [x] **Conveyor Riding Debris & Animation Studio for Custom Enemy Moves**:
+  - **Conveyor Belt Riding Debris (`src/game/debrisPhysics.ts`)**: Robot parts landing on conveyor belts now ride the belts all the way into the incinerator pit. Sideways launch speed is balanced, riding parts dim once cooled, and `trimDebris` protects belt riders when clearing excess fragments.
+  - **Animation Studio (`src/components/AnimationStudio.tsx`, `src/game/customAnimation.ts`, `src/game/animationLibrary.ts`)**: Full in-browser editor accessible from the main menu. Pose any of the 9 enemy variants by dragging head, chest, hips, hands, and feet with an analytical 2-bone IK solver (limbs never stretch, click joint to flip bend). Multi-frame keyframe timeline with real-time looping preview on the beat.
+  - **Animation Storage & Bundling**: Custom animations can replace any of the 4 motion stances per enemy variant, persist in `localStorage` via "Save to Game", and export/import JSON to bundle into `src/game/bundledAnimations.ts`.
+  - **157 Unit Tests**: Vitest suite expanded to 157 tests covering IK rigs, blending, keyframes, validation, storage, coordinate mapping, and conveyor riding physics.
