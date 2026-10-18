@@ -1,0 +1,446 @@
+import { EnemyTier, FrequencyBand } from '../types/game';
+import {
+  assemblePose,
+  buildForBand,
+  ENEMY_MOTION_STYLES,
+  EnemyMotionStyle,
+  EnemyPose,
+  enemyPose,
+  FLOOR,
+  LimbBends,
+  Point,
+  PoseRig,
+} from './enemyMotion';
+
+/**
+ * Custom enemy animations made in the Animation Studio.
+ *
+ * An animation is a list of key poses ("Pose 1, Pose 2, ...") that play in a
+ * loop on the beat, smoothly blending from one to the next. Each enemy type
+ * (3 bands x 3 tiers = 9) can replace any of the four stances with its own
+ * animation; anything without a custom version uses the built-in maths.
+ *
+ * Poses are stored as rigs (see PoseRig in enemyMotion.ts): only the body line
+ * and the hand / foot positions. Elbows and knees are worked out when drawing,
+ * so arms and legs can never stretch, even while blending between poses.
+ */
+
+export interface CustomAnimation {
+  /** How many beats each pose lasts before it has fully blended into the next */
+  beatsPerPose: number;
+  /** True for front-on poses (paired gear is mirrored, like the "Hands up" stance) */
+  facingCamera: boolean;
+  poses: PoseRig[];
+}
+
+export type EnemyKey = `${FrequencyBand}-${EnemyTier}`;
+export type AnimationLibrary = Partial<Record<EnemyKey, Partial<Record<EnemyMotionStyle, CustomAnimation>>>>;
+
+export const ENEMY_KEYS: EnemyKey[] = ['sub-1', 'sub-2', 'sub-3', 'bass-1', 'bass-2', 'bass-3', 'high-1', 'high-2', 'high-3'];
+export const BEATS_PER_POSE_OPTIONS = [0.25, 0.5, 1, 2] as const;
+export const MAX_POSES = 16;
+
+/** Where joints may be dragged (pose units, feet on y = 68, facing right). */
+export const EDIT_BOUNDS = { minX: -75, maxX: 75, minY: -115, maxY: FLOOR } as const;
+
+export function enemyKey(band: FrequencyBand, tier: EnemyTier): EnemyKey {
+  return `${band}-${tier}`;
+}
+
+// ---------------------------------------------------------------------------
+// Rigs <-> poses
+// ---------------------------------------------------------------------------
+
+/** +1 or -1: which side of the root->end line the middle joint sits on. */
+function bendOf(root: Point, end: Point, joint: Point): 1 | -1 {
+  const cross = (end.x - root.x) * (joint.y - root.y) - (end.y - root.y) * (joint.x - root.x);
+  return cross >= 0 ? 1 : -1;
+}
+
+/** Recover the rig from a full pose (used to start editing from a built-in stance). */
+export function rigFromPose(p: EnemyPose): PoseRig {
+  return {
+    pelvis: { ...p.pelvis },
+    chest: { ...p.chest },
+    head: { ...p.head },
+    frontHand: { ...p.frontHand },
+    backHand: { ...p.backHand },
+    frontFoot: { ...p.frontFoot },
+    backFoot: { ...p.backFoot },
+    bends: {
+      frontArm: bendOf(p.frontShoulder, p.frontHand, p.frontElbow),
+      backArm: bendOf(p.backShoulder, p.backHand, p.backElbow),
+      frontLeg: bendOf(p.pelvis, p.frontFoot, p.frontKnee),
+      backLeg: bendOf(p.pelvis, p.backFoot, p.backKnee),
+    },
+    shoulderSpread: (p.frontShoulder.x - p.backShoulder.x) / 2,
+  };
+}
+
+/**
+ * Snap hand and foot targets to where the limbs actually reach, so the stored
+ * rig always matches what's on screen (a hand dragged out of reach stops at
+ * the end of the straight arm).
+ */
+export function settleRig(rig: PoseRig): PoseRig {
+  const p = assemblePose(rig, 0, false);
+  return { ...rig, frontHand: p.frontHand, backHand: p.backHand, frontFoot: p.frontFoot, backFoot: p.backFoot };
+}
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
+function lerpPoint(a: Point, b: Point, t: number): Point {
+  return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
+}
+
+/** Blend two rigs. Elbow / knee bend directions switch halfway through. */
+export function lerpRig(a: PoseRig, b: PoseRig, t: number): PoseRig {
+  return {
+    pelvis: lerpPoint(a.pelvis, b.pelvis, t),
+    chest: lerpPoint(a.chest, b.chest, t),
+    head: lerpPoint(a.head, b.head, t),
+    frontHand: lerpPoint(a.frontHand, b.frontHand, t),
+    backHand: lerpPoint(a.backHand, b.backHand, t),
+    frontFoot: lerpPoint(a.frontFoot, b.frontFoot, t),
+    backFoot: lerpPoint(a.backFoot, b.backFoot, t),
+    bends: t < 0.5 ? { ...a.bends } : { ...b.bends },
+    shoulderSpread: lerp(a.shoulderSpread, b.shoulderSpread, t),
+  };
+}
+
+/** Which pose we're on and how far into the blend toward the next one. */
+export function animationPhase(anim: CustomAnimation, beat: number): { index: number; next: number; t: number } {
+  const n = anim.poses.length;
+  const pos = beat / anim.beatsPerPose;
+  const whole = Math.floor(pos);
+  const index = ((whole % n) + n) % n;
+  return { index, next: (index + 1) % n, t: pos - whole };
+}
+
+/**
+ * The enemy's pose `beat` beats into the song. Each pose is hit exactly on
+ * its beat, then eases into the next one (smoothstep: slow out, slow in).
+ */
+export function sampleAnimation(anim: CustomAnimation, beat: number): EnemyPose {
+  const { index, next, t } = animationPhase(anim, beat);
+  const eased = t * t * (3 - 2 * t);
+  const rig = lerpRig(anim.poses[index], anim.poses[next], eased);
+  // A little stomp pulse as each pose lands (drives dust rings in the game).
+  const stomp = Math.exp(-t * 5);
+  return assemblePose(rig, stomp, anim.facingCamera);
+}
+
+/**
+ * A starting point for editing: the built-in stance sampled at half-beat steps.
+ * Most stances repeat every 2 beats (4 poses); "Hands up" sways over 4 (8 poses).
+ */
+export function builtInAnimation(style: EnemyMotionStyle, band: FrequencyBand): CustomAnimation {
+  const count = style === 'sway' ? 8 : 4;
+  const beatsPerPose = 0.5;
+  const poses: PoseRig[] = [];
+  let facingCamera = false;
+  for (let i = 0; i < count; i++) {
+    const p = enemyPose(style, i * beatsPerPose, buildForBand(band));
+    facingCamera = p.facingCamera;
+    poses.push(rigFromPose(p));
+  }
+  return { beatsPerPose, facingCamera, poses };
+}
+
+/** The pose the game should draw: the custom animation if there is one, else the built-in stance. */
+export function enemyPoseFor(
+  style: EnemyMotionStyle,
+  beat: number,
+  band: FrequencyBand,
+  tier: EnemyTier,
+  library: AnimationLibrary
+): EnemyPose {
+  const custom = library[enemyKey(band, tier)]?.[style];
+  return custom ? sampleAnimation(custom, beat) : enemyPose(style, beat, buildForBand(band));
+}
+
+// ---------------------------------------------------------------------------
+// Editing (used by the Animation Studio)
+// ---------------------------------------------------------------------------
+
+/** Joints you can drag. Elbows and knees follow automatically. */
+export type DragHandle = 'pelvis' | 'chest' | 'head' | 'frontHand' | 'backHand' | 'frontFoot' | 'backFoot';
+export const DRAG_HANDLES: DragHandle[] = ['head', 'chest', 'pelvis', 'frontHand', 'backHand', 'frontFoot', 'backFoot'];
+
+/** Elbows and knees: click one to flip the way it bends. */
+export type BendHandle = keyof LimbBends;
+export const BEND_HANDLES: BendHandle[] = ['frontArm', 'backArm', 'frontLeg', 'backLeg'];
+
+function clampToBounds(p: Point): Point {
+  return {
+    x: Math.min(EDIT_BOUNDS.maxX, Math.max(EDIT_BOUNDS.minX, p.x)),
+    y: Math.min(EDIT_BOUNDS.maxY, Math.max(EDIT_BOUNDS.minY, p.y)),
+  };
+}
+
+function add(a: Point, d: Point): Point {
+  return { x: a.x + d.x, y: a.y + d.y };
+}
+
+/** Put `p` at the same distance from `centre` as `keepDistanceOf`, pointing toward `toward`. */
+function onCircle(centre: Point, radius: number, toward: Point): Point {
+  const dx = toward.x - centre.x;
+  const dy = toward.y - centre.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return { x: centre.x, y: centre.y - radius };
+  return { x: centre.x + (dx / len) * radius, y: centre.y + (dy / len) * radius };
+}
+
+function rotateAround(p: Point, centre: Point, angle: number): Point {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const dx = p.x - centre.x;
+  const dy = p.y - centre.y;
+  return { x: centre.x + dx * c - dy * s, y: centre.y + dx * s + dy * c };
+}
+
+/**
+ * Drag one joint to `target` and return the new rig (the old one is untouched).
+ *  - pelvis: moves the whole upper body with it; the feet stay planted.
+ *  - chest:  swings around the pelvis (the spine keeps its length), carrying head and hands.
+ *  - head:   swings around the chest (the neck keeps its length).
+ *  - hands / feet: go where you drag them, as far as the limb reaches.
+ */
+export function moveHandle(rig: PoseRig, handle: DragHandle, target: Point): PoseRig {
+  const to = clampToBounds(target);
+  const next: PoseRig = { ...rig, bends: { ...rig.bends } };
+
+  if (handle === 'pelvis') {
+    const d = { x: to.x - rig.pelvis.x, y: to.y - rig.pelvis.y };
+    next.pelvis = to;
+    next.chest = add(rig.chest, d);
+    next.head = add(rig.head, d);
+    next.frontHand = add(rig.frontHand, d);
+    next.backHand = add(rig.backHand, d);
+  } else if (handle === 'chest') {
+    const spine = Math.hypot(rig.chest.x - rig.pelvis.x, rig.chest.y - rig.pelvis.y);
+    const chest = onCircle(rig.pelvis, spine, to);
+    const turn =
+      Math.atan2(chest.y - rig.pelvis.y, chest.x - rig.pelvis.x) -
+      Math.atan2(rig.chest.y - rig.pelvis.y, rig.chest.x - rig.pelvis.x);
+    next.chest = chest;
+    next.head = rotateAround(rig.head, rig.pelvis, turn);
+    const d = { x: chest.x - rig.chest.x, y: chest.y - rig.chest.y };
+    next.frontHand = add(rig.frontHand, d);
+    next.backHand = add(rig.backHand, d);
+  } else if (handle === 'head') {
+    const neck = Math.hypot(rig.head.x - rig.chest.x, rig.head.y - rig.chest.y);
+    next.head = onCircle(rig.chest, neck, to);
+  } else {
+    next[handle] = to;
+  }
+  return settleRig(next);
+}
+
+export function flipBend(rig: PoseRig, limb: BendHandle): PoseRig {
+  return settleRig({ ...rig, bends: { ...rig.bends, [limb]: rig.bends[limb] === 1 ? -1 : 1 } });
+}
+
+/** Swap left and right limbs (keeps the body where it is). Handy for "same move, other side". */
+export function mirrorRig(rig: PoseRig): PoseRig {
+  const cx = rig.pelvis.x;
+  const flip = (p: Point): Point => ({ x: 2 * cx - p.x, y: p.y });
+  return settleRig({
+    ...rig,
+    chest: flip(rig.chest),
+    head: flip(rig.head),
+    frontHand: flip(rig.backHand),
+    backHand: flip(rig.frontHand),
+    frontFoot: flip(rig.backFoot),
+    backFoot: flip(rig.frontFoot),
+    bends: {
+      frontArm: rig.bends.backArm === 1 ? -1 : 1,
+      backArm: rig.bends.frontArm === 1 ? -1 : 1,
+      frontLeg: rig.bends.backLeg === 1 ? -1 : 1,
+      backLeg: rig.bends.frontLeg === 1 ? -1 : 1,
+    },
+  });
+}
+
+export type HandleHit = { kind: 'drag'; handle: DragHandle } | { kind: 'bend'; limb: BendHandle };
+
+/**
+ * Which handle is under the pointer (pose units), if any. Draggable joints
+ * win over elbows / knees when both are in reach.
+ */
+export function handleAt(rig: PoseRig, p: Point, radius: number): HandleHit | null {
+  const pose = assemblePose(rig, 0, false);
+  let best: HandleHit | null = null;
+  let bestDist = radius;
+  for (const h of DRAG_HANDLES) {
+    const d = Math.hypot(rig[h].x - p.x, rig[h].y - p.y);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = { kind: 'drag', handle: h };
+    }
+  }
+  if (best) return best;
+  const bendPoints: Record<BendHandle, Point> = {
+    frontArm: pose.frontElbow,
+    backArm: pose.backElbow,
+    frontLeg: pose.frontKnee,
+    backLeg: pose.backKnee,
+  };
+  for (const limb of BEND_HANDLES) {
+    const q = bendPoints[limb];
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = { kind: 'bend', limb };
+    }
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// Library: checking, merging and saving
+// ---------------------------------------------------------------------------
+
+const STYLE_IDS = new Set<string>(ENEMY_MOTION_STYLES.map((s) => s.id));
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function parsePoint(v: unknown): Point | null {
+  if (!isRecord(v)) return null;
+  const { x, y } = v;
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return clampToBounds({ x, y });
+}
+
+function parseBend(v: unknown): 1 | -1 | null {
+  return v === 1 || v === -1 ? v : null;
+}
+
+function parseRig(v: unknown): PoseRig | null {
+  if (!isRecord(v) || !isRecord(v.bends)) return null;
+  const pts = {
+    pelvis: parsePoint(v.pelvis),
+    chest: parsePoint(v.chest),
+    head: parsePoint(v.head),
+    frontHand: parsePoint(v.frontHand),
+    backHand: parsePoint(v.backHand),
+    frontFoot: parsePoint(v.frontFoot),
+    backFoot: parsePoint(v.backFoot),
+  };
+  const bends = {
+    frontArm: parseBend(v.bends.frontArm),
+    backArm: parseBend(v.bends.backArm),
+    frontLeg: parseBend(v.bends.frontLeg),
+    backLeg: parseBend(v.bends.backLeg),
+  };
+  const spread = v.shoulderSpread;
+  if (Object.values(pts).some((p) => p === null) || Object.values(bends).some((b) => b === null)) return null;
+  if (typeof spread !== 'number' || !Number.isFinite(spread)) return null;
+  return {
+    pelvis: pts.pelvis!,
+    chest: pts.chest!,
+    head: pts.head!,
+    frontHand: pts.frontHand!,
+    backHand: pts.backHand!,
+    frontFoot: pts.frontFoot!,
+    backFoot: pts.backFoot!,
+    bends: bends as LimbBends,
+    shoulderSpread: Math.min(15, Math.max(0, spread)),
+  };
+}
+
+function parseAnimation(v: unknown): CustomAnimation | null {
+  if (!isRecord(v) || !Array.isArray(v.poses)) return null;
+  const bpp = v.beatsPerPose;
+  if (typeof bpp !== 'number' || !Number.isFinite(bpp) || bpp < 0.125 || bpp > 8) return null;
+  const poses = v.poses.slice(0, MAX_POSES).map(parseRig);
+  if (poses.length === 0 || poses.some((p) => p === null)) return null;
+  return { beatsPerPose: bpp, facingCamera: v.facingCamera === true, poses: poses as PoseRig[] };
+}
+
+/**
+ * Read a library from untrusted data (a saved file, local storage). Anything
+ * malformed is dropped rather than crashing the game.
+ */
+export function parseLibrary(raw: unknown): AnimationLibrary {
+  const out: AnimationLibrary = {};
+  if (!isRecord(raw)) return out;
+  for (const key of ENEMY_KEYS) {
+    const slot = raw[key];
+    if (!isRecord(slot)) continue;
+    for (const [style, anim] of Object.entries(slot)) {
+      if (!STYLE_IDS.has(style)) continue;
+      const parsed = parseAnimation(anim);
+      if (parsed) (out[key] ??= {})[style as EnemyMotionStyle] = parsed;
+    }
+  }
+  return out;
+}
+
+/** `overrides` wins wherever both have an animation for the same enemy + stance. */
+export function mergeLibraries(base: AnimationLibrary, overrides: AnimationLibrary): AnimationLibrary {
+  const out: AnimationLibrary = {};
+  for (const key of ENEMY_KEYS) {
+    const merged = { ...base[key], ...overrides[key] };
+    if (Object.keys(merged).length > 0) out[key] = merged;
+  }
+  return out;
+}
+
+/** Return a copy of `lib` with one animation set (or removed when `anim` is null). */
+export function withAnimation(
+  lib: AnimationLibrary,
+  key: EnemyKey,
+  style: EnemyMotionStyle,
+  anim: CustomAnimation | null
+): AnimationLibrary {
+  const slot = { ...lib[key] };
+  if (anim) slot[style] = anim;
+  else delete slot[style];
+  const out = { ...lib };
+  if (Object.keys(slot).length > 0) out[key] = slot;
+  else delete out[key];
+  return out;
+}
+
+/** How many enemy + stance slots have a custom animation. */
+export function countAnimations(lib: AnimationLibrary): number {
+  return ENEMY_KEYS.reduce((n, k) => n + Object.keys(lib[k] ?? {}).length, 0);
+}
+
+/** Minimal storage interface (localStorage fits), so tests can pass a fake. */
+export interface KeyValueStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+export const ANIMATION_STORAGE_KEY = 'neon_strike_custom_animations_v1';
+
+export function loadSavedAnimations(store: KeyValueStore | undefined): AnimationLibrary {
+  if (!store) return {};
+  try {
+    return parseLibrary(JSON.parse(store.getItem(ANIMATION_STORAGE_KEY) || '{}'));
+  } catch {
+    return {};
+  }
+}
+
+/** Returns false if the browser refused to save (storage full or blocked). */
+export function saveAnimations(store: KeyValueStore | undefined, lib: AnimationLibrary): boolean {
+  if (!store) return false;
+  try {
+    store.setItem(ANIMATION_STORAGE_KEY, JSON.stringify(lib));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Round to 0.1 so exported files stay small and readable. */
+export function roundLibrary(lib: AnimationLibrary): AnimationLibrary {
+  return JSON.parse(JSON.stringify(lib, (_k, v) => (typeof v === 'number' ? Math.round(v * 10) / 10 : v)));
+}

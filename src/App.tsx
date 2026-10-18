@@ -7,9 +7,10 @@ import { audioStorage } from './utils/audioStorage';
 import { NeonCanvas } from './components/NeonCanvas';
 import { HUD } from './components/HUD';
 import { TrackSelectModal } from './components/TrackSelectModal';
+import { AnimationStudio } from './components/AnimationStudio';
 import { GameOverModal } from './components/GameOverModal';
 import { GameOptions } from './components/GameOptions';
-import { Play, Music, Keyboard, Volume2, ShieldAlert, Award, Zap } from 'lucide-react';
+import { Play, Music, Keyboard, Volume2, ShieldAlert, Award, Zap, Clapperboard } from 'lucide-react';
 
 export default function App() {
   const [gameStatus, setGameStatus] = useState<GameStatus>('MENU');
@@ -27,6 +28,7 @@ export default function App() {
   });
   const [highScores, setHighScores] = useState<Record<string, HighScoreRecord>>({});
   const [showTrackSelect, setShowTrackSelect] = useState(false);
+  const [showStudio, setShowStudio] = useState(false);
   const [clearedOutcome, setClearedOutcome] = useState(false);
   const [deathReport, setDeathReport] = useState<DeathReport | null>(null);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>({
@@ -170,6 +172,8 @@ export default function App() {
   // Keyboard controls listener (Optimized for minimal input latency)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // The Animation Studio has its own shortcuts (Space plays the preview there).
+      if (showStudio) return;
       // Ignore typing in text fields (sliders and buttons are fine).
       const target = e.target as HTMLInputElement | null;
       if (target?.tagName === 'INPUT' && target.type !== 'range') return;
@@ -233,6 +237,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     gameStatus,
+    showStudio,
     audioSettings.oneButtonMode,
     handleStrike,
     handleOneButtonStrike,
@@ -397,6 +402,14 @@ export default function App() {
               <Play className="w-5 h-5 fill-current" />
               <span>ENGAGE COMBAT</span>
             </button>
+
+            <button
+              onClick={() => setShowStudio(true)}
+              className="mt-3 px-5 py-2 rounded-lg border border-pink-500/50 bg-pink-500/10 text-pink-300 text-xs font-bold tracking-wider hover:bg-pink-500/20 transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <Clapperboard className="w-4 h-4" />
+              <span>ANIMATION STUDIO</span>
+            </button>
           </div>
 
           {/* Controls Instruction Bar */}
@@ -508,6 +521,9 @@ export default function App() {
           onApplyLatencyOffset={(offsetMs) => handleUpdateSettings({ latencyOffsetMs: offsetMs })}
         />
       )}
+
+      {/* Animation Studio: custom enemy moves */}
+      {showStudio && <AnimationStudio onClose={() => setShowStudio(false)} />}
 
       {/* Track Select & Custom Audio Importer Modal */}
       {showTrackSelect && (

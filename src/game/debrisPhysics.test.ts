@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DebrisPiece, DebrisWorld, massProperties, shatterEnemy, stepDebris } from './debrisPhysics';
+import { DebrisPiece, DebrisWorld, massProperties, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { enemyPose } from './enemyMotion';
 
 const world: DebrisWorld = { floorY: 68, pitHalfWidth: 40, beltSpeed: 0, gravity: 1500 };
@@ -125,11 +125,27 @@ describe('stepDebris: conveyors and pit', () => {
     expect(simulate([soft], world, 1).impacts).toBe(0);
   });
 
-  it('settled pieces fade away within about a second, so debris never piles up', () => {
+  it('pieces lying still with no belt moving fade away within about a second', () => {
     const p = piece({ shape: 'segment', x: -200, y: world.floorY - 2 });
     const pieces = [p];
-    simulate(pieces, world, 1.2);
+    simulate(pieces, world, 1.2); // this world's belts are stopped
     expect(pieces).toHaveLength(0);
+  });
+
+  it('pieces riding a belt do not fade: they travel all the way into the pit', () => {
+    const beltWorld: DebrisWorld = { ...world, beltSpeed: 275 };
+    // Lands far out on the right belt, with a short normal life
+    const p = piece({ shape: 'segment', x: 380, y: world.floorY - 2, maxLife: 1 });
+    const pieces = [p];
+    let minAlphaOnBelt = 1;
+    let sunk = false;
+    for (let t = 0; t < 3 && !sunk; t += 1 / 60) {
+      const r = stepDebris(pieces, beltWorld, 1 / 60);
+      if (!p.inPit) minAlphaOnBelt = Math.min(minAlphaOnBelt, p.alpha);
+      sunk = r.sunk.includes(p);
+    }
+    expect(minAlphaOnBelt).toBe(1); // never faded while riding
+    expect(sunk).toBe(true); // dropped into the pit
   });
 
   it('pieces still flying through the air do not fade early', () => {
@@ -140,11 +156,20 @@ describe('stepDebris: conveyors and pit', () => {
     expect(p.alpha).toBe(1);
   });
 
-  it('removes pieces knocked off the side of the screen', () => {
-    const p = piece({ shape: 'segment', x: 300, y: -50, vx: 2000 });
+  it('removes pieces knocked far off the side of the screen', () => {
+    const p = piece({ shape: 'segment', x: 300, y: -50, vx: 4000 });
     const pieces = [p];
-    simulate(pieces, { ...world, halfWidth: 400 }, 0.3);
+    simulate(pieces, { ...world, halfWidth: 400 }, 0.4);
     expect(pieces).toHaveLength(0);
+  });
+
+  it('pieces landing just past the screen edge ride the belt back into view', () => {
+    const beltWorld: DebrisWorld = { ...world, beltSpeed: 275, halfWidth: 400 };
+    const p = piece({ shape: 'segment', x: 520, y: world.floorY - 2, maxLife: 1.5 });
+    const pieces = [p];
+    simulate(pieces, beltWorld, 1);
+    expect(pieces).toContain(p);
+    expect(p.x).toBeLessThan(400); // back on screen
   });
 
   it('fades out and removes pieces that outlive their lifetime', () => {
@@ -222,5 +247,29 @@ describe('shatterEnemy', () => {
     expect(heavy[0].radius / slim[0].radius).toBeCloseTo(1.3 / 0.9, 5);
     // Thigh piece is half the drawn thigh width (radius vs full width)
     expect(Math.max(...heavy.map((p) => p.radius))).toBeCloseTo((8 * 1.3) / 2, 5);
+  });
+
+  it('even a huge blast keeps pieces within reach of the belts', () => {
+    const pieces = shatter(-1, 4);
+    for (const p of pieces) expect(Math.abs(p.vx)).toBeLessThanOrEqual(600 + 1e-9);
+  });
+});
+
+describe('trimDebris', () => {
+  const at = (id: number, x: number, alpha = 1) => piece({ shape: 'circle', id, x, alpha });
+
+  it('does nothing while under the cap', () => {
+    const list = [at(1, 0), at(2, 10)];
+    trimDebris(list, 5, 400);
+    expect(list.map((p) => p.id)).toEqual([1, 2]);
+  });
+
+  it('drops fading pieces first, then off-screen ones, then the oldest', () => {
+    const list = [at(1, 0), at(2, 900), at(3, 50, 0.4), at(4, 100), at(5, 150)];
+    trimDebris(list, 3, 400);
+    // Fading #3 and off-screen #2 go before the oldest on-screen piece #1.
+    expect(list.map((p) => p.id)).toEqual([1, 4, 5]);
+    trimDebris(list, 2, 400);
+    expect(list.map((p) => p.id)).toEqual([4, 5]);
   });
 });

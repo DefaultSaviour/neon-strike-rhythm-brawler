@@ -32,5 +32,6 @@ export function extraShardsForCombo(combo: number): number {
  * Clutter budgets. Long songs at high combos used to fill the screen with
  * hundreds of pieces and sparks; these caps keep the fight readable.
  */
-export const MAX_DEBRIS = 110;
+/** Riding pieces are cheap to draw (cooled pieces don't glow), so this can be generous. */
+export const MAX_DEBRIS = 150;
 export const MAX_PARTICLES = 160;

@@ -8,7 +8,8 @@ import { beatPulse } from '../audio/beatGrid';
 import { ArenaLayout, computeArenaLayout, FLOOR_Y } from '../game/layout';
 import { HIT_WINDOWS } from '../game/timing';
 import { Enemy } from '../types/game';
-import { buildForBand, enemyPose } from '../game/enemyMotion';
+import { enemyPoseFor } from '../game/customAnimation';
+import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
 import { drawFighter, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
@@ -64,7 +65,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       engine.update(dt, layout.worldHalfWidth);
 
       // Inward conveyor scrolling (world units)
-      const conveyorSpeed = engine.conveyorSpeed * (engine.beatGrid.bpm / 120) * 0.6;
+      const conveyorSpeed = engine.beltSpeed();
       conveyorOffset = (conveyorOffset + dt * conveyorSpeed) % 40;
 
       // 1 on each beat, fading before the next: drives everything that pulses with the music.
@@ -552,7 +553,7 @@ function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
     // Bright on impact, then fades back so it never competes with incoming enemies.
-    const presence = 0.3 + 0.7 * p.heat;
+    const presence = 0.45 + 0.55 * p.heat;
     ctx.globalAlpha = Math.max(0, p.alpha) * presence;
 
     // Same solid-neon look as the bodies they came from. Fresh pieces glow
@@ -672,7 +673,7 @@ function drawEnemyFigure(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: Ga
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    const pose = enemyPose(engine.settings.enemyMotion, phase, buildForBand(band));
+    const pose = enemyPoseFor(engine.settings.enemyMotion, phase, band, tier, getActiveAnimations());
     drawEnemyArt(ctx, pose, band, tier, { main: mainColor, accent }, phase, !!opts.flash);
 
     ctx.restore();

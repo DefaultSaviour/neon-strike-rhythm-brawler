@@ -14,14 +14,16 @@ import { ATTACK_MOVES, IDLE_POSE, getOrientedPose, getMoveForCombo } from './ani
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
-import { DebrisPiece, DebrisWorld, shatterEnemy, stepDebris } from './debrisPhysics';
+import { DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
 import { FLOOR_Y } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { recordRunProgress, RunProgress } from './runProgress';
-import { buildForBand, DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, enemyPose } from './enemyMotion';
+import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES } from './enemyMotion';
+import { enemyPoseFor } from './customAnimation';
+import { getActiveAnimations } from './animationLibrary';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -40,6 +42,8 @@ export class GameEngine {
   public enemies: Enemy[] = [];
   public particles: Particle[] = [];
   public debris: DebrisPiece[] = [];
+  /** Half the visible screen width in world units, from the latest update() */
+  private worldHalfWidth = 400;
   public judgements: FloatingJudgement[] = [];
   public currentPose: SkeletonPose = { ...IDLE_POSE };
   public isAttacking: boolean = false;
@@ -57,6 +61,15 @@ export class GameEngine {
   public hitLineOffset: number = 78; // Strike distance from center (world units)
   public pitRadius: number = 44; // Central abyss pit half-width
   public conveyorSpeed: number = 220; // Pixels per second moving inward towards the pit
+
+  /**
+   * Conveyor surface speed (world units/s), scaled with the song's tempo.
+   * Fast enough that debris reaches the pit quickly (less clutter), slow
+   * enough that you can watch it ride there. The floor arrows use it too.
+   */
+  public beltSpeed(): number {
+    return this.conveyorSpeed * (this.beatGrid.bpm / 120);
+  }
 
   /** Song time (s) the player is hearing, with the latency setting applied. Updated every frame. */
   public songTime: number = 0;
@@ -398,7 +411,7 @@ export class GameEngine {
     const pieces = shatterEnemy(
       {
         x: enemy.x,
-        pose: enemyPose(this.settings.enemyMotion, enemy.animPhase, buildForBand(enemy.band)),
+        pose: enemyPoseFor(this.settings.enemyMotion, enemy.animPhase, enemy.band, enemy.tier, getActiveAnimations()),
         facing: enemy.lane === 'left' ? 1 : -1,
         scale: style.scale,
         color: enemy.color,
@@ -412,10 +425,8 @@ export class GameEngine {
     );
     this.debris.push(...pieces);
 
-    // Drop the oldest pieces if there are too many on screen.
-    if (this.debris.length > MAX_DEBRIS) {
-      this.debris.splice(0, this.debris.length - MAX_DEBRIS);
-    }
+    // Too many pieces: drop fading and off-screen ones before the belt riders.
+    trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
   }
 
   private triggerMiss(lane: Lane) {
@@ -525,6 +536,7 @@ export class GameEngine {
    */
   public update(deltaTimeSec: number, worldHalfWidth: number) {
     if (!this.isRunning || !this.track || this.paused) return;
+    this.worldHalfWidth = worldHalfWidth;
 
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
@@ -571,7 +583,7 @@ export class GameEngine {
     const world: DebrisWorld = {
       floorY: FLOOR_Y,
       pitHalfWidth: this.pitRadius,
-      beltSpeed: this.conveyorSpeed * (this.beatGrid.bpm / 120) * 0.6,
+      beltSpeed: this.beltSpeed(),
       gravity: 1500,
       halfWidth: worldHalfWidth,
     };
