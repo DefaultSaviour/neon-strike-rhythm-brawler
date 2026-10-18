@@ -123,5 +123,13 @@
     - Animation Studio displays a shaded "timing zone" indicator, preventing hip dragging outside the corridor, clamping deep squats, and guarding ground limits.
     - Loaded and imported animations auto-center hips into the timing zone.
   - **173 Unit Tests**: Vitest suite expanded to 173 tests verifying whole-loop timing zone compliance, limb length invariance, floor boundaries, and squat limits for all 9 signature dances.
+- [x] **Motion Joint Pivot Rotations (Dances, Sprinter Run & Hands-Up Sway)**:
+  - **Rotational Pose Blending (`src/game/customAnimation.ts`)**: Bone interpolation (`blendPoses`) now rotates bones around their natural joint pivots via shortest-path angular lerping (`lerpAngle`) rather than linear cartesian sliding, preventing limb shrinkage during transitions. Arms sweep in full reach arcs and can spin complete circles.
+  - **Spinning Moves & Dances (`src/game/signatureDances.ts`)**: Poses can specify arms via joint angles (`armByAngles`). Powers Titan's spinning Gangnam overhead lasso, Seraph's interlocking disco roll, and arc swings.
+  - **Natural Sprinter Run & Hands-Up Stances (`src/game/enemyMotion.ts`)**:
+    - "Run on the spot": Sprinter arms swing around shoulders with elbows held near 90° opposed to leg stride; lifted leg drives high knee around hip with shin folding back.
+    - "Hands up": Mirrored arm sway synchronized with body lean; forearms rhythmically fold and extend at elbows on every beat.
+  - **180 Unit Tests**: Vitest suite expanded to 180 tests covering angular shortest-path lerping, arc radius preservation, 360° spin cycles, and stance kinematic fidelity.
+
 
 
