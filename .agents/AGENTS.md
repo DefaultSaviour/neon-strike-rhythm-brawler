@@ -92,3 +92,8 @@
   - **Debris & Spark Anti-Clutter Cleanup (`src/game/debrisPhysics.ts`)**: Settled conveyor floor debris fades after ~0.45s, off-screen fragments are removed, and spark particles are capped at 160 to maintain 60 FPS in dense song sections.
   - **Non-Stacking Floating Judgements**: Replaces older judgements per lane to eliminate text stacking clutter.
   - **106 Unit Tests**: Vitest suite expanded to 106 tests covering input resolution, combo FX scaling, timing diagnostics, and death explanation reporting.
+- [x] **Run-Progress Bar with Best-Attempt Marker & Leveling Runner**:
+  - **Results Screen Run-Progress Bar (`src/components/RunProgressBar.tsx`, `src/game/runProgress.ts`)**: Interactive visual progress bar displaying the exact percentage reached on the track, timestamp, death marker, and historical personal best attempt marker.
+  - **Attacking Progress Runner (`src/components/fighterArt.ts`, `src/game/motion.ts`)**: Instead of a generic marker, the actual player fighter avatar attacks his way along the progress track.
+  - **Quarter-Track Fighter Level-Ups (`src/game/fighterTier.ts`)**: The progress runner dynamically levels up in appearance, aura intensity, and plasma wings as completion advances past 25%, 50%, 75%, and 100%.
+  - **128 Unit Tests**: Vitest suite expanded to 128 tests covering progress math, best-attempt record storage, fighter tiers, and runner motion frames.
