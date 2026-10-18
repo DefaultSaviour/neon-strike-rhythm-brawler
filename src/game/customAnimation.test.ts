@@ -10,6 +10,8 @@ import {
   enemyPoseFor,
   handleAt,
   handlePosition,
+  HIP_ZONE,
+  LOWEST_HIPS,
   KeyValueStore,
   loadSavedAnimations,
   mergeLibraries,
@@ -146,6 +148,32 @@ describe('moveHandle', () => {
     r = moveHandle(r, 'backElbow', { x: 30, y: -60 });
     r = mirrorRig(r);
     expectLimbLengths(sampleAnimation({ beatsPerPose: 1, facingCamera: false, poses: [r] }, 0));
+  });
+});
+
+describe('timing zone', () => {
+  const rig = rigFromPose(enemyPose('stand', 0, 'samurai'));
+
+  it('the hips cannot be dragged out of the timing zone', () => {
+    expect(moveHandle(rig, 'pelvis', { x: 60, y: rig.pelvis.y }).pelvis.x).toBe(HIP_ZONE);
+    expect(moveHandle(rig, 'pelvis', { x: -60, y: rig.pelvis.y }).pelvis.x).toBe(-HIP_ZONE);
+  });
+
+  it('the hips cannot sink into the floor, and nothing else ends up below it', () => {
+    const squashed = moveHandle(rig, 'pelvis', { x: 0, y: 200 });
+    expect(squashed.pelvis.y).toBe(LOWEST_HIPS);
+    for (const q of [squashed.frontHand, squashed.backHand, squashed.frontFoot, squashed.backFoot]) {
+      expect(q.y).toBeLessThanOrEqual(EDIT_BOUNDS.maxY + 1e-9);
+    }
+  });
+
+  it('a loaded animation with the hips off to one side is slid back into the zone, shape intact', () => {
+    const shifted = { ...rig, pelvis: { x: rig.pelvis.x + 40, y: rig.pelvis.y }, chest: { x: rig.chest.x + 40, y: rig.chest.y } };
+    const lib = parseLibrary({ 'sub-1': { dance: { beatsPerPose: 1, facingCamera: false, poses: [shifted] } } });
+    const loaded = lib['sub-1']!.dance!.poses[0];
+    expect(Math.abs(loaded.pelvis.x)).toBeLessThanOrEqual(HIP_ZONE);
+    // Slid as one piece: the chest is still the same distance from the hips.
+    expect(loaded.chest.x - loaded.pelvis.x).toBeCloseTo(shifted.chest.x - shifted.pelvis.x, 6);
   });
 });
 
