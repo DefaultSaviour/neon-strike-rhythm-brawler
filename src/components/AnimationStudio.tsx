@@ -207,7 +207,17 @@ function drawHandles(
 }
 
 /** Small preview of one pose for the pose strip. */
-function PoseThumb({ rig, enemy, facingCamera }: { rig: PoseRig; enemy: EnemyKey; facingCamera: boolean }) {
+function PoseThumb({
+  rig,
+  enemy,
+  facingCamera,
+  upsideDown,
+}: {
+  rig: PoseRig;
+  enemy: EnemyKey;
+  facingCamera: boolean;
+  upsideDown?: boolean;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current;
@@ -221,8 +231,8 @@ function PoseThumb({ rig, enemy, facingCamera }: { rig: PoseRig; enemy: EnemyKey
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     const view = studioView(w, h);
-    drawEnemyAt(ctx, view, assemblePose(rig, 0, facingCamera), enemy, 0);
-  }, [rig, enemy, facingCamera]);
+    drawEnemyAt(ctx, view, assemblePose(rig, 0, facingCamera, upsideDown), enemy, 0);
+  }, [rig, enemy, facingCamera, upsideDown]);
   return <canvas ref={ref} style={{ width: 56, height: 68 }} />;
 }
 
@@ -452,10 +462,10 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
       // Onion skin: the previous pose, faint, so you can see how far each joint travels.
       if (L.onion && anim.poses.length > 1) {
         const prev = anim.poses[(index - 1 + anim.poses.length) % anim.poses.length];
-        drawEnemyAt(ctx, view, assemblePose(prev, 0, anim.facingCamera), L.enemy, 0, 0.18);
+        drawEnemyAt(ctx, view, assemblePose(prev, 0, anim.facingCamera, anim.upsideDown), L.enemy, 0, 0.18);
       }
       const rig = anim.poses[index];
-      drawEnemyAt(ctx, view, assemblePose(rig, 0, anim.facingCamera), L.enemy, 0);
+      drawEnemyAt(ctx, view, assemblePose(rig, 0, anim.facingCamera, anim.upsideDown), L.enemy, 0);
       drawHandles(ctx, view, rig, L.hover);
     };
     raf = requestAnimationFrame(frame);
@@ -627,6 +637,17 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
               <span>Facing the camera</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.upsideDown === true}
+                onChange={(e) => {
+                  const { upsideDown: _old, ...rest } = draft;
+                  commit(e.target.checked ? { ...rest, upsideDown: true } : rest);
+                }}
+              />
+              <span>Upside down (handstand)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={onion} onChange={(e) => setOnion(e.target.checked)} />
               <span>Show previous pose (ghost)</span>
             </label>
@@ -688,7 +709,7 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
                   active ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-800 bg-slate-950/60 hover:border-slate-600'
                 }`}
               >
-                <PoseThumb rig={rig} enemy={enemy} facingCamera={draft.facingCamera} />
+                <PoseThumb rig={rig} enemy={enemy} facingCamera={draft.facingCamera} upsideDown={draft.upsideDown} />
                 <span className="text-[10px] text-slate-400">Pose {i + 1}</span>
               </button>
             );

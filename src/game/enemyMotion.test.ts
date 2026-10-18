@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { armByAngles, ENEMY_MOTION_STYLES, EnemyMotionStyle, enemyPose, LIMB, solveTwoBone } from './enemyMotion';
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-const styles: EnemyMotionStyle[] = ['stand', 'run', 'dance', 'sway'];
+const styles: EnemyMotionStyle[] = ['stand', 'run', 'dance', 'sway', 'handstand'];
 const builds = ['heavy', 'samurai', 'agile'] as const;
 
 describe('solveTwoBone', () => {
@@ -170,6 +170,33 @@ describe('enemyPose', () => {
     const { joint } = solveTwoBone(shoulder, hand, LIMB.upperArm, LIMB.forearm, bend);
     expect(joint.x).toBeCloseTo(0, 6);
     expect(joint.y).toBeCloseTo(LIMB.upperArm, 6);
+  });
+
+  it('handstand: hands planted on the floor, head hanging between them, legs in the air', () => {
+    for (let beat = 0; beat < 2; beat += 0.1) {
+      const p = enemyPose('handstand', beat, 'samurai');
+      expect(p.upsideDown).toBe(true);
+      expect(p.frontHand.y).toBeCloseTo(68, 6);
+      expect(p.backHand.y).toBeCloseTo(68, 6);
+      expect(p.head.y).toBeGreaterThan(p.chest.y); // head below the chest
+      expect(p.head.y).toBeLessThan(68 - 8); // ...but clear of the floor
+      expect(p.pelvis.y).toBeLessThan(p.chest.y); // hips above the shoulders
+      expect(Math.max(p.frontFoot.y, p.backFoot.y)).toBeLessThan(p.pelvis.y); // feet up in the air
+    }
+  });
+
+  it('handstand: legs scissor from beat to beat, and the elbows dip on the beat', () => {
+    const a = enemyPose('handstand', 0.5, 'agile');
+    const b = enemyPose('handstand', 1.5, 'agile');
+    expect(a.frontFoot.x).toBeGreaterThan(a.backFoot.x + 20);
+    expect(b.backFoot.x).toBeGreaterThan(b.frontFoot.x + 20);
+    expect(enemyPose('handstand', 1, 'agile').chest.y).toBeGreaterThan(enemyPose('handstand', 1.8, 'agile').chest.y + 3);
+  });
+
+  it('only the handstand is upside down', () => {
+    for (const style of ['stand', 'run', 'dance', 'sway'] as const) {
+      expect(enemyPose(style, 1, 'heavy').upsideDown).toBeFalsy();
+    }
   });
 
   it('lists every style once for the options menu', () => {

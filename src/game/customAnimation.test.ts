@@ -137,6 +137,26 @@ describe('blending rotates around the pivots', () => {
   });
 });
 
+describe('upside-down animations', () => {
+  it('the built-in handstand stays upside down through editing, saving and playback', () => {
+    const anim = builtInAnimation('handstand', 'bass');
+    expect(anim.upsideDown).toBe(true);
+    const lib = parseLibrary(withAnimation({}, 'bass-2', 'handstand', anim));
+    expect(lib['bass-2']!.handstand!.upsideDown).toBe(true);
+    for (let beat = 0; beat < 2; beat += 0.13) {
+      const p = sampleAnimation(lib['bass-2']!.handstand!, beat);
+      expect(p.upsideDown).toBe(true);
+      expectLimbLengths(p);
+    }
+  });
+
+  it('upright animations do not gain an upsideDown flag when loaded', () => {
+    const anim = builtInAnimation('dance', 'sub');
+    expect('upsideDown' in anim).toBe(false);
+    expect('upsideDown' in parseLibrary(withAnimation({}, 'sub-1', 'dance', anim))['sub-1']!.dance!).toBe(false);
+  });
+});
+
 describe('enemyPoseFor', () => {
   it('uses the built-in stance when there is no custom animation', () => {
     expectSamePose(enemyPoseFor('dance', 0.7, 'sub', 1, {}), enemyPose('dance', 0.7, 'heavy'));

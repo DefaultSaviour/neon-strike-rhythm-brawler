@@ -10,13 +10,14 @@
  * (no stretchy rubber arms, whatever the style does).
  */
 
-export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway';
+export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway' | 'handstand';
 
 export const ENEMY_MOTION_STYLES: Array<{ id: EnemyMotionStyle; label: string; description: string }> = [
   { id: 'run', label: 'Run on the spot', description: 'High knees and sprinter arms swinging from the shoulder, one step per beat' },
   { id: 'dance', label: 'Dance', description: 'Each enemy busts out its signature move: the Moonwalk, YMCA, the Floss, Thriller...' },
   { id: 'sway', label: 'Hands up', description: 'Facing you, arms waving overhead like a crowd, knees and elbows pumping on the beat' },
   { id: 'stand', label: 'Just stand', description: 'Guard up, riding the conveyor, nodding on the beat' },
+  { id: 'handstand', label: 'Handstand', description: 'Upside down on their hands, legs scissoring in the air, elbows dipping on the beat' },
 ];
 
 export const DEFAULT_ENEMY_MOTION: EnemyMotionStyle = 'run';
@@ -47,9 +48,17 @@ export interface EnemyPose {
   stomp: number;
   /** True when the body faces the viewer (symmetric pose) rather than side-on */
   facingCamera: boolean;
+  /**
+   * True when the body is upside down (a handstand). The joints are real
+   * positions either way; this only tells the art to draw hats, helmets and
+   * other gear flipped, hanging toward the floor.
+   */
+  upsideDown?: boolean;
 }
 
 export const LIMB = { upperArm: 21, forearm: 21, thigh: 31, shin: 32 } as const;
+/** Pelvis to chest in the built-in stances. */
+const SPINE_LENGTH = 30;
 export const FLOOR = 68;
 
 const BUILDS: Record<EnemyBuild, { hunch: number; stance: number }> = {
@@ -93,10 +102,22 @@ function dirPoint(from: Point, angleDeg: number, length: number): Point {
  * hand position and the elbow side, which the IK then reproduces exactly.
  */
 export function armByAngles(shoulder: Point, upperDeg: number, foreDeg: number): { hand: Point; bend: 1 | -1 } {
-  const elbow = dirPoint(shoulder, upperDeg, LIMB.upperArm);
-  const hand = dirPoint(elbow, foreDeg, LIMB.forearm);
-  const cross = (hand.x - shoulder.x) * (elbow.y - shoulder.y) - (hand.y - shoulder.y) * (elbow.x - shoulder.x);
-  return { hand, bend: cross >= 0 ? 1 : -1 };
+  const { end, bend } = limbByAngles(shoulder, upperDeg, foreDeg, LIMB.upperArm, LIMB.forearm);
+  return { hand: end, bend };
+}
+
+/** Same as armByAngles for any two-bone limb (legs use the thigh and shin lengths). */
+export function limbByAngles(
+  root: Point,
+  upperDeg: number,
+  lowerDeg: number,
+  upperLength: number,
+  lowerLength: number
+): { end: Point; bend: 1 | -1 } {
+  const joint = dirPoint(root, upperDeg, upperLength);
+  const end = dirPoint(joint, lowerDeg, lowerLength);
+  const cross = (end.x - root.x) * (joint.y - root.y) - (end.y - root.y) * (joint.x - root.x);
+  return { end, bend: cross >= 0 ? 1 : -1 };
 }
 
 /**
@@ -141,6 +162,7 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
   // Half the distance between the shoulders. Side-on poses overlap them; front-on spreads them.
   let shoulderSpread = 3;
   let facingCamera = false;
+  let upsideDown = false;
   let stomp = 0;
 
   if (style === 'run') {
@@ -214,6 +236,33 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     legBendFront = -1;
     legBendBack = 1;
     stomp = 0;
+  } else if (style === 'handstand') {
+    // Handstand, side-on: hands planted on the floor with the head hanging
+    // between them, body straight up, legs scissoring in the air (rotating
+    // around the hips) over two beats. On every beat the elbows dip and the
+    // knees tuck a little further, then push back up.
+    upsideDown = true;
+    const s = Math.sin(Math.PI * beat);
+    const dip = pulse * 5;
+    chest = { x: 1, y: 27 + dip };
+    pelvis = { x: chest.x - 2, y: chest.y - SPINE_LENGTH };
+    // Head tucked in between the arms (closer to the chest than standing up),
+    // so hats and helmets have room above the floor.
+    head = { x: chest.x + 4, y: chest.y + 18 };
+    frontHandTarget = { x: 9, y: FLOOR };
+    backHandTarget = { x: -7, y: FLOOR };
+    // Elbows bend back toward the legs' side, like a handstand push-up.
+    armBendFront = 1;
+    armBendBack = 1;
+    const split = 32 * s;
+    const tuck = 22 + pulse * 30;
+    const frontLeg = limbByAngles(pelvis, -90 + split, -90 + split - tuck, LIMB.thigh, LIMB.shin);
+    const backLeg = limbByAngles(pelvis, -90 - split, -90 - split - tuck, LIMB.thigh, LIMB.shin);
+    frontFootTarget = frontLeg.end;
+    backFootTarget = backLeg.end;
+    legBendFront = frontLeg.bend;
+    legBendBack = backLeg.bend;
+    stomp = 0;
   } else {
     // Stand: fighting guard, small nod on each beat.
     const dip = pulse * 1.8;
@@ -242,7 +291,8 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
       shoulderSpread,
     },
     stomp,
-    facingCamera
+    facingCamera,
+    upsideDown
   );
 }
 
@@ -274,7 +324,7 @@ export interface PoseRig {
 }
 
 /** Turn a rig into a full skeleton: shoulders, then elbows and knees by two-bone IK. */
-export function assemblePose(rig: PoseRig, stomp: number, facingCamera: boolean): EnemyPose {
+export function assemblePose(rig: PoseRig, stomp: number, facingCamera: boolean, upsideDown = false): EnemyPose {
   const { pelvis, chest, head, bends, shoulderSpread } = rig;
   const frontShoulder = { x: chest.x + shoulderSpread, y: chest.y + 1 };
   const backShoulder = { x: chest.x - shoulderSpread, y: chest.y + 1 };
@@ -299,6 +349,7 @@ export function assemblePose(rig: PoseRig, stomp: number, facingCamera: boolean)
     backFoot: backLeg.end,
     stomp,
     facingCamera,
+    upsideDown,
   };
 }
 
