@@ -140,8 +140,14 @@ describe('Baba Yaga', () => {
       expect(m.pose.bladeSlash!.end.x).toBeGreaterThan(m.pose.pelvis.x);
       for (const k of m.sequence!.slice(1)) expect(k.ms).toBeGreaterThan(0);
     }
-    const multiHit = baba.moves.filter((m) => m.sequence!.filter((k) => k.trail).length >= 3);
-    expect(multiHit.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('keeps every move simple: a few big poses and at most two shots (finishers a little more)', () => {
+    for (const m of baba.moves) {
+      const finisher = m.tier === 5;
+      expect(m.sequence!.length).toBeLessThanOrEqual(finisher ? 4 : 3);
+      expect(m.sequence!.filter((k) => k.shot).length).toBeLessThanOrEqual(finisher ? 3 : 2);
+    }
   });
 
   it('always has a weapon in hand, and holds the pistol two-handed at the chest when idle', () => {
@@ -154,7 +160,7 @@ describe('Baba Yaga', () => {
 
   it('shots only fire with a trail (the bullet streak), and only on guns', () => {
     const shots = allKeys.filter((k) => k.shot);
-    expect(shots.length).toBeGreaterThan(40);
+    expect(shots.length).toBeGreaterThan(15);
     for (const k of shots) {
       expect(k.trail).toBeDefined();
       expect(['pistol', 'pistols', 'shotgun']).toContain(k.prop);
@@ -166,10 +172,10 @@ describe('Baba Yaga', () => {
   it('the muzzle flash sits at the end of the gun that is firing', () => {
     const dual = baba.moves.find((m) => m.name === 'Dual Pistols')!.sequence!.map((k) => keyToPlayerPose(k));
     // Lead hand fires first, then the rear hand
-    expect(dist(muzzlePoint(dual[0], 1)!, dual[0].leftHand)).toBeCloseTo(9, 3);
-    expect(dist(muzzlePoint(dual[1], 1)!, dual[1].rightHand)).toBeCloseTo(9, 3);
+    expect(dist(muzzlePoint(dual[0], 1)!, dual[0].leftHand)).toBeCloseTo(13, 3);
+    expect(dist(muzzlePoint(dual[1], 1)!, dual[1].rightHand)).toBeCloseTo(13, 3);
     const blast = keyToPlayerPose(baba.moves.find((m) => m.name === 'Shotgun Blast')!.sequence![0]);
-    expect(dist(muzzlePoint(blast, 1)!, blast.leftHand)).toBeCloseTo(22, 3);
+    expect(dist(muzzlePoint(blast, 1)!, blast.leftHand)).toBeCloseTo(26, 3);
     expect(muzzlePoint(baba.idlePose, 1)).toBeUndefined();
   });
 

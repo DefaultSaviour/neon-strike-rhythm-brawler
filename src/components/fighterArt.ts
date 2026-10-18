@@ -344,8 +344,8 @@ function drawFocusAfterimages(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
 }
 
 /**
- * Baba Yaga's suit: a dark jacket over the torso with a white collar V and a
- * black tie, slicked-back hair and stubble along the jaw.
+ * Baba Yaga's suit, kept simple so it reads at game size: a dark jacket over
+ * the torso, a white collar V and slicked-back hair.
  */
 function drawBabaYagaOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
   const c = pose.chest;
@@ -373,7 +373,7 @@ function drawBabaYagaOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, fac
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  // White shirt collar V, and the black tie down the middle
+  // White shirt collar V
   ctx.shadowBlur = 0;
   const v = along(0.3);
   ctx.strokeStyle = '#f2f2f7';
@@ -382,14 +382,6 @@ function drawBabaYagaOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, fac
   ctx.moveTo(c.x - 4, c.y - 1);
   ctx.lineTo(v.x, v.y);
   ctx.lineTo(c.x + 4, c.y - 1);
-  ctx.stroke();
-  const knot = along(0.15);
-  const tip = along(0.6);
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(knot.x, knot.y);
-  ctx.lineTo(tip.x, tip.y);
   ctx.stroke();
   // Slicked-back hair: a dark cap swept into a point behind the head
   const h = pose.head;
@@ -407,17 +399,12 @@ function drawBabaYagaOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, fac
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  // Stubble along the front of the jaw
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(20, 20, 30, 0.75)';
-  ctx.lineWidth = 2.2;
-  ctx.setLineDash([1, 1.4]);
-  ctx.beginPath();
-  if (facing > 0) ctx.arc(h.x + 1.5, h.y + 1, 6.5, 0.1 * Math.PI, 0.55 * Math.PI);
-  else ctx.arc(h.x - 1.5, h.y + 1, 6.5, 0.45 * Math.PI, 0.9 * Math.PI);
-  ctx.stroke();
   ctx.restore();
 }
+
+/** Barrel lengths past the hand. Big on purpose: the guns must read at game size. */
+const PISTOL_LENGTH = 13;
+const SHOTGUN_LENGTH = 26;
 
 /** A weapon gripped in a hand: which way it points (along the forearm) and where its muzzle is. */
 function weaponAt(hand: Point2D, elbow: Point2D, length: number) {
@@ -440,13 +427,13 @@ export function muzzlePoint(pose: SkeletonPose, facing: 1 | -1): Point2D | undef
   if (!pose.shot || !pose.bladeSlash) return undefined;
   const { lead, rear } = arms(pose, facing);
   const arm = pose.shot === 'rear' ? rear : lead;
-  return weaponAt(arm.hand, arm.elbow, pose.prop === 'shotgun' ? 22 : 9).muzzle;
+  return weaponAt(arm.hand, arm.elbow, pose.prop === 'shotgun' ? SHOTGUN_LENGTH : PISTOL_LENGTH).muzzle;
 }
 
 /**
- * Pistol(s), shotgun or pencil, plus the muzzle flash and a spent casing
- * when the pose fires. The bullet streak itself is the pose's trail. In the
- * top-level form a red laser sight runs out from the lead gun.
+ * Pistol(s), shotgun or pencil. The bullet streak is the pose's trail and
+ * the flash is drawShotFlash. In the top-level form a red laser sight runs
+ * out from the lead gun.
  */
 function drawHandWeapons(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, laser: boolean) {
   const { lead, rear } = arms(pose, facing);
@@ -470,20 +457,20 @@ function drawHandWeapons(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, laser: bo
   }
 
   const pistol = (hand: Point2D, elbow: Point2D) => {
-    const { dir, muzzle } = weaponAt(hand, elbow, 9);
-    ctx.lineWidth = 3.2;
+    const { dir, muzzle } = weaponAt(hand, elbow, PISTOL_LENGTH);
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
     ctx.moveTo(hand.x - dir.x * 1.5, hand.y - dir.y * 1.5);
     ctx.lineTo(muzzle.x, muzzle.y);
     // Grip, hanging below the slide
     ctx.moveTo(hand.x, hand.y);
-    ctx.lineTo(hand.x - dir.x * 2 - dir.y * 4.5, hand.y - dir.y * 2 + dir.x * 4.5);
+    ctx.lineTo(hand.x - dir.x * 2 - dir.y * 6, hand.y - dir.y * 2 + dir.x * 6);
     ctx.stroke();
   };
-  const gunLength = pose.prop === 'shotgun' ? 22 : 9;
+  const gunLength = pose.prop === 'shotgun' ? SHOTGUN_LENGTH : PISTOL_LENGTH;
   const { dir, muzzle } = weaponAt(lead.hand, lead.elbow, gunLength);
   if (pose.prop === 'shotgun') {
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
     ctx.moveTo(lead.hand.x - dir.x * 22, lead.hand.y - dir.y * 22 + 2);
     ctx.lineTo(lead.hand.x - dir.x * 12, lead.hand.y - dir.y * 12);
@@ -514,34 +501,45 @@ function drawHandWeapons(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, laser: bo
     ctx.restore();
   }
 
+  ctx.restore();
+}
+
+/**
+ * The muzzle flash for a pose that fires: a bold white starburst at the
+ * muzzle and a white core down the tracer. Drawn AFTER the slash
+ * crescent (the bullet streak), or the streak would cover it.
+ */
+export function drawShotFlash(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  ctx.save();
   const m = muzzlePoint(pose, facing);
   if (m && pose.bladeSlash) {
-    // Muzzle flash: a white three-point star, and a thin white core on the tracer
     const e = pose.bladeSlash.end;
     const a = Math.atan2(e.y - m.y, e.x - m.x);
-    const big = pose.prop === 'shotgun' ? 1.6 : 1;
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#ffd27a';
-    ctx.shadowBlur = 14;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const r = (i % 2 === 1 ? 2.2 : i === 0 ? 12 : 6.5) * big;
-      const t = a + (i * Math.PI) / 3;
-      ctx.lineTo(m.x + Math.cos(t) * r, m.y + Math.sin(t) * r);
-    }
-    ctx.closePath();
-    ctx.fill();
+    const big = pose.prop === 'shotgun' ? 1.5 : 1;
+    // White core down the tracer
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 0.8;
+    ctx.shadowColor = '#ffd27a';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(m.x, m.y);
     ctx.lineTo(e.x, e.y);
     ctx.stroke();
-    // A spent brass casing kicked up and back off the gun
-    ctx.fillStyle = '#e8b04a';
-    ctx.shadowColor = '#e8b04a';
-    ctx.shadowBlur = 4;
-    ctx.fillRect(m.x - Math.cos(a) * 12 - 1.25, m.y - 10, 2.5, 4);
+    // Starburst: a glowing orange disc with eight white spikes, the longest pointing down the barrel
+    ctx.fillStyle = 'rgba(255, 170, 60, 0.85)';
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 6 * big, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const r = (i % 2 === 1 ? 3 : i === 0 ? 17 : 10) * big;
+      const t = a + (i * Math.PI) / 8;
+      ctx.lineTo(m.x + Math.cos(t) * r, m.y + Math.sin(t) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
   }
   ctx.restore();
 }
