@@ -13,9 +13,9 @@
 export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway';
 
 export const ENEMY_MOTION_STYLES: Array<{ id: EnemyMotionStyle; label: string; description: string }> = [
-  { id: 'run', label: 'Run on the spot', description: 'Knees up, arms pumping, one step per beat' },
+  { id: 'run', label: 'Run on the spot', description: 'High knees and sprinter arms swinging from the shoulder, one step per beat' },
   { id: 'dance', label: 'Dance', description: 'Each enemy busts out its signature move: the Moonwalk, YMCA, the Floss, Thriller...' },
-  { id: 'sway', label: 'Hands up', description: 'Facing you, hands in the air, knees and elbows pumping on the beat' },
+  { id: 'sway', label: 'Hands up', description: 'Facing you, arms waving overhead like a crowd, knees and elbows pumping on the beat' },
   { id: 'stand', label: 'Just stand', description: 'Guard up, riding the conveyor, nodding on the beat' },
 ];
 
@@ -80,6 +80,37 @@ export function solveTwoBone(root: Point, target: Point, l1: number, l2: number,
   return { joint, end };
 }
 
+const deg = (d: number) => (d * Math.PI) / 180;
+
+function dirPoint(from: Point, angleDeg: number, length: number): Point {
+  return { x: from.x + Math.cos(deg(angleDeg)) * length, y: from.y + Math.sin(deg(angleDeg)) * length };
+}
+
+/**
+ * Place an arm by ROTATING it around its pivots: the upper arm turns around
+ * the shoulder and the forearm around the elbow. Angles are in degrees on
+ * screen (0 = toward +x, 90 = straight down, -90 = straight up). Returns the
+ * hand position and the elbow side, which the IK then reproduces exactly.
+ */
+export function armByAngles(shoulder: Point, upperDeg: number, foreDeg: number): { hand: Point; bend: 1 | -1 } {
+  const elbow = dirPoint(shoulder, upperDeg, LIMB.upperArm);
+  const hand = dirPoint(elbow, foreDeg, LIMB.forearm);
+  const cross = (hand.x - shoulder.x) * (elbow.y - shoulder.y) - (hand.y - shoulder.y) * (elbow.x - shoulder.x);
+  return { hand, bend: cross >= 0 ? 1 : -1 };
+}
+
+/**
+ * Where a leg's foot ends up (relative to a straight hanging leg) when the
+ * thigh swings forward around the hip by `thighDeg` and the shin folds back
+ * around the knee by `foldDeg`. Used for the running high-knee drive.
+ */
+function kneeDriveOffset(thighDeg: number, foldDeg: number): Point {
+  const hip = { x: 0, y: 0 };
+  const knee = dirPoint(hip, 90 - thighDeg, LIMB.thigh);
+  const foot = dirPoint(knee, 90 - thighDeg + foldDeg, LIMB.shin);
+  return { x: foot.x, y: foot.y - (LIMB.thigh + LIMB.shin) };
+}
+
 function pulseAt(beat: number, sharpness = 5) {
   const frac = beat - Math.floor(beat);
   return Math.exp(-frac * sharpness);
@@ -116,18 +147,27 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     // One footfall per beat, alternating legs. theta = 0, pi, 2pi... are the landings.
     const theta = Math.PI * beat;
     const s = Math.sin(theta);
-    const lift = 24;
     const bounce = (1 - Math.abs(s)) * 4; // body lowest as a foot lands
     pelvis = { x: 2, y: 8 + bounce };
     chest = { x: hunch + 6, y: -22 + bounce };
     head = { x: hunch + 10, y: -48 + bounce };
-    frontFootTarget = { x: stance * 0.45 + s * 6, y: FLOOR - Math.max(0, s) * lift };
-    backFootTarget = { x: -stance * 0.45 + s * 6, y: FLOOR - Math.max(0, -s) * lift };
-    // Arms pump opposite to the legs.
-    frontHandTarget = { x: chest.x + 18 - s * 14, y: chest.y + 6 - Math.max(0, -s) * 12 };
-    backHandTarget = { x: chest.x - 4 + s * 14, y: chest.y + 8 - Math.max(0, s) * 12 };
-    armBendFront = 1;
-    armBendBack = 1;
+    // High-knee drive: the lifted leg's thigh swings up around the hip and the
+    // shin folds back under it, then the foot comes down exactly on the beat.
+    const drive = (lift: number) => kneeDriveOffset(72 * lift, 115 * lift);
+    const frontPlant = { x: stance * 0.45 + s * 6, y: FLOOR };
+    const backPlant = { x: -stance * 0.45 + s * 6, y: FLOOR };
+    const frontLift = drive(Math.max(0, s));
+    const backLift = drive(Math.max(0, -s));
+    frontFootTarget = { x: frontPlant.x + frontLift.x, y: frontPlant.y + frontLift.y };
+    backFootTarget = { x: backPlant.x + backLift.x, y: backPlant.y + backLift.y };
+    // Sprinter's arms, opposite to the legs: each upper arm swings around its
+    // shoulder with the elbow held at about 90 degrees.
+    const frontArm = armByAngles({ x: chest.x + shoulderSpread, y: chest.y + 1 }, 90 + 42 * s, 5 + 42 * s);
+    const backArm = armByAngles({ x: chest.x - shoulderSpread, y: chest.y + 1 }, 90 - 42 * s, 5 - 42 * s);
+    frontHandTarget = frontArm.hand;
+    backHandTarget = backArm.hand;
+    armBendFront = frontArm.bend;
+    armBendBack = backArm.bend;
     stomp = pulse;
   } else if (style === 'dance') {
     // Dip on every beat, hips swing side to side, arms take turns pointing up.
@@ -146,25 +186,31 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     armBendBack = -1;
     stomp = pulse;
   } else if (style === 'sway') {
-    // Hands-up crowd pose, FACING THE CAMERA: one arm up on each side of the
-    // head, feet apart. On every beat the whole body pumps: knees and elbows
-    // bend (body dips, hands drop a little), then straighten between beats.
-    // A gentle side-to-side sway runs over two beats.
+    // Hands-up crowd pose, FACING THE CAMERA, like a crowd at a concert:
+    // both arms up, waving side to side together over two beats (rotating
+    // around the shoulders, forearms whipping a little further around the
+    // elbows). On every beat the whole body pumps: knees bend, and the
+    // forearms fold in around the elbows, then everything straightens.
     facingCamera = true;
-    const sway = Math.sin((Math.PI * beat) / 2) * 3;
+    const wave = Math.sin((Math.PI * beat) / 2);
+    const sway = wave * 3;
     const dip = pulse * 7;
-    const handDrop = pulse * 14;
     pelvis = { x: sway * 0.5, y: 8 + dip };
     chest = { x: sway, y: -22 + dip };
     head = { x: sway * 1.3, y: -48 + dip };
     frontFootTarget = { x: 13, y: FLOOR };
     backFootTarget = { x: -13, y: FLOOR };
-    frontHandTarget = { x: chest.x + 21, y: chest.y - 42 + handDrop };
-    backHandTarget = { x: chest.x - 21, y: chest.y - 42 + handDrop };
     shoulderSpread = 9;
-    // Elbows and knees bend OUTWARD, away from the body's centre line.
-    armBendFront = 1;
-    armBendBack = -1;
+    const fold = pulse * 55;
+    const frontUpper = -58 + wave * 8;
+    const backUpper = -122 + wave * 8;
+    const frontArm = armByAngles({ x: chest.x + shoulderSpread, y: chest.y + 1 }, frontUpper, frontUpper - fold + wave * 6);
+    const backArm = armByAngles({ x: chest.x - shoulderSpread, y: chest.y + 1 }, backUpper, backUpper + fold + wave * 6);
+    frontHandTarget = frontArm.hand;
+    backHandTarget = backArm.hand;
+    armBendFront = frontArm.bend;
+    armBendBack = backArm.bend;
+    // Knees bend OUTWARD, away from the body's centre line.
     legBendFront = -1;
     legBendBack = 1;
     stomp = 0;
