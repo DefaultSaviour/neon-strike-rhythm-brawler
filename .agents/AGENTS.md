@@ -102,3 +102,9 @@
   - **Animation Studio (`src/components/AnimationStudio.tsx`, `src/game/customAnimation.ts`, `src/game/animationLibrary.ts`)**: Full in-browser editor accessible from the main menu. Pose any of the 9 enemy variants by dragging head, chest, hips, hands, and feet with an analytical 2-bone IK solver (limbs never stretch, click joint to flip bend). Multi-frame keyframe timeline with real-time looping preview on the beat.
   - **Animation Storage & Bundling**: Custom animations can replace any of the 4 motion stances per enemy variant, persist in `localStorage` via "Save to Game", and export/import JSON to bundle into `src/game/bundledAnimations.ts`.
   - **157 Unit Tests**: Vitest suite expanded to 157 tests covering IK rigs, blending, keyframes, validation, storage, coordinate mapping, and conveyor riding physics.
+- [x] **Animation Studio Draggable Elbows & Knees**:
+  - **Natural Limb Angle Control (`src/game/customAnimation.ts`, `src/components/AnimationStudio.tsx`)**: Replaced click-to-flip diamond buttons with interactive circular drag handles for all mid-joints (elbows and knees).
+  - **Upper-Bone Arc Posing**: Dragging an elbow or knee swings the upper arm/thigh around the shoulder/hip toward the pointer, while the forearm/shin naturally rides along pointing in the same direction.
+  - **Automatic Bend Inversion**: Sweeping past straight dynamically flips the bend side without requiring a separate toggle.
+  - **159 Unit Tests**: Vitest suite expanded to 159 tests covering elbow/knee drag angle calculation and IK rig preservation.
+
