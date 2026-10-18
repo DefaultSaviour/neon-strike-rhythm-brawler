@@ -222,6 +222,72 @@ describe('Baba Yaga', () => {
   });
 });
 
+describe('The One', () => {
+  const one = getHero('theOne');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(one.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => one.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(one.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [one.idlePose, ...one.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of one.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x).toBeGreaterThan(m.pose.pelvis.x);
+      for (const k of m.sequence!.slice(1)) expect(k.ms).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of one.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of one.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x)).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('the tier 4 moves float: he stays off the floor for the whole combo', () => {
+    const floating = one.moves.filter((m) => m.tier === 4);
+    expect(floating).toHaveLength(4);
+    for (const m of floating) {
+      for (const k of m.sequence!) expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y)).toBeLessThan(64);
+    }
+  });
+
+  it('jumping moves really leave the ground', () => {
+    for (const name of ['Wall-Run Kick', 'Corkscrew Kick', 'Flying Knee', 'Air Pirouette Kick', 'Superman Punch']) {
+      const k = one.moves.find((m) => m.name === name)!.sequence![0];
+      expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y)).toBeLessThan(64);
+    }
+  });
+
+  it('fights bare-handed', () => {
+    expect(one.moves.every((m) => m.sequence!.every((k) => !k.prop && !k.shot))).toBe(true);
+  });
+});
+
 describe('getMoveForCombo with a hero', () => {
   it('unlocks tougher moves as the combo grows, cycling through each tier', () => {
     expect(getMoveForCombo(0, 0, dragon.moves).tier).toBe(1);

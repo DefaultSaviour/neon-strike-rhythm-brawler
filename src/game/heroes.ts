@@ -2,6 +2,7 @@ import { AttackMove, SkeletonPose } from '../types/game';
 import { ATTACK_MOVES, IDLE_POSE } from './animations';
 import { BABA_YAGA_IDLE, BABA_YAGA_MOVES } from './heroMoves/babaYaga';
 import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDragon';
+import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
 
 /**
  * The heroes you can play. Each has its own fighting stance, its own set of
@@ -10,7 +11,7 @@ import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDrago
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -43,6 +44,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Gun-fu assassin: point-blank shots, judo throws and a shotgun',
     idlePose: BABA_YAGA_IDLE,
     moves: BABA_YAGA_MOVES,
+  },
+  {
+    id: 'theOne',
+    label: 'The One',
+    description: 'Bullet-time kung fu: impossible dodges, and he floats while he kicks',
+    idlePose: THE_ONE_IDLE,
+    moves: THE_ONE_MOVES,
   },
 ];
 
