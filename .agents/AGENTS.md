@@ -130,6 +130,17 @@
     - "Run on the spot": Sprinter arms swing around shoulders with elbows held near 90° opposed to leg stride; lifted leg drives high knee around hip with shin folding back.
     - "Hands up": Mirrored arm sway synchronized with body lean; forearms rhythmically fold and extend at elbows on every beat.
   - **180 Unit Tests**: Vitest suite expanded to 180 tests covering angular shortest-path lerping, arc radius preservation, 360° spin cycles, and stance kinematic fidelity.
+- [x] **Handstand Stance for All Enemies & Clearer Moonwalk**:
+  - **New 5th Motion Stance: Handstand (`src/game/enemyMotion.ts`, `src/components/enemyArt.ts`)**:
+    - Side-on stance with hands planted on the floor and head tucked between arms.
+    - Legs scissor in the air from hips over two beats, while elbows dip and knees tuck in sync with each beat.
+    - Real anatomical joint positions ensure debris explodes accurately from upside-down coordinates.
+    - Canvas flip (`EnemyPose.upsideDown`) hangs hats, helmets, and halos downward, with floor-clipping protecting ground penetrations.
+    - Animation Studio toggle "Upside down (handstand)" allows custom upside-down choreography for any enemy.
+  - **Enhanced Michael Jackson Moonwalk (`src/game/signatureDances.ts`)**:
+    - Acid Dancer's moonwalk upgraded with authentic pop-and-glide kinematics: snappy toe pop, flat backward sliding leg, and an iconic toe-stand hat-tip finale.
+  - **187 Unit Tests**: Vitest suite expanded to 187 tests covering handstand ground contact, head floor clearance, leg scissoring, inverted canvas flipping, and stance preservation.
+
 
 
 
