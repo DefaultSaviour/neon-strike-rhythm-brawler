@@ -140,6 +140,15 @@
   - **Enhanced Michael Jackson Moonwalk (`src/game/signatureDances.ts`)**:
     - Acid Dancer's moonwalk upgraded with authentic pop-and-glide kinematics: snappy toe pop, flat backward sliding leg, and an iconic toe-stand hat-tip finale.
   - **187 Unit Tests**: Vitest suite expanded to 187 tests covering handstand ground contact, head floor clearance, leg scissoring, inverted canvas flipping, and stance preservation.
+- [x] **Robot, Headbang & Zombie Stances with Smooth Hands-Up Groove**:
+  - **3 New Stances (`src/game/enemyMotion.ts`)**:
+    - **Robot**: Front-facing robotic isolation; right-angle arms snap in the first eighth of each beat and freeze until the next, accompanied by stiff head tilts and knee dips on a 4-beat cycle.
+    - **Headbang**: Side-on intense headbanging; head snaps downward fast into each beat and rises slowly, while playing air guitar strumming on the beat.
+    - **Zombie**: Side-on hunched posture with drooping wrists reaching for the player, lolling head, and dragging foot shuffle.
+  - **Smooth Hands-Up Groove**: Overhauled sway and forearm fold kinematics so the body sways strictly on beat with zero frame-jumping or snapping.
+  - **Inverted Handstand Foot Gear Suppression (`src/components/enemyArt.ts`)**: Skips floor-oriented foot gear (Speeder boot jets, Wraith hover discs, Titan stomp shockwaves) when enemies are inverted in handstands.
+  - **194 Unit Tests**: Vitest suite expanded to 194 tests covering snap-and-hold robot timing, headbang peak velocity, zombie reach, and smooth hands-up interpolation.
+
 
 
 
