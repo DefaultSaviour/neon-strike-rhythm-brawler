@@ -11,7 +11,7 @@ import { Enemy } from '../types/game';
 import { enemyPoseFor } from '../game/customAnimation';
 import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
-import { drawFighter, drawShotFlash, drawSlashCrescent } from './fighterArt';
+import { drawFighter, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
@@ -737,6 +737,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   if (pose.bladeSlash && engine.strikeActive) {
     drawSlashCrescent(ctx, pose.bladeSlash);
     drawShotFlash(ctx, pose, engine.attackDirection === 'left' ? -1 : 1);
+    if (engine.settings.hero === 'theOne') drawImpactRipple(ctx, pose);
   }
 
   // Move & tier banner

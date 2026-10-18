@@ -58,7 +58,10 @@ export function comboFrame(
     if (e < d) {
       const t = e / d;
       const blended = blendPoses(keys[i - 1].pose, keys[i].pose, easeOutCubic(t), 0, false);
-      const pose = keyToPlayerPose({ ...keys[i], pose: blended, trail: t < TRAIL_SHOWN_FOR ? keys[i].trail : undefined });
+      // A hit's trail fades out near the end of its travel, unless a hold follows: then it stays
+      // on through the travel and the hold, so the effect never blinks off and back on.
+      const showTrail = t < TRAIL_SHOWN_FOR || keys[i].hold || keys[i + 1]?.hold;
+      const pose = keyToPlayerPose({ ...keys[i], pose: blended, trail: showTrail ? keys[i].trail : undefined });
       return { pose: orient(pose), lungeX: lunge, active: !!pose.bladeSlash };
     }
     e -= d;

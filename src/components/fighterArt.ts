@@ -39,6 +39,7 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   if (tier.ascended) {
     if (opts.hero === 'dragon') drawDragonSpirit(ctx, pose, opts.time);
     else if (opts.hero === 'babaYaga') drawGoldCoinHalo(ctx, pose, opts.time);
+    else if (opts.hero === 'theOne') drawCodeRain(ctx, pose, opts.time);
     else drawAngelWings(ctx, pose, opts.time);
   }
 
@@ -82,6 +83,9 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
     }
   }
 
+  // 4b. The One's long coat tail, flaring out behind his legs
+  if (opts.hero === 'theOne') drawCoatTail(ctx, pose, tier, opts.facing, opts.time);
+
   // 5. Solid neon body. The left limbs lead in every attack pose, so they're in front.
   drawNeonBody(
     ctx,
@@ -109,17 +113,22 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   // 5b. Hero outfit details on top of the body
   if (opts.hero === 'dragon') drawLittleDragonOutfit(ctx, pose, tier);
   if (opts.hero === 'babaYaga') drawBabaYagaOutfit(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'theOne') drawTheOneOutfit(ctx, pose, tier, opts.facing);
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
   if (pose.prop === 'pistol' || pose.prop === 'pistols' || pose.prop === 'shotgun' || pose.prop === 'pencil') {
     drawHandWeapons(ctx, pose, opts.facing, tier.ascended && opts.hero === 'babaYaga');
   }
 
-  // 6. Visor and pulsing chest core
+  // 6. Visor (The One wears small dark sunglasses instead) and pulsing chest core
   ctx.save();
-  ctx.fillStyle = tier.visorColor;
-  ctx.shadowColor = tier.visorColor;
-  ctx.shadowBlur = 10;
-  ctx.fillRect(opts.facing > 0 ? pose.head.x - 1 : pose.head.x - 9, pose.head.y - 2.5, 10, 3.5);
+  if (opts.hero === 'theOne') {
+    drawSunglasses(ctx, pose, opts.facing);
+  } else {
+    ctx.fillStyle = tier.visorColor;
+    ctx.shadowColor = tier.visorColor;
+    ctx.shadowBlur = 10;
+    ctx.fillRect(opts.facing > 0 ? pose.head.x - 1 : pose.head.x - 9, pose.head.y - 2.5, 10, 3.5);
+  }
   const core = 2.5 + (opts.corePulse ?? 0) * 2.5 + Math.min(2.5, combo * 0.08);
   ctx.fillStyle = '#ffffff';
   ctx.shadowColor = tier.color;
@@ -303,6 +312,162 @@ function drawNunchaku(ctx: Ctx, pose: SkeletonPose) {
   ctx.lineTo(link.x, link.y);
   ctx.stroke();
   ctx.restore();
+}
+
+/** The falling streaks of The One's code rain: where each bright head is, and how long it is. */
+export function codeRainStreaks(pose: SkeletonPose, time: number, count = 20) {
+  const top = pose.head.y - 90;
+  const span = 68 - top;
+  const streaks = [];
+  for (let i = 0; i < count; i++) {
+    // Spread the columns across both sides of him, each falling at its own speed
+    const x = pose.chest.x + ((i * 37) % 150) - 75;
+    const speed = 70 + ((i * 53) % 60);
+    const y = top + ((time * speed + i * 41) % span);
+    streaks.push({ x, y, length: 16 + ((i * 29) % 18) });
+  }
+  return streaks;
+}
+
+/**
+ * The One's top-level form: green "code" raining down all around him, each
+ * streak a column of short dashes with a bright head, plus a green glow
+ * ring under his feet. One path per colour, so it stays cheap.
+ */
+function drawCodeRain(ctx: Ctx, pose: SkeletonPose, time: number) {
+  const streaks = codeRainStreaks(pose, time);
+  ctx.save();
+  ctx.lineCap = 'butt';
+  // Dim tails: a column of dashes trailing up from each head
+  ctx.strokeStyle = 'rgba(57, 255, 106, 0.55)';
+  ctx.shadowColor = '#39ff6a';
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  for (const st of streaks) {
+    for (let d = 5; d < st.length; d += 5) {
+      ctx.moveTo(st.x, st.y - d);
+      ctx.lineTo(st.x, st.y - d - 3);
+    }
+  }
+  ctx.stroke();
+  // Bright heads
+  ctx.strokeStyle = '#d8ffe0';
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (const st of streaks) {
+    ctx.moveTo(st.x, st.y);
+    ctx.lineTo(st.x, st.y - 4);
+  }
+  ctx.stroke();
+  // Green glow ring under his feet
+  ctx.strokeStyle = '#39ff6a';
+  ctx.shadowBlur = 18;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(pose.pelvis.x, 68, 46, 12, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The One's long black coat, behind the body: from the shoulders down past
+ * the knees, the tail flaring out behind him. It flares more when he is in
+ * the air and sways gently with time.
+ */
+function drawCoatTail(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1, time: number) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const back = -facing;
+  const airborne = Math.max(0, Math.min(1, (40 - p.y) / 40));
+  const flare = 10 + airborne * 18 + Math.sin(time * 3) * 3;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  // Hem: below the hips along the spine, swept behind
+  const hemFront = { x: p.x + (sx / sl) * 42 - back * 4, y: p.y + (sy / sl) * 42 };
+  const hemBack = { x: p.x + (sx / sl) * 38 + back * (16 + flare), y: p.y + (sy / sl) * 38 - airborne * 12 };
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = '#07070c';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(c.x - back * 8, c.y);
+  ctx.lineTo(c.x + back * 10, c.y + 2);
+  ctx.quadraticCurveTo(p.x + back * (8 + flare * 0.5), p.y, hemBack.x, hemBack.y);
+  ctx.lineTo(hemFront.x, hemFront.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The One's coat front over the torso (with a high open collar), and short dark hair. */
+function drawTheOneOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = '#07070c';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 10, c.y + ny * 10);
+  ctx.lineTo(c.x - nx * 10, c.y - ny * 10);
+  ctx.lineTo(p.x - nx * 7 + (sx / sl) * 6, p.y - ny * 7 + (sy / sl) * 6);
+  ctx.lineTo(p.x + nx * 7 + (sx / sl) * 6, p.y + ny * 7 + (sy / sl) * 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // High coat collar, open in a V at the neck
+  ctx.beginPath();
+  ctx.moveTo(c.x - 5, c.y - 3);
+  ctx.lineTo(c.x + (p.x - c.x) * 0.4, c.y + (p.y - c.y) * 0.4);
+  ctx.lineTo(c.x + 5, c.y - 3);
+  ctx.stroke();
+  // Short dark hair, close to the head
+  const h = pose.head;
+  ctx.fillStyle = '#0d0d16';
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.arc(h.x - facing * 0.5, h.y - 0.5, 10, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Small, dark, oval sunglasses where the visor would be. */
+function drawSunglasses(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  const h = pose.head;
+  ctx.fillStyle = '#020204';
+  ctx.strokeStyle = '#9fffb8';
+  ctx.lineWidth = 0.8;
+  ctx.shadowColor = '#39ff6a';
+  ctx.shadowBlur = 6;
+  for (const dx of [2, 7]) {
+    ctx.beginPath();
+    ctx.ellipse(h.x + facing * dx, h.y - 1, 2.8, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 4.8, h.y - 1.4);
+  ctx.lineTo(h.x + facing * 4.2, h.y - 1.4);
+  ctx.moveTo(h.x - facing * 0.8, h.y - 1.5);
+  ctx.lineTo(h.x - facing * 7, h.y - 2.5);
+  ctx.stroke();
 }
 
 /** Where Baba Yaga's gold coin halo sits and how wide it looks as it spins (1 = face on). */
@@ -572,6 +737,23 @@ export function drawShotFlash(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
     ctx.closePath();
     ctx.fill();
   }
+  ctx.restore();
+}
+
+/** The One's ripple rings where a strike lands: two thin ellipses round the end of the trail. */
+export function drawImpactRipple(ctx: Ctx, pose: SkeletonPose) {
+  const e = pose.bladeSlash?.end;
+  if (!e) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(160, 255, 190, 0.8)';
+  ctx.shadowColor = '#39ff6a';
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.ellipse(e.x, e.y, 6, 14, 0, 0, Math.PI * 2);
+  ctx.moveTo(e.x + 11, e.y);
+  ctx.ellipse(e.x, e.y, 11, 24, 0, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 

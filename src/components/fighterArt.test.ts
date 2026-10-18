@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { coinHalo, dragonSpiritPath } from './fighterArt';
+import { codeRainStreaks, coinHalo, dragonSpiritPath } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -37,5 +37,26 @@ describe("Baba Yaga's gold coin halo (top-level form)", () => {
     const widths = [0, 0.3, 0.6, 1.1, 1.5, 2.2].map((t) => coinHalo(pose, t).squash);
     expect(Math.max(...widths) - Math.min(...widths)).toBeGreaterThan(0.4);
     expect(Math.min(...widths)).toBeGreaterThanOrEqual(0.2);
+  });
+});
+
+describe("The One's code rain (top-level form)", () => {
+  const pose = getHero('theOne').idlePose;
+
+  it('falls all around him, from above his head down to the floor', () => {
+    const streaks = codeRainStreaks(pose, 0);
+    const xs = streaks.map((s) => s.x - pose.chest.x);
+    expect(Math.min(...xs)).toBeLessThan(-40);
+    expect(Math.max(...xs)).toBeGreaterThan(40);
+    for (const s of streaks) {
+      expect(s.y).toBeGreaterThanOrEqual(pose.head.y - 90);
+      expect(s.y).toBeLessThanOrEqual(68);
+    }
+  });
+
+  it('keeps falling over time', () => {
+    const a = codeRainStreaks(pose, 0);
+    const b = codeRainStreaks(pose, 0.1);
+    expect(b.filter((s, i) => s.y > a[i].y).length).toBeGreaterThan(a.length / 2);
   });
 });

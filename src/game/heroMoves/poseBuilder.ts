@@ -1,4 +1,4 @@
-import { MoveKey, SkeletonPose } from '../../types/game';
+import { AttackMove, MoveKey, SkeletonPose } from '../../types/game';
 import { assemblePose, EnemyPose, FLOOR, LIMB, limbByAngles, Point } from '../enemyMotion';
 import { playerPoseFromEnemyPose } from '../motion';
 
@@ -155,4 +155,29 @@ function trailFor(p: EnemyPose, trail: TrailSpec, color: string): NonNullable<Sk
     curveOffset: trail.curve ?? 0,
     color,
   };
+}
+
+/** How long each hit is held so it reads at game speed, and how long the final pose is held. */
+export const HIT_HOLD_MS = 80;
+export const FINAL_HOLD_MS = 200;
+
+/**
+ * Hold the poses so they read: after every hit (a key with a trail) the
+ * same pose repeats for a beat, and the last pose is held longer before the
+ * fighter recovers to the stance. A hit's hold keeps its trail and flash
+ * showing (see comboFrame), so the effect stays on for the whole hit
+ * instead of blinking off and back on.
+ */
+export function withHolds(keys: MoveKey[]): MoveKey[] {
+  return keys.flatMap((key, i) => {
+    const ms = i === keys.length - 1 ? FINAL_HOLD_MS : key.trail ? HIT_HOLD_MS : 0;
+    if (!ms) return [key];
+    return [key, { ...key, ms, hold: true }];
+  });
+}
+
+/** A combo move from its keyframes: the first one is the hit that lands on the button press. */
+export function comboMove(id: number, tier: AttackMove['tier'], name: string, description: string, sequence: MoveKey[]): AttackMove {
+  const durationMs = 50 + sequence.slice(1).reduce((s, k) => s + k.ms, 0) + 140;
+  return { id, tier, name, description, durationMs, pose: keyToPlayerPose(sequence[0]), sequence };
 }
