@@ -38,6 +38,7 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   // 1. Top-level form (god tier), behind the body: each hero has their own.
   if (tier.ascended) {
     if (opts.hero === 'dragon') drawDragonSpirit(ctx, pose, opts.time);
+    else if (opts.hero === 'babaYaga') drawGoldCoinHalo(ctx, pose, opts.time);
     else drawAngelWings(ctx, pose, opts.time);
   }
 
@@ -107,7 +108,11 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
 
   // 5b. Hero outfit details on top of the body
   if (opts.hero === 'dragon') drawLittleDragonOutfit(ctx, pose, tier);
+  if (opts.hero === 'babaYaga') drawBabaYagaOutfit(ctx, pose, tier, opts.facing);
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
+  if (pose.prop === 'pistol' || pose.prop === 'pistols' || pose.prop === 'shotgun' || pose.prop === 'pencil') {
+    drawHandWeapons(ctx, pose, opts.facing, tier.ascended && opts.hero === 'babaYaga');
+  }
 
   // 6. Visor and pulsing chest core
   ctx.save();
@@ -297,6 +302,276 @@ function drawNunchaku(ctx: Ctx, pose: SkeletonPose) {
   ctx.moveTo(grip.x, grip.y);
   ctx.lineTo(link.x, link.y);
   ctx.stroke();
+  ctx.restore();
+}
+
+/** Where Baba Yaga's gold coin halo sits and how wide it looks as it spins (1 = face on). */
+export function coinHalo(pose: SkeletonPose, time: number) {
+  return {
+    center: { x: pose.head.x, y: pose.head.y + 8 },
+    radius: 34,
+    // Spinning round its vertical axis, but never quite edge-on so it never vanishes
+    squash: Math.max(0.2, Math.abs(Math.cos(time * 1.4))),
+  };
+}
+
+/**
+ * Baba Yaga's top-level form: a huge gold assassin's coin spinning slowly
+ * behind his head and shoulders like a halo. A milled rim, an inner ring and
+ * a crossed-pistols mark. Flat shapes only, about the cost of the wings.
+ * (His suit also gets gold trim, see drawBabaYagaOutfit.)
+ */
+function drawGoldCoinHalo(ctx: Ctx, pose: SkeletonPose, time: number) {
+  const { center: c, radius: r, squash } = coinHalo(pose, time);
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(squash, 1);
+  ctx.globalAlpha *= 0.9;
+  // Face of the coin
+  ctx.fillStyle = '#9a6a10';
+  ctx.strokeStyle = '#ffd34d';
+  ctx.shadowColor = '#ffb000';
+  ctx.shadowBlur = 22;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Milled edge: ticks between the rim and the inner ring
+  ctx.strokeStyle = '#ffe9a0';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let i = 0; i < 24; i++) {
+    const t = (i / 24) * Math.PI * 2;
+    ctx.moveTo(Math.cos(t) * (r - 2), Math.sin(t) * (r - 2));
+    ctx.lineTo(Math.cos(t) * (r - 7), Math.sin(t) * (r - 7));
+  }
+  ctx.stroke();
+  ctx.strokeStyle = '#ffd34d';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.arc(0, 0, r - 9, 0, Math.PI * 2);
+  ctx.stroke();
+  // Crossed pistols in the middle
+  ctx.strokeStyle = '#ffe9a0';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 3.4;
+  ctx.beginPath();
+  for (const side of [-1, 1]) {
+    ctx.moveTo(side * -13, 11);
+    ctx.lineTo(side * 11, -11);
+    // grip
+    ctx.moveTo(side * -13, 11);
+    ctx.lineTo(side * -17, 5);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Baba Yaga's suit, kept simple so it reads at game size: a dark jacket over
+ * the torso, a white collar V and slicked-back hair. Gold-trimmed in his
+ * top-level form, to match the coin halo.
+ */
+function drawBabaYagaOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const along = (t: number) => ({ x: c.x + (p.x - c.x) * t, y: c.y + (p.y - c.y) * t });
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // Jacket over the torso (as wide as the drawn body), edged in the combo colour
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  const trim = tier.ascended ? '#ffc23a' : tier.color;
+  ctx.fillStyle = '#0b0b12';
+  ctx.strokeStyle = trim;
+  ctx.lineWidth = tier.ascended ? 2 : 1.2;
+  ctx.shadowColor = trim;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 10, c.y + ny * 10);
+  ctx.lineTo(c.x - nx * 10, c.y - ny * 10);
+  ctx.lineTo(p.x - nx * 6.5 + (sx / sl) * 3, p.y - ny * 6.5 + (sy / sl) * 3);
+  ctx.lineTo(p.x + nx * 6.5 + (sx / sl) * 3, p.y + ny * 6.5 + (sy / sl) * 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // White shirt collar V (gold lapels in his top-level form)
+  ctx.shadowBlur = 0;
+  const v = along(0.3);
+  ctx.strokeStyle = tier.ascended ? '#ffd34d' : '#f2f2f7';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(c.x - 4, c.y - 1);
+  ctx.lineTo(v.x, v.y);
+  ctx.lineTo(c.x + 4, c.y - 1);
+  ctx.stroke();
+  // Slicked-back hair: a dark cap swept into a point behind the head
+  const h = pose.head;
+  const back = -facing;
+  ctx.fillStyle = '#0d0d16';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 8, h.y - 4);
+  ctx.quadraticCurveTo(h.x, h.y - 13, h.x + back * 10, h.y - 6);
+  ctx.lineTo(h.x + back * 13, h.y + 1);
+  ctx.quadraticCurveTo(h.x + back * 6, h.y - 4, h.x + facing * 8, h.y - 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Barrel lengths past the hand. Big on purpose: the guns must read at game size. */
+const PISTOL_LENGTH = 18;
+const SHOTGUN_LENGTH = 32;
+
+/** A weapon gripped in a hand: which way it points (along the forearm) and where its muzzle is. */
+function weaponAt(hand: Point2D, elbow: Point2D, length: number) {
+  const dx = hand.x - elbow.x;
+  const dy = hand.y - elbow.y;
+  const l = Math.hypot(dx, dy) || 1;
+  const dir = { x: dx / l, y: dy / l };
+  return { dir, muzzle: { x: hand.x + dir.x * length, y: hand.y + dir.y * length } };
+}
+
+/** The lead (gun) arm and the rear arm. Facing left mirrors the pose, which swaps the sides. */
+function arms(pose: SkeletonPose, facing: 1 | -1) {
+  const left = { hand: pose.leftHand, elbow: pose.leftElbow };
+  const right = { hand: pose.rightHand, elbow: pose.rightElbow };
+  return facing > 0 ? { lead: left, rear: right } : { lead: right, rear: left };
+}
+
+/** The muzzle of the gun firing this pose's shot, if it fires. */
+export function muzzlePoint(pose: SkeletonPose, facing: 1 | -1): Point2D | undefined {
+  if (!pose.shot || !pose.bladeSlash) return undefined;
+  const { lead, rear } = arms(pose, facing);
+  const arm = pose.shot === 'rear' ? rear : lead;
+  return weaponAt(arm.hand, arm.elbow, pose.prop === 'shotgun' ? SHOTGUN_LENGTH : PISTOL_LENGTH).muzzle;
+}
+
+/**
+ * Pistol(s), shotgun or pencil. The bullet streak is the pose's trail and
+ * the flash is drawShotFlash. In the top-level form a red laser sight runs
+ * out from the lead gun.
+ */
+function drawHandWeapons(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, laser: boolean) {
+  const { lead, rear } = arms(pose, facing);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  /** Stroke the current path with a dark outline, then bright on top, so it stands out from the neon body. */
+  const outlined = (width: number, color: string) => {
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = width + 3;
+    ctx.stroke();
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  };
+
+  if (pose.prop === 'pencil') {
+    const { dir, muzzle: tip } = weaponAt(lead.hand, lead.elbow, 13);
+    ctx.beginPath();
+    ctx.moveTo(lead.hand.x - dir.x * 3, lead.hand.y - dir.y * 3);
+    ctx.lineTo(tip.x, tip.y);
+    outlined(3, '#ffd23f');
+    ctx.restore();
+    return;
+  }
+
+  const pistol = (hand: Point2D, elbow: Point2D) => {
+    const { dir, muzzle } = weaponAt(hand, elbow, PISTOL_LENGTH);
+    ctx.beginPath();
+    ctx.moveTo(hand.x - dir.x * 2, hand.y - dir.y * 2);
+    ctx.lineTo(muzzle.x, muzzle.y);
+    // Grip, hanging below the slide
+    ctx.moveTo(hand.x, hand.y);
+    ctx.lineTo(hand.x - dir.x * 3 - dir.y * 8, hand.y - dir.y * 3 + dir.x * 8);
+    outlined(6, '#e6eaf7');
+  };
+  const gunLength = pose.prop === 'shotgun' ? SHOTGUN_LENGTH : PISTOL_LENGTH;
+  const { dir, muzzle } = weaponAt(lead.hand, lead.elbow, gunLength);
+  if (pose.prop === 'shotgun') {
+    ctx.beginPath();
+    ctx.moveTo(lead.hand.x - dir.x * 24, lead.hand.y - dir.y * 24 + 3);
+    ctx.lineTo(lead.hand.x - dir.x * 13, lead.hand.y - dir.y * 13);
+    ctx.lineTo(muzzle.x, muzzle.y);
+    outlined(6, '#e6eaf7');
+    // Wooden pump grip under the barrel
+    ctx.beginPath();
+    ctx.moveTo(lead.hand.x + dir.x * 4 - dir.y * 3, lead.hand.y + dir.y * 4 + dir.x * 3);
+    ctx.lineTo(lead.hand.x + dir.x * 14 - dir.y * 3, lead.hand.y + dir.y * 14 + dir.x * 3);
+    outlined(5, '#b8875a');
+  } else {
+    pistol(lead.hand, lead.elbow);
+    if (pose.prop === 'pistols') pistol(rear.hand, rear.elbow);
+  }
+
+  if (laser) {
+    ctx.save();
+    ctx.globalAlpha *= 0.6;
+    ctx.strokeStyle = '#ff2a3d';
+    ctx.shadowColor = '#ff2a3d';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(muzzle.x, muzzle.y);
+    ctx.lineTo(muzzle.x + dir.x * 260, muzzle.y + dir.y * 260);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+/**
+ * The muzzle flash for a pose that fires: a bold white starburst at the
+ * muzzle and a white core down the tracer. Drawn AFTER the slash
+ * crescent (the bullet streak), or the streak would cover it.
+ */
+export function drawShotFlash(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  ctx.save();
+  const m = muzzlePoint(pose, facing);
+  if (m && pose.bladeSlash) {
+    const e = pose.bladeSlash.end;
+    const a = Math.atan2(e.y - m.y, e.x - m.x);
+    const big = pose.prop === 'shotgun' ? 1.5 : 1;
+    // White core down the tracer
+    ctx.strokeStyle = '#ffffff';
+    ctx.shadowColor = '#ffd27a';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(e.x, e.y);
+    ctx.stroke();
+    // Starburst: a glowing orange disc with eight white spikes, the longest pointing down the barrel
+    ctx.fillStyle = 'rgba(255, 170, 60, 0.85)';
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 9 * big, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const r = (i % 2 === 1 ? 4 : i === 0 ? 24 : 14) * big;
+      const t = a + (i * Math.PI) / 8;
+      ctx.lineTo(m.x + Math.cos(t) * r, m.y + Math.sin(t) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
 }
 

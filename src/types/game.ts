@@ -115,7 +115,9 @@ export interface SkeletonPose {
   rightFoot: Point2D;
   scarf?: Point2D[];
   /** A weapon held in the lead hand during this pose (drawn by fighterArt) */
-  prop?: 'nunchaku';
+  prop?: 'nunchaku' | 'pistol' | 'pistols' | 'shotgun' | 'pencil';
+  /** The gun in this hand fires in this pose (muzzle flash; the trail is the bullet streak) */
+  shot?: 'lead' | 'rear';
   bladeSlash?: {
     start: Point2D;
     end: Point2D;
@@ -134,6 +136,8 @@ export interface MoveKey {
   ms: number;
   /** Weapon in the lead hand at this keyframe */
   prop?: SkeletonPose['prop'];
+  /** The gun in this hand fires on the way into this keyframe (needs a trail: it's the bullet streak) */
+  shot?: SkeletonPose['shot'];
 }
 
 export interface AttackMove {

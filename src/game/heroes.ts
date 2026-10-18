@@ -1,5 +1,6 @@
 import { AttackMove, SkeletonPose } from '../types/game';
 import { ATTACK_MOVES, IDLE_POSE } from './animations';
+import { BABA_YAGA_IDLE, BABA_YAGA_MOVES } from './heroMoves/babaYaga';
 import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDragon';
 
 /**
@@ -9,7 +10,7 @@ import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDrago
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -35,6 +36,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Lightning kung fu: one-inch punches, flying kicks and nunchaku',
     idlePose: LITTLE_DRAGON_IDLE,
     moves: LITTLE_DRAGON_MOVES,
+  },
+  {
+    id: 'babaYaga',
+    label: 'Baba Yaga',
+    description: 'Gun-fu assassin: point-blank shots, judo throws and a shotgun',
+    idlePose: BABA_YAGA_IDLE,
+    moves: BABA_YAGA_MOVES,
   },
 ];
 
