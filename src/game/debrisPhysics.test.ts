@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DebrisPiece, DebrisWorld, massProperties, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
+import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, massProperties, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { enemyPose } from './enemyMotion';
 
 const world: DebrisWorld = { floorY: 68, pitHalfWidth: 40, beltSpeed: 0, gravity: 1500 };
@@ -247,6 +247,45 @@ describe('shatterEnemy', () => {
     expect(heavy[0].radius / slim[0].radius).toBeCloseTo(1.3 / 0.9, 5);
     // Thigh piece is half the drawn thigh width (radius vs full width)
     expect(Math.max(...heavy.map((p) => p.radius))).toBeCloseTo((8 * 1.3) / 2, 5);
+  });
+
+  it('the head pops almost straight up, spinning', () => {
+    const head = shatter(1).find((p) => p.role === 'head')!;
+    expect(head.vy).toBeLessThan(-600);
+    expect(Math.abs(head.vx)).toBeLessThan(25);
+    expect(Math.abs(head.vAngle)).toBeGreaterThan(9);
+  });
+
+  it('some pieces sail back over the player and land on the belt behind them', () => {
+    for (const facing of [1, -1]) {
+      const pieces = shatter(facing);
+      const startX = pieces.map((p) => p.x);
+      const weapon = pieces.find((p) => p.role === 'weapon')!;
+      const from = weapon.x;
+      // Fly it with the real physics (belts stopped so only the throw moves it).
+      const world = { floorY: 68, pitHalfWidth: 44, beltSpeed: 0, gravity: DEBRIS_GRAVITY };
+      let crossedAt: number | null = null;
+      for (let t = 0; t < 3 && weapon.y < 60; t += 1 / 60) {
+        const prevX = weapon.x;
+        stepDebris([weapon], world, 1 / 60);
+        if (crossedAt === null && Math.sign(prevX) !== Math.sign(weapon.x)) crossedAt = weapon.y;
+      }
+      // It crossed over the player (at x = 0) high above their head (head is at about y = -48)...
+      expect(crossedAt).not.toBeNull();
+      expect(crossedAt!).toBeLessThan(-90);
+      // ...and came down on the other side.
+      expect(Math.sign(weapon.x)).toBe(-Math.sign(from));
+      expect(Math.abs(weapon.x)).toBeGreaterThan(30);
+      expect(startX.length).toBe(pieces.length);
+    }
+  });
+
+  it('bigger hits send more pieces over the player, without making more pieces', () => {
+    const towardPlayer = (ps: DebrisPiece[]) => ps.filter((p) => p.vx > 50).length; // enemy on the left: toward the player = +x
+    const small = shatter(1, 1);
+    const big = shatter(1, 2.4);
+    expect(towardPlayer(big)).toBeGreaterThan(towardPlayer(small));
+    expect(big.length).toBe(small.length);
   });
 
   it('even a huge blast keeps pieces within reach of the belts', () => {

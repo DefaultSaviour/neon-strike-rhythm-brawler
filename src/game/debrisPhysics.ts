@@ -84,6 +84,8 @@ const RESTITUTION = 0.38;
 const BOUNCE_THRESHOLD = 90;
 const FRICTION = 0.55;
 const AIR_DRAG = 0.35;
+/** Gravity for debris (units/s^2). The game passes this to stepDebris too. */
+export const DEBRIS_GRAVITY = 1500;
 const SPIN_DRAG = 0.6;
 const SUBSTEP = 1 / 240;
 const PIT_DEPTH = 260;
@@ -382,7 +384,7 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
     color: string
   ) => {
     const { mass, inertia } = massProperties(shape, halfLength, radius);
-    pieces.push({
+    const piece: DebrisPiece = {
       id: nextId(),
       shape,
       role,
@@ -403,13 +405,15 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
       maxLife: maxLife + rnd(),
       alpha: 1,
       inPit: false,
-    });
+    };
+    pieces.push(piece);
+    return piece;
   };
 
   const bone = (a: Point, b: Point, role: DebrisRole, thickness: number, color = opts.color) => {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
-    make('segment', role, (a.x + b.x) / 2, (a.y + b.y) / 2, Math.atan2(dy, dx), Math.hypot(dx, dy) / 2, thickness, color);
+    return make('segment', role, (a.x + b.x) / 2, (a.y + b.y) / 2, Math.atan2(dy, dx), Math.hypot(dx, dy) / 2, thickness, color);
   };
 
   const sc = opts.scale;
@@ -417,28 +421,30 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
   const thick = sc * (opts.limbScale ?? 1) * 0.5;
   make('circle', 'head', sk.head.x, sk.head.y, 0, 0, 9 * sc, opts.color);
   bone(sk.chest, sk.pelvis, 'torso', TORSO_WIDTH * thick);
-  bone(sk.frontShoulder, sk.frontElbow, 'limb', LIMB_WIDTH.upperArm * thick);
-  bone(sk.frontElbow, sk.frontHand, 'limb', LIMB_WIDTH.forearm * thick);
+  const frontUpperArm = bone(sk.frontShoulder, sk.frontElbow, 'limb', LIMB_WIDTH.upperArm * thick);
+  const frontForearm = bone(sk.frontElbow, sk.frontHand, 'limb', LIMB_WIDTH.forearm * thick);
   bone(sk.backShoulder, sk.backElbow, 'limb', LIMB_WIDTH.upperArm * thick);
-  bone(sk.backElbow, sk.backHand, 'limb', LIMB_WIDTH.forearm * thick);
+  const backForearm = bone(sk.backElbow, sk.backHand, 'limb', LIMB_WIDTH.forearm * thick);
   bone(sk.pelvis, sk.frontKnee, 'limb', LIMB_WIDTH.thigh * thick);
   bone(sk.frontKnee, sk.frontFoot, 'limb', LIMB_WIDTH.shin * thick);
   bone(sk.pelvis, sk.backKnee, 'limb', LIMB_WIDTH.thigh * thick);
   bone(sk.backKnee, sk.backFoot, 'limb', LIMB_WIDTH.shin * thick);
 
+  let weapon: DebrisPiece | undefined;
   if (opts.hasBlade) {
     // Blade continues on from the forearm.
     const fx = sk.frontHand.x - sk.frontElbow.x;
     const fy = sk.frontHand.y - sk.frontElbow.y;
     const len = Math.hypot(fx, fy) || 1;
     const tip = { x: sk.frontHand.x + (fx / len) * 40 * sc, y: sk.frontHand.y + (fy / len) * 40 * sc };
-    bone(sk.frontHand, tip, 'weapon', 1.6 * sc, opts.accent);
+    weapon = bone(sk.frontHand, tip, 'weapon', 1.6 * sc, opts.accent);
   }
 
   const shardCount = 3 + opts.extraShards;
+  const shards: DebrisPiece[] = [];
   for (let i = 0; i < shardCount; i++) {
     const t = rnd();
-    make(
+    const shard = make(
       'shard',
       'shard',
       sk.chest.x + (rnd() - 0.5) * 18 * sc,
@@ -448,6 +454,7 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
       1,
       i % 2 ? opts.accent : opts.color
     );
+    shards.push(shard);
   }
 
   // The blow lands on the enemy's chest, from the player's side, pushing the
@@ -487,5 +494,42 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
     }
   }
 
+  // Special flights. These reuse pieces the blast already made, so they add
+  // nothing to draw or simulate: the explosion just looks wilder.
+  //  - The head pops STRAIGHT UP, spinning, then drops back onto the belt.
+  //  - The weapon (or a forearm) and a shard sail back OVER the player's head
+  //    and land on the belt behind them. Bigger hits send more pieces over.
+  const head = pieces.find((q) => q.role === 'head');
+  if (head) launchStraightUp(head, opts.power, rnd);
+  const over: DebrisPiece[] = [weapon ?? backForearm, shards[0]];
+  if (opts.power > 1.6) over.push(frontForearm);
+  if (opts.power > 2.2) over.push(frontUpperArm);
+  for (const q of over) if (q) launchOverPlayer(q, rnd);
+
   return pieces;
+}
+
+/** Fire a piece almost straight up, spinning hard. */
+export function launchStraightUp(p: DebrisPiece, power: number, rnd: () => number) {
+  const strength = Math.min(1.25, 0.85 + 0.15 * power);
+  p.vy = -(780 + rnd() * 160) * strength;
+  p.vx = (rnd() - 0.5) * 40;
+  p.vAngle = (rnd() < 0.5 ? -1 : 1) * (10 + rnd() * 8);
+}
+
+/**
+ * Lob a piece in a high arc back over the player (who stands at x = 0) so it
+ * lands on the far side, about as far out as it started. Aimed with the real
+ * gravity and air drag, so it reliably comes down on the other belt.
+ */
+export function launchOverPlayer(p: DebrisPiece, rnd: () => number) {
+  const vy = -(700 + rnd() * 120);
+  const target = -p.x * (0.6 + rnd() * 0.3);
+  const drop = Math.max(0, 68 - p.y);
+  const time = (-vy + Math.sqrt(vy * vy + 2 * DEBRIS_GRAVITY * drop)) / DEBRIS_GRAVITY;
+  // Air drag slows sideways speed by AIR_DRAG per second, so aim a bit harder.
+  const vx = ((target - p.x) * AIR_DRAG) / (1 - Math.exp(-AIR_DRAG * time));
+  p.vx = Math.max(-MAX_LAUNCH_VX, Math.min(MAX_LAUNCH_VX, vx));
+  p.vy = vy;
+  p.vAngle = (rnd() < 0.5 ? -1 : 1) * (12 + rnd() * 8);
 }

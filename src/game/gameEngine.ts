@@ -14,7 +14,7 @@ import { ATTACK_MOVES, IDLE_POSE, getOrientedPose, getMoveForCombo } from './ani
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
-import { DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
+import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
@@ -584,7 +584,7 @@ export class GameEngine {
       floorY: FLOOR_Y,
       pitHalfWidth: this.pitRadius,
       beltSpeed: this.beltSpeed(),
-      gravity: 1500,
+      gravity: DEBRIS_GRAVITY,
       halfWidth: worldHalfWidth,
     };
     if (fxDt > 0) {
