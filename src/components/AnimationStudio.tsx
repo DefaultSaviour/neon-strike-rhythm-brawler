@@ -20,16 +20,14 @@ import {
   AnimationLibrary,
   animationPhase,
   BEATS_PER_POSE_OPTIONS,
-  BEND_HANDLES,
   builtInAnimation,
   CustomAnimation,
   DRAG_HANDLES,
   DragHandle,
   ENEMY_KEYS,
   EnemyKey,
-  flipBend,
-  HandleHit,
   handleAt,
+  handlePosition,
   MAX_POSES,
   mergeLibraries,
   mirrorRig,
@@ -66,13 +64,18 @@ const HANDLE_HINTS: Record<DragHandle, string> = {
   backHand: 'Back hand: drag to place',
   frontFoot: 'Front foot: drag to place',
   backFoot: 'Back foot: drag to place',
+  frontElbow: 'Front elbow: drag to swing the arm (past straight bends it the other way)',
+  backElbow: 'Back elbow: drag to swing the arm (past straight bends it the other way)',
+  frontKnee: 'Front knee: drag to swing the leg (past straight bends it the other way)',
+  backKnee: 'Back knee: drag to swing the leg (past straight bends it the other way)',
 };
-const BEND_HINTS = {
-  frontArm: 'Front elbow: click to flip the bend',
-  backArm: 'Back elbow: click to flip the bend',
-  frontLeg: 'Front knee: click to flip the bend',
-  backLeg: 'Back knee: click to flip the bend',
-};
+
+/** Handle colours: cyan for the body line, yellow for hands and feet, pink for elbows and knees. */
+function handleColour(h: DragHandle) {
+  if (h === 'head' || h === 'chest' || h === 'pelvis') return '#00e5ff';
+  if (h.endsWith('Elbow') || h.endsWith('Knee')) return '#ff4fd8';
+  return '#ffe600';
+}
 
 function bandTier(key: EnemyKey): { band: FrequencyBand; tier: EnemyTier } {
   const [band, tier] = key.split('-');
@@ -165,33 +168,13 @@ function drawHandles(
   ctx: CanvasRenderingContext2D,
   view: ReturnType<typeof studioView>,
   rig: PoseRig,
-  hover: HandleHit | null
+  hover: DragHandle | null
 ) {
-  const pose = assemblePose(rig, 0, false);
   ctx.save();
-  // Elbows and knees: small diamonds (click to flip)
-  const bendAt = { frontArm: pose.frontElbow, backArm: pose.backElbow, frontLeg: pose.frontKnee, backLeg: pose.backKnee };
-  for (const limb of BEND_HANDLES) {
-    const s = view.toScreen(bendAt[limb]);
-    const on = hover?.kind === 'bend' && hover.limb === limb;
-    const r = on ? 7 : 5;
-    ctx.beginPath();
-    ctx.moveTo(s.x, s.y - r);
-    ctx.lineTo(s.x + r, s.y);
-    ctx.lineTo(s.x, s.y + r);
-    ctx.lineTo(s.x - r, s.y);
-    ctx.closePath();
-    ctx.fillStyle = on ? '#ff4fd8' : 'rgba(10, 10, 25, 0.8)';
-    ctx.strokeStyle = '#ff4fd8';
-    ctx.lineWidth = 1.5;
-    ctx.fill();
-    ctx.stroke();
-  }
-  // Draggable joints: circles (cyan body line, yellow hands and feet)
   for (const h of DRAG_HANDLES) {
-    const s = view.toScreen(rig[h]);
-    const on = hover?.kind === 'drag' && hover.handle === h;
-    const colour = h === 'head' || h === 'chest' || h === 'pelvis' ? '#00e5ff' : '#ffe600';
+    const s = view.toScreen(handlePosition(rig, h));
+    const on = hover === h;
+    const colour = handleColour(h);
     ctx.beginPath();
     ctx.arc(s.x, s.y, on ? 9 : 7, 0, Math.PI * 2);
     ctx.fillStyle = on ? colour : 'rgba(10, 10, 25, 0.75)';
@@ -241,7 +224,7 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
   const [playIndex, setPlayIndex] = useState(0);
   const [bpm, setBpm] = useState(120);
   const [onion, setOnion] = useState(true);
-  const [hover, setHover] = useState<HandleHit | null>(null);
+  const [hover, setHover] = useState<DragHandle | null>(null);
   const [message, setMessage] = useState('');
 
   // Refs let the drawing loop and pointer handlers read the latest values without re-subscribing.
@@ -479,13 +462,9 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
     const rig = anim.poses[sel];
     const hit = handleAt(rig, p, radius);
     if (!hit) return;
-    if (hit.kind === 'bend') {
-      commit(withPose(anim, sel, flipBend(rig, hit.limb)));
-      return;
-    }
     // Remember the pose before the drag so one Undo takes back the whole drag.
     commit(anim);
-    dragRef.current = hit.handle;
+    dragRef.current = hit;
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
@@ -501,7 +480,7 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
       return;
     }
     const hit = handleAt(rig, p, radius);
-    if (JSON.stringify(hit) !== JSON.stringify(hover)) setHover(hit);
+    if (hit !== hover) setHover(hit);
   };
 
   const onPointerUp = () => {
@@ -511,10 +490,8 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
   const hint = playing
     ? 'Previewing. Click the figure or press Space to stop and edit.'
     : hover
-      ? hover.kind === 'drag'
-        ? HANDLE_HINTS[hover.handle]
-        : BEND_HINTS[hover.limb]
-      : 'Drag the circles to pose. Click a pink diamond (elbow / knee) to flip its bend.';
+      ? HANDLE_HINTS[hover]
+      : 'Drag any circle to pose: blue = body, yellow = hands and feet, pink = elbows and knees.';
 
   // --- layout --------------------------------------------------------------
 
@@ -582,7 +559,7 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
               ref={canvasRef}
               aria-label="Pose editor: drag the joints to pose the enemy"
               className="absolute inset-0 w-full h-full"
-              style={{ touchAction: 'none', cursor: dragRef.current ? 'grabbing' : hover ? (hover.kind === 'drag' ? 'grab' : 'pointer') : 'default' }}
+              style={{ touchAction: 'none', cursor: dragRef.current ? 'grabbing' : hover ? 'grab' : 'default' }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}

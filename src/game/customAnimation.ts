@@ -7,6 +7,7 @@ import {
   EnemyPose,
   enemyPose,
   FLOOR,
+  LIMB,
   LimbBends,
   Point,
   PoseRig,
@@ -165,13 +166,57 @@ export function enemyPoseFor(
 // Editing (used by the Animation Studio)
 // ---------------------------------------------------------------------------
 
-/** Joints you can drag. Elbows and knees follow automatically. */
-export type DragHandle = 'pelvis' | 'chest' | 'head' | 'frontHand' | 'backHand' | 'frontFoot' | 'backFoot';
-export const DRAG_HANDLES: DragHandle[] = ['head', 'chest', 'pelvis', 'frontHand', 'backHand', 'frontFoot', 'backFoot'];
+/** Every joint you can drag in the studio. */
+export type DragHandle =
+  | 'head'
+  | 'chest'
+  | 'pelvis'
+  | 'frontHand'
+  | 'backHand'
+  | 'frontFoot'
+  | 'backFoot'
+  | 'frontElbow'
+  | 'backElbow'
+  | 'frontKnee'
+  | 'backKnee';
 
-/** Elbows and knees: click one to flip the way it bends. */
-export type BendHandle = keyof LimbBends;
-export const BEND_HANDLES: BendHandle[] = ['frontArm', 'backArm', 'frontLeg', 'backLeg'];
+export const DRAG_HANDLES: DragHandle[] = [
+  'head',
+  'chest',
+  'pelvis',
+  'frontHand',
+  'backHand',
+  'frontFoot',
+  'backFoot',
+  'frontElbow',
+  'backElbow',
+  'frontKnee',
+  'backKnee',
+];
+
+/**
+ * Elbows and knees are the middle of a two-bone limb. Dragging one swings
+ * the upper bone around its root (shoulder / hip) and the lower bone rides
+ * along with it, like moving a real arm from the elbow.
+ */
+const MIDDLE_JOINTS = {
+  frontElbow: { root: 'frontShoulder', end: 'frontHand', bend: 'frontArm', length: LIMB.upperArm },
+  backElbow: { root: 'backShoulder', end: 'backHand', bend: 'backArm', length: LIMB.upperArm },
+  frontKnee: { root: 'pelvis', end: 'frontFoot', bend: 'frontLeg', length: LIMB.thigh },
+  backKnee: { root: 'pelvis', end: 'backFoot', bend: 'backLeg', length: LIMB.thigh },
+} as const;
+
+type MiddleJoint = keyof typeof MIDDLE_JOINTS;
+
+function isMiddleJoint(h: DragHandle): h is MiddleJoint {
+  return h in MIDDLE_JOINTS;
+}
+
+/** Where a handle is drawn (pose units). */
+export function handlePosition(rig: PoseRig, handle: DragHandle): Point {
+  if (!isMiddleJoint(handle)) return rig[handle];
+  return assemblePose(rig, 0, false)[handle];
+}
 
 function clampToBounds(p: Point): Point {
   return {
@@ -207,6 +252,9 @@ function rotateAround(p: Point, centre: Point, angle: number): Point {
  *  - chest:  swings around the pelvis (the spine keeps its length), carrying head and hands.
  *  - head:   swings around the chest (the neck keeps its length).
  *  - hands / feet: go where you drag them, as far as the limb reaches.
+ *  - elbows / knees: swing the upper bone around the shoulder / hip; the
+ *    forearm / shin rides along, still pointing the same way (drag across
+ *    the limb to bend it the other way).
  */
 export function moveHandle(rig: PoseRig, handle: DragHandle, target: Point): PoseRig {
   const to = clampToBounds(target);
@@ -233,14 +281,22 @@ export function moveHandle(rig: PoseRig, handle: DragHandle, target: Point): Pos
   } else if (handle === 'head') {
     const neck = Math.hypot(rig.head.x - rig.chest.x, rig.head.y - rig.chest.y);
     next.head = onCircle(rig.chest, neck, to);
+  } else if (isMiddleJoint(handle)) {
+    const spec = MIDDLE_JOINTS[handle];
+    const pose = assemblePose(rig, 0, false);
+    const root = pose[spec.root];
+    const oldJoint = pose[handle];
+    const joint = onCircle(root, spec.length, to);
+    // The lower bone keeps pointing the same way and rides along with the joint
+    // (like the hands do when you drag the chest). Drag the joint across the
+    // limb and it bends the other way.
+    const end = clampToBounds(add(pose[spec.end], { x: joint.x - oldJoint.x, y: joint.y - oldJoint.y }));
+    next[spec.end] = end;
+    next.bends[spec.bend] = bendOf(root, end, joint);
   } else {
     next[handle] = to;
   }
   return settleRig(next);
-}
-
-export function flipBend(rig: PoseRig, limb: BendHandle): PoseRig {
-  return settleRig({ ...rig, bends: { ...rig.bends, [limb]: rig.bends[limb] === 1 ? -1 : 1 } });
 }
 
 /** Swap left and right limbs (keeps the body where it is). Handy for "same move, other side". */
@@ -264,36 +320,16 @@ export function mirrorRig(rig: PoseRig): PoseRig {
   });
 }
 
-export type HandleHit = { kind: 'drag'; handle: DragHandle } | { kind: 'bend'; limb: BendHandle };
-
-/**
- * Which handle is under the pointer (pose units), if any. Draggable joints
- * win over elbows / knees when both are in reach.
- */
-export function handleAt(rig: PoseRig, p: Point, radius: number): HandleHit | null {
-  const pose = assemblePose(rig, 0, false);
-  let best: HandleHit | null = null;
+/** The nearest joint within `radius` of the pointer (pose units), if any. */
+export function handleAt(rig: PoseRig, p: Point, radius: number): DragHandle | null {
+  let best: DragHandle | null = null;
   let bestDist = radius;
   for (const h of DRAG_HANDLES) {
-    const d = Math.hypot(rig[h].x - p.x, rig[h].y - p.y);
-    if (d <= bestDist) {
-      bestDist = d;
-      best = { kind: 'drag', handle: h };
-    }
-  }
-  if (best) return best;
-  const bendPoints: Record<BendHandle, Point> = {
-    frontArm: pose.frontElbow,
-    backArm: pose.backElbow,
-    frontLeg: pose.frontKnee,
-    backLeg: pose.backKnee,
-  };
-  for (const limb of BEND_HANDLES) {
-    const q = bendPoints[limb];
+    const q = handlePosition(rig, h);
     const d = Math.hypot(q.x - p.x, q.y - p.y);
     if (d <= bestDist) {
       bestDist = d;
-      best = { kind: 'bend', limb };
+      best = h;
     }
   }
   return best;
