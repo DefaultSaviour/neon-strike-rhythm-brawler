@@ -4,7 +4,7 @@ import { ATTACK_MOVES, getMoveForCombo, getOrientedPose } from './animations';
 import { LIMB } from './enemyMotion';
 import { DEFAULT_HERO, getHero, HEROES } from './heroes';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
-import { comboDuration, comboFrame } from './combo';
+import { COMBO_SNAP_SEC, comboDuration, comboFrame } from './combo';
 import { muzzlePoint } from '../components/fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -137,9 +137,11 @@ describe('Baba Yaga', () => {
     for (const m of baba.moves) {
       const seq = m.sequence!;
       seq.forEach((k, i) => {
-        if (!k.trail || i === seq.length - 1) return;
+        if (!k.trail || k.hold || i === seq.length - 1) return;
         expect(seq[i + 1].pose).toEqual(k.pose);
-        expect(seq[i + 1].trail).toBeUndefined();
+        expect(seq[i + 1].hold).toBe(true);
+        // The hit's effect carries on through the hold
+        expect(seq[i + 1].trail).toEqual(k.trail);
       });
       const [before, last] = seq.slice(-2);
       expect(last.pose).toEqual(before.pose);
@@ -162,7 +164,7 @@ describe('Baba Yaga', () => {
       // Holds repeat the pose before them; only count the real poses.
       const poses = m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
       expect(poses.length).toBeLessThanOrEqual(finisher ? 4 : 3);
-      expect(m.sequence!.filter((k) => k.shot).length).toBeLessThanOrEqual(finisher ? 3 : 2);
+      expect(m.sequence!.filter((k) => k.shot && !k.hold).length).toBeLessThanOrEqual(finisher ? 3 : 2);
     }
   });
 
@@ -186,7 +188,7 @@ describe('Baba Yaga', () => {
   });
 
   it('the muzzle flash sits at the end of the gun that is firing', () => {
-    const dual = baba.moves.find((m) => m.name === 'Dual Pistols')!.sequence!.filter((k) => k.shot).map((k) => keyToPlayerPose(k));
+    const dual = baba.moves.find((m) => m.name === 'Dual Pistols')!.sequence!.filter((k) => k.shot && !k.hold).map((k) => keyToPlayerPose(k));
     // Lead hand fires first, then the rear hand
     expect(dist(muzzlePoint(dual[0], 1)!, dual[0].leftHand)).toBeCloseTo(18, 3);
     expect(dist(muzzlePoint(dual[1], 1)!, dual[1].rightHand)).toBeCloseTo(18, 3);
@@ -285,6 +287,35 @@ describe('The One', () => {
 
   it('fights bare-handed', () => {
     expect(one.moves.every((m) => m.sequence!.every((k) => !k.prop && !k.shot))).toBe(true);
+  });
+});
+
+describe('hit effects on held combos', () => {
+  it("never blink off and back on during one hit: the trail stays on from the hit through its hold", () => {
+    for (const hero of [getHero('babaYaga'), getHero('theOne')]) {
+      for (const m of hero.moves) {
+        const keys = m.sequence!;
+        const total = comboDuration(keys);
+        let wasOn = false;
+        let offs = 0;
+        // Sample every 5 ms; count how often the effect switches off while a later key still has one
+        for (let t = 0; t < total; t += 0.005) {
+          const on = !!comboFrame(t, hero.idlePose, keys, hero.idlePose, 0, (p) => p).pose.bladeSlash;
+          if (wasOn && !on) offs++;
+          wasOn = on;
+        }
+        // Once per real hit at most (hits separated by a non-hit pose), never more
+        const hits = keys.filter((k) => k.trail && !k.hold).length;
+        expect(offs, `${hero.label}: ${m.name}`).toBeLessThanOrEqual(hits);
+      }
+    }
+  });
+
+  it('the first hit still shows its effect from the very first frame', () => {
+    const one = getHero('theOne');
+    const m = one.moves[0];
+    const f = comboFrame(COMBO_SNAP_SEC / 2, one.idlePose, m.sequence!, one.idlePose, 0, (p) => p);
+    expect(f.pose.bladeSlash).toBeDefined();
   });
 });
 

@@ -163,15 +163,16 @@ export const FINAL_HOLD_MS = 200;
 
 /**
  * Hold the poses so they read: after every hit (a key with a trail) the
- * same pose repeats for a beat with no trail, and the last pose is held
- * longer before the fighter recovers to the stance.
+ * same pose repeats for a beat, and the last pose is held longer before the
+ * fighter recovers to the stance. A hit's hold keeps its trail and flash
+ * showing (see comboFrame), so the effect stays on for the whole hit
+ * instead of blinking off and back on.
  */
 export function withHolds(keys: MoveKey[]): MoveKey[] {
   return keys.flatMap((key, i) => {
-    const hold = i === keys.length - 1 ? FINAL_HOLD_MS : key.trail ? HIT_HOLD_MS : 0;
-    if (!hold) return [key];
-    const { trail: _trail, shot: _shot, ...still } = key;
-    return [key, { ...still, ms: hold }];
+    const ms = i === keys.length - 1 ? FINAL_HOLD_MS : key.trail ? HIT_HOLD_MS : 0;
+    if (!ms) return [key];
+    return [key, { ...key, ms, hold: true }];
   });
 }
 

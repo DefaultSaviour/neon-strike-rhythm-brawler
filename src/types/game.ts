@@ -138,6 +138,8 @@ export interface MoveKey {
   prop?: SkeletonPose['prop'];
   /** The gun in this hand fires on the way into this keyframe (needs a trail: it's the bullet streak) */
   shot?: SkeletonPose['shot'];
+  /** A hold: the previous pose kept still, with its hit effect (trail, flash) still showing */
+  hold?: boolean;
 }
 
 export interface AttackMove {
