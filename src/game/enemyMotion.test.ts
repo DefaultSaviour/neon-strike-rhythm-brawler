@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { armByAngles, ENEMY_MOTION_STYLES, EnemyMotionStyle, enemyPose, LIMB, solveTwoBone } from './enemyMotion';
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-const styles: EnemyMotionStyle[] = ['stand', 'run', 'dance', 'sway', 'handstand'];
+const styles: EnemyMotionStyle[] = ['stand', 'run', 'dance', 'sway', 'handstand', 'robot', 'headbang', 'zombie'];
 const builds = ['heavy', 'samurai', 'agile'] as const;
 
 describe('solveTwoBone', () => {
@@ -124,7 +124,7 @@ describe('enemyPose', () => {
 
   it('repeats every two beats, so the motion stays in time for the whole song', () => {
     for (const style of styles) {
-      const period = style === 'sway' ? 4 : 2;
+      const period = style === 'sway' || style === 'robot' ? 4 : 2;
       const a = enemyPose(style, 1.37, 'heavy');
       const b = enemyPose(style, 1.37 + period * 10, 'heavy');
       expect(b.frontHand.x).toBeCloseTo(a.frontHand.x, 6);
@@ -217,6 +217,60 @@ describe('enemyPose', () => {
     for (const style of ['stand', 'run', 'dance', 'sway'] as const) {
       expect(enemyPose(style, 1, 'heavy').upsideDown).toBeFalsy();
     }
+  });
+
+  it('robot: snaps to a new pose right at the beat, then freezes until the next beat', () => {
+    const settled = enemyPose('robot', 1.3, 'samurai'); // locked in by a quarter of a beat
+    const later = enemyPose('robot', 1.95, 'samurai');
+    // Frozen: nothing moves for the rest of the beat.
+    expect(later.frontHand.x).toBeCloseTo(settled.frontHand.x, 6);
+    expect(later.frontHand.y).toBeCloseTo(settled.frontHand.y, 6);
+    expect(later.head.x).toBeCloseTo(settled.head.x, 6);
+    // ...and the next beat is a clearly different pose.
+    const next = enemyPose('robot', 2.2, 'samurai');
+    // (Compare elbows: two poses can share a hand position with the arm shaped differently.)
+    expect(Math.hypot(next.frontElbow.x - settled.frontElbow.x, next.frontElbow.y - settled.frontElbow.y)).toBeGreaterThan(15);
+  });
+
+  it('robot: arms are bent at right angles', () => {
+    for (const beat of [0.5, 1.5, 2.5, 3.5]) {
+      const p = enemyPose('robot', beat, 'agile');
+      const a = Math.atan2(p.frontElbow.y - p.frontShoulder.y, p.frontElbow.x - p.frontShoulder.x);
+      const b = Math.atan2(p.frontHand.y - p.frontElbow.y, p.frontHand.x - p.frontElbow.x);
+      const d = Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a)));
+      expect(d).toBeCloseTo(Math.PI / 2, 1);
+    }
+  });
+
+  it('headbang: the head is lowest exactly on the beat and well forward of the hips', () => {
+    const onBeat = enemyPose('headbang', 3, 'heavy');
+    for (const off of [0.2, 0.5, 0.75, 0.9]) {
+      expect(onBeat.head.y).toBeGreaterThan(enemyPose('headbang', 3 + off, 'heavy').head.y);
+    }
+    expect(onBeat.head.x).toBeGreaterThan(onBeat.pelvis.x + 25);
+  });
+
+  it('headbang: the head drops fast and comes back up slowly', () => {
+    const up = enemyPose('headbang', 0.75, 'heavy').head.y;
+    const down = enemyPose('headbang', 1, 'heavy').head.y;
+    const quarterAfterUp = enemyPose('headbang', 0.875, 'heavy').head.y; // halfway through the drop
+    const quarterAfterDown = enemyPose('headbang', 1.375, 'heavy').head.y; // halfway through the rise
+    expect(down - up).toBeGreaterThan(10);
+    // Halfway (in progress) through each: the drop takes 1/4 beat, the rise 3/4.
+    expect(quarterAfterUp).toBeGreaterThan(up);
+    expect(quarterAfterDown).toBeGreaterThan(up);
+  });
+
+  it('zombie: both arms reach out toward the player, and the head lolls', () => {
+    for (let beat = 0; beat < 2; beat += 0.25) {
+      const p = enemyPose('zombie', beat, 'samurai');
+      expect(p.frontHand.x).toBeGreaterThan(p.frontShoulder.x + 30);
+      expect(p.backHand.x).toBeGreaterThan(p.backShoulder.x + 30);
+      expect(Math.abs(p.frontHand.y - p.frontShoulder.y)).toBeLessThan(18); // roughly shoulder height
+    }
+    const a = enemyPose('zombie', 0, 'samurai').head.x;
+    const b = enemyPose('zombie', 1, 'samurai').head.x;
+    expect(Math.abs(a - b)).toBeGreaterThan(5);
   });
 
   it('lists every style once for the options menu', () => {
