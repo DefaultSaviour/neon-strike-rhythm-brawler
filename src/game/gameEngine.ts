@@ -21,7 +21,9 @@ import { idleBouncePose, strikeFrame } from './motion';
 import { FLOOR_Y } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { recordRunProgress, RunProgress } from './runProgress';
-import { buildForBand, DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, enemyPose } from './enemyMotion';
+import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES } from './enemyMotion';
+import { enemyPoseFor } from './customAnimation';
+import { getActiveAnimations } from './animationLibrary';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -409,7 +411,7 @@ export class GameEngine {
     const pieces = shatterEnemy(
       {
         x: enemy.x,
-        pose: enemyPose(this.settings.enemyMotion, enemy.animPhase, buildForBand(enemy.band)),
+        pose: enemyPoseFor(this.settings.enemyMotion, enemy.animPhase, enemy.band, enemy.tier, getActiveAnimations()),
         facing: enemy.lane === 'left' ? 1 : -1,
         scale: style.scale,
         color: enemy.color,

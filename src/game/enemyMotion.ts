@@ -50,7 +50,7 @@ export interface EnemyPose {
 }
 
 export const LIMB = { upperArm: 21, forearm: 21, thigh: 31, shin: 32 } as const;
-const FLOOR = 68;
+export const FLOOR = 68;
 
 const BUILDS: Record<EnemyBuild, { hunch: number; stance: number }> = {
   heavy: { hunch: 8, stance: 26 },
@@ -183,17 +183,64 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     stomp = 0;
   }
 
+  return assemblePose(
+    {
+      pelvis,
+      chest,
+      head,
+      frontHand: frontHandTarget,
+      backHand: backHandTarget,
+      frontFoot: frontFootTarget,
+      backFoot: backFootTarget,
+      bends: { frontArm: armBendFront, backArm: armBendBack, frontLeg: legBendFront, backLeg: legBendBack },
+      shoulderSpread,
+    },
+    stomp,
+    facingCamera
+  );
+}
+
+/** Which side each elbow / knee pops out to (see solveTwoBone). */
+export interface LimbBends {
+  frontArm: 1 | -1;
+  backArm: 1 | -1;
+  frontLeg: 1 | -1;
+  backLeg: 1 | -1;
+}
+
+/**
+ * The few points that fully describe a pose: the body line (pelvis, chest,
+ * head) plus where the hands and feet are aiming. Elbows and knees are worked
+ * out from these, so limbs always keep their length. The built-in stances and
+ * the Animation Studio's custom poses are both stored this way.
+ */
+export interface PoseRig {
+  pelvis: Point;
+  chest: Point;
+  head: Point;
+  frontHand: Point;
+  backHand: Point;
+  frontFoot: Point;
+  backFoot: Point;
+  bends: LimbBends;
+  /** Half the gap between the shoulders (about 3 side-on, 9 facing the camera) */
+  shoulderSpread: number;
+}
+
+/** Turn a rig into a full skeleton: shoulders, then elbows and knees by two-bone IK. */
+export function assemblePose(rig: PoseRig, stomp: number, facingCamera: boolean): EnemyPose {
+  const { pelvis, chest, head, bends, shoulderSpread } = rig;
   const frontShoulder = { x: chest.x + shoulderSpread, y: chest.y + 1 };
   const backShoulder = { x: chest.x - shoulderSpread, y: chest.y + 1 };
-  const frontArm = solveTwoBone(frontShoulder, frontHandTarget, LIMB.upperArm, LIMB.forearm, armBendFront);
-  const backArm = solveTwoBone(backShoulder, backHandTarget, LIMB.upperArm, LIMB.forearm, armBendBack);
-  const frontLeg = solveTwoBone(pelvis, frontFootTarget, LIMB.thigh, LIMB.shin, legBendFront);
-  const backLeg = solveTwoBone(pelvis, backFootTarget, LIMB.thigh, LIMB.shin, legBendBack);
+  const frontArm = solveTwoBone(frontShoulder, rig.frontHand, LIMB.upperArm, LIMB.forearm, bends.frontArm);
+  const backArm = solveTwoBone(backShoulder, rig.backHand, LIMB.upperArm, LIMB.forearm, bends.backArm);
+  const frontLeg = solveTwoBone(pelvis, rig.frontFoot, LIMB.thigh, LIMB.shin, bends.frontLeg);
+  const backLeg = solveTwoBone(pelvis, rig.backFoot, LIMB.thigh, LIMB.shin, bends.backLeg);
 
   return {
-    head,
-    chest,
-    pelvis,
+    head: { ...head },
+    chest: { ...chest },
+    pelvis: { ...pelvis },
     frontShoulder,
     frontElbow: frontArm.joint,
     frontHand: frontArm.end,

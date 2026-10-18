@@ -8,7 +8,8 @@ import { beatPulse } from '../audio/beatGrid';
 import { ArenaLayout, computeArenaLayout, FLOOR_Y } from '../game/layout';
 import { HIT_WINDOWS } from '../game/timing';
 import { Enemy } from '../types/game';
-import { buildForBand, enemyPose } from '../game/enemyMotion';
+import { enemyPoseFor } from '../game/customAnimation';
+import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
 import { drawFighter, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
@@ -672,7 +673,7 @@ function drawEnemyFigure(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: Ga
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    const pose = enemyPose(engine.settings.enemyMotion, phase, buildForBand(band));
+    const pose = enemyPoseFor(engine.settings.enemyMotion, phase, band, tier, getActiveAnimations());
     drawEnemyArt(ctx, pose, band, tier, { main: mainColor, accent }, phase, !!opts.flash);
 
     ctx.restore();
