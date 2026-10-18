@@ -10,14 +10,17 @@
  * (no stretchy rubber arms, whatever the style does).
  */
 
-export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway' | 'handstand';
+export type EnemyMotionStyle = 'stand' | 'run' | 'dance' | 'sway' | 'handstand' | 'robot' | 'headbang' | 'zombie';
 
 export const ENEMY_MOTION_STYLES: Array<{ id: EnemyMotionStyle; label: string; description: string }> = [
   { id: 'run', label: 'Run on the spot', description: 'High knees and sprinter arms swinging from the shoulder, one step per beat' },
   { id: 'dance', label: 'Dance', description: 'Each enemy busts out its signature move: the Moonwalk, YMCA, the Floss, Thriller...' },
-  { id: 'sway', label: 'Hands up', description: 'Facing you, arms waving overhead like a crowd, knees and elbows pumping on the beat' },
+  { id: 'sway', label: 'Hands up', description: 'Facing you, hands in the air, swaying side to side on the beat like a crowd' },
   { id: 'stand', label: 'Just stand', description: 'Guard up, riding the conveyor, nodding on the beat' },
   { id: 'handstand', label: 'Handstand', description: 'Upside down on their hands, legs scissoring in the air, elbows dipping on the beat' },
+  { id: 'robot', label: 'Robot', description: 'Stiff right-angle arm poses that snap to the next one exactly on each beat, then freeze' },
+  { id: 'headbang', label: 'Headbang', description: 'Bent over, head whipping down on every beat, shredding air guitar' },
+  { id: 'zombie', label: 'Zombie', description: 'Hunched, arms reaching out at you, head lolling, shuffling and dragging a foot' },
 ];
 
 export const DEFAULT_ENEMY_MOTION: EnemyMotionStyle = 'run';
@@ -132,6 +135,26 @@ function kneeDriveOffset(thighDeg: number, foldDeg: number): Point {
   return { x: foot.x, y: foot.y - (LIMB.thigh + LIMB.shin) };
 }
 
+/**
+ * Robot keyframes, one per beat: arm angles (degrees, see armByAngles; the
+ * front arm is on the +x side, facing the camera), a stiff head tilt and a
+ * knee dip. Classic right-angle "robot" arms.
+ */
+const ROBOT_POSES = [
+  { frontUpper: 0, frontFore: -90, backUpper: 180, backFore: -90, tilt: 0 }, // goalposts
+  { frontUpper: 0, frontFore: 90, backUpper: 180, backFore: -90, tilt: 14 }, // one up, one down
+  { frontUpper: 90, frontFore: 0, backUpper: 90, backFore: 180, tilt: 0 }, // arms down, forearms out
+  { frontUpper: -90, frontFore: 180, backUpper: 180, backFore: 90, tilt: -14 }, // one over the head
+] as const;
+/** How much of a beat the robot takes to snap into its next pose before freezing. */
+const ROBOT_SNAP = 0.12;
+
+/** Blend two angles (degrees) the short way round. */
+function lerpDeg(a: number, b: number, t: number): number {
+  const d = ((((b - a) % 360) + 540) % 360) - 180;
+  return a + d * t;
+}
+
 function pulseAt(beat: number, sharpness = 5) {
   const frac = beat - Math.floor(beat);
   return Math.exp(-frac * sharpness);
@@ -208,26 +231,29 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     armBendBack = -1;
     stomp = pulse;
   } else if (style === 'sway') {
-    // Hands-up crowd pose, FACING THE CAMERA, like a crowd at a concert:
-    // both arms up, waving side to side together over two beats (rotating
-    // around the shoulders, forearms whipping a little further around the
-    // elbows). On every beat the whole body pumps: knees bend, and the
-    // forearms fold in around the elbows, then everything straightens.
+    // Hands-up crowd groove, FACING THE CAMERA, like a crowd at a concert.
+    // The whole body sways to one side ON each beat and the other side on
+    // the next, dipping into the knees as it lands on the beat and rising
+    // as it crosses the middle between beats. Both arms ride the sway
+    // overhead (rotating around the shoulders) and the forearms ease in
+    // around the elbows into each beat. Everything is smooth: no snapping.
     facingCamera = true;
-    const wave = Math.sin((Math.PI * beat) / 2);
-    const sway = wave * 3;
-    const dip = pulse * 7;
+    const side = Math.cos(Math.PI * beat); // +1 on even beats, -1 on odd beats
+    const groove = (1 + Math.cos(2 * Math.PI * beat)) / 2; // 1 on every beat, 0 halfway between
+    const sway = side * 4;
+    const dip = groove * 7;
     pelvis = { x: sway * 0.5, y: 8 + dip };
     chest = { x: sway, y: -22 + dip };
     head = { x: sway * 1.3, y: -48 + dip };
     frontFootTarget = { x: 13, y: FLOOR };
     backFootTarget = { x: -13, y: FLOOR };
     shoulderSpread = 9;
-    const fold = pulse * 55;
-    const frontUpper = -58 + wave * 8;
-    const backUpper = -122 + wave * 8;
-    const frontArm = armByAngles({ x: chest.x + shoulderSpread, y: chest.y + 1 }, frontUpper, frontUpper - fold + wave * 6);
-    const backArm = armByAngles({ x: chest.x - shoulderSpread, y: chest.y + 1 }, backUpper, backUpper + fold + wave * 6);
+    const fold = groove * 55;
+    const lean = side * 10;
+    const frontUpper = -55 + lean;
+    const backUpper = -125 + lean;
+    const frontArm = armByAngles({ x: chest.x + shoulderSpread, y: chest.y + 1 }, frontUpper, frontUpper - fold);
+    const backArm = armByAngles({ x: chest.x - shoulderSpread, y: chest.y + 1 }, backUpper, backUpper + fold);
     frontHandTarget = frontArm.hand;
     backHandTarget = backArm.hand;
     armBendFront = frontArm.bend;
@@ -235,6 +261,83 @@ export function enemyPose(style: EnemyMotionStyle, beat: number, build: EnemyBui
     // Knees bend OUTWARD, away from the body's centre line.
     legBendFront = -1;
     legBendBack = 1;
+    stomp = 0;
+  } else if (style === 'robot') {
+    // The Robot, FACING THE CAMERA: right-angle arms that SNAP to the next
+    // pose in the first instant of each beat, then freeze completely until
+    // the next beat. Stiff head tilts and a little knee dip as it locks in.
+    facingCamera = true;
+    shoulderSpread = 9;
+    const whole = Math.floor(beat);
+    const frac = beat - whole;
+    const n = ROBOT_POSES.length;
+    const from = ROBOT_POSES[(((whole - 1) % n) + n) % n];
+    const to = ROBOT_POSES[((whole % n) + n) % n];
+    const k = Math.min(1, frac / ROBOT_SNAP);
+    const snap = 1 - (1 - k) * (1 - k); // fast in, then locked
+    const lock = Math.sin(Math.min(1, frac / (ROBOT_SNAP * 2)) * Math.PI) * 3; // knee dip as it locks in
+    pelvis = { x: 0, y: 8 + lock };
+    chest = { x: 0, y: -22 + lock };
+    head = dirPoint(chest, -90 + lerpDeg(from.tilt, to.tilt, snap), 26);
+    frontFootTarget = { x: 13, y: FLOOR };
+    backFootTarget = { x: -13, y: FLOOR };
+    const frontArm = armByAngles(
+      { x: chest.x + shoulderSpread, y: chest.y + 1 },
+      lerpDeg(from.frontUpper, to.frontUpper, snap),
+      lerpDeg(from.frontFore, to.frontFore, snap)
+    );
+    const backArm = armByAngles(
+      { x: chest.x - shoulderSpread, y: chest.y + 1 },
+      lerpDeg(from.backUpper, to.backUpper, snap),
+      lerpDeg(from.backFore, to.backFore, snap)
+    );
+    frontHandTarget = frontArm.hand;
+    backHandTarget = backArm.hand;
+    armBendFront = frontArm.bend;
+    armBendBack = backArm.bend;
+    legBendFront = -1;
+    legBendBack = 1;
+    stomp = 0;
+  } else if (style === 'headbang') {
+    // Headbang with air guitar, side-on: bent forward from the hips, the
+    // head whips DOWN fast into every beat and rises slowly after it. One
+    // arm holds the guitar neck out front, the other strums down on the beat.
+    const frac = beat - Math.floor(beat);
+    // 1 = head fully down (exactly on the beat), 0 = up (three-quarters of the way to the next beat)
+    const raw = frac < 0.75 ? 1 - frac / 0.75 : (frac - 0.75) / 0.25;
+    const bang = raw * raw * (3 - 2 * raw);
+    const lean = 12 + 38 * bang; // degrees forward from upright
+    pelvis = { x: -4, y: 12 + bang * 4 };
+    chest = dirPoint(pelvis, -90 + lean, SPINE_LENGTH);
+    head = dirPoint(chest, -90 + lean + 45 * bang, 24);
+    frontFootTarget = { x: stance * 0.75, y: FLOOR };
+    backFootTarget = { x: -stance * 0.75, y: FLOOR };
+    const neck = armByAngles({ x: chest.x - shoulderSpread, y: chest.y + 1 }, 50 + lean * 0.5, -15 + lean * 0.5);
+    const strum = armByAngles({ x: chest.x + shoulderSpread, y: chest.y + 1 }, 75 + lean * 0.4, 10 + 55 * bang);
+    backHandTarget = neck.hand;
+    frontHandTarget = strum.hand;
+    armBendBack = neck.bend;
+    armBendFront = strum.bend;
+    stomp = 0;
+  } else if (style === 'zombie') {
+    // Zombie shuffle, side-on: hunched over, both arms stretched out toward
+    // the player with drooping wrists, head lolling from side to side. Each
+    // beat one foot shuffles forward with a little lift while the other drags.
+    const s = Math.sin(Math.PI * beat);
+    const sway = Math.cos(Math.PI * beat);
+    pelvis = { x: -2, y: 10 + Math.abs(s) * 2 };
+    chest = dirPoint(pelvis, -90 + 14, SPINE_LENGTH);
+    head = dirPoint(chest, -90 + 30 + 18 * sway, 24);
+    // One foot shuffles forward (lifting a little) while the other drags back.
+    frontFootTarget = { x: 4 + 9 * s, y: FLOOR - Math.max(0, s) * 6 };
+    backFootTarget = { x: -10 - 9 * s, y: FLOOR - Math.max(0, -s) * 6 };
+    const reach = (shoulder: Point, droop: number) => armByAngles(shoulder, -4 + droop, 14 + droop * 1.5);
+    const frontArm = reach({ x: chest.x + shoulderSpread, y: chest.y + 1 }, 6 * s);
+    const backArm = reach({ x: chest.x - shoulderSpread, y: chest.y + 1 }, -6 * s);
+    frontHandTarget = frontArm.hand;
+    backHandTarget = backArm.hand;
+    armBendFront = frontArm.bend;
+    armBendBack = backArm.bend;
     stomp = 0;
   } else if (style === 'handstand') {
     // Handstand, side-on: hands planted on the floor with the head hanging

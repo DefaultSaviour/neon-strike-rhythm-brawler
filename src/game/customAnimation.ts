@@ -238,10 +238,10 @@ export function sampleAnimation(anim: CustomAnimation, beat: number): EnemyPose 
 
 /**
  * A starting point for editing: the built-in stance sampled at half-beat steps.
- * Most stances repeat every 2 beats (4 poses); "Hands up" sways over 4 (8 poses).
+ * Most stances repeat every 2 beats (4 poses); "Hands up" and "Robot" take 4 (8 poses).
  */
 export function builtInAnimation(style: EnemyMotionStyle, band: FrequencyBand): CustomAnimation {
-  const count = style === 'sway' ? 8 : 4;
+  const count = style === 'sway' || style === 'robot' ? 8 : 4;
   const beatsPerPose = 0.5;
   const poses: PoseRig[] = [];
   let facingCamera = false;

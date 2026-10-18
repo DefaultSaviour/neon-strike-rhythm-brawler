@@ -36,6 +36,12 @@ interface GearEnv {
   forearmFront: Point;
   forearmBack: Point;
   rnd: () => number;
+  /**
+   * Drawing an upside-down body (a handstand). Gear that belongs on the
+   * ground under the feet (boot jets, hover discs, stomp rings) is skipped,
+   * or it would float in the air above the raised feet.
+   */
+  inverted: boolean;
 }
 
 interface EnemyLook {
@@ -177,7 +183,7 @@ const LOOKS: Record<FrequencyBand, Record<EnemyTier, EnemyLook>> = {
         ctx.arc(pose.chest.x + (g.front ? 0 : 2), pose.chest.y + 6, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
-        if (pose.stomp > 0.4 && !g.flash) {
+        if (pose.stomp > 0.4 && !g.flash && !g.inverted) {
           ctx.save();
           ctx.globalAlpha *= pose.stomp;
           neonStroke(g, g.accent, 2, 10, () => {
@@ -335,7 +341,7 @@ const LOOKS: Record<FrequencyBand, Record<EnemyTier, EnemyLook>> = {
       shoulderHalf: 10,
       waistHalf: 5.5,
       back: (g) => {
-        if (g.front) return;
+        if (g.front || g.inverted) return; // boot jets only make sense with feet on the ground
         const f = g.pose.backFoot;
         neonStroke(g, g.main, 3, 14, () => line(g.ctx, P(f.x - 2, f.y - 3), P(f.x - 28 - g.rnd() * 14, f.y - 3 + (g.rnd() - 0.5) * 5)));
       },
@@ -368,6 +374,8 @@ const LOOKS: Record<FrequencyBand, Record<EnemyTier, EnemyLook>> = {
           polyline(g.ctx, [pose.frontHand, tip, along(tip, g.forearmFront, 10, 0.4)]);
           line(g.ctx, pose.backHand, along(pose.backHand, g.forearmBack, 16, 0.3));
         }, true);
+        // Hover discs under the feet (not when upside down: the feet are in the air).
+        if (g.inverted) return;
         neonStroke(g, g.accent, 2.5, 16, () => {
           g.ctx.beginPath();
           g.ctx.ellipse(pose.frontFoot.x, pose.frontFoot.y + 3, 8, 2.5, 0, 0, Math.PI * 2);
@@ -481,10 +489,23 @@ export function drawEnemyArt(
     ctx.rect(-1000, -1000, 2000, 1000 + FLOOR_Y);
     ctx.clip();
     ctx.scale(1, -1);
-    drawEnemyArt(ctx, flipPoseVertically(pose), band, tier, colors, beat, flash);
+    drawUpright(ctx, flipPoseVertically(pose), band, tier, colors, beat, flash, true);
     ctx.restore();
     return;
   }
+  drawUpright(ctx, pose, band, tier, colors, beat, flash, false);
+}
+
+function drawUpright(
+  ctx: Ctx,
+  pose: EnemyPose,
+  band: FrequencyBand,
+  tier: EnemyTier,
+  colors: EnemyArtColors,
+  beat: number,
+  flash: boolean,
+  inverted: boolean
+) {
   const look = LOOKS[band][tier];
   const front = pose.facingCamera;
   const g: GearEnv = {
@@ -499,6 +520,7 @@ export function drawEnemyArt(
     forearmFront: dirOf(pose.frontElbow, pose.frontHand),
     forearmBack: dirOf(pose.backElbow, pose.backHand),
     rnd: flash ? () => 0.5 : Math.random,
+    inverted,
   };
   const glow = band === 'high' && tier === 3 ? 18 : 12;
 
