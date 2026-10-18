@@ -683,7 +683,7 @@ function drawEnemyFigure(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: Ga
 function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const pose = engine.currentPose;
   const combo = engine.scoreState.combo;
-  // Glow, colour, lightning and wings all come from the combo tier (see fighterTier.ts).
+  // Glow, colour, lightning and the top-level form all come from the combo tier (see fighterTier.ts).
   const tier = fighterTier(combo);
 
   ctx.save();

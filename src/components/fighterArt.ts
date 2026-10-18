@@ -4,7 +4,7 @@ import type { HeroId } from '../game/heroes';
 import { bodyFill, drawNeonBody, neonHead, neonLimb } from './neonBody';
 
 /**
- * Draws the player's fighter: angel wings (god tier), lightning (overdrive),
+ * Draws the player's fighter: the hero's top-level form (god tier), lightning (overdrive),
  * ground aura, scarf, solid neon body, head, visor and chest core.
  *
  * Shared by the game and the results-screen progress bar, so the little guy
@@ -35,30 +35,10 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   const combo = opts.combo ?? tier.minCombo;
   const rnd = opts.random ?? Math.random;
 
-  // 1. Radiant angel wings (god tier)
-  if (tier.wings) {
-    ctx.save();
-    ctx.globalAlpha *= 0.55;
-    ctx.strokeStyle = '#fff1a8';
-    ctx.shadowColor = '#ffe600';
-    ctx.shadowBlur = 16;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    const spread = 38 + Math.sin(opts.time * 8) * 6;
-    for (const side of [-1, 1]) {
-      const c = pose.chest;
-      const joint = { x: c.x + side * (45 + spread), y: c.y - 45 };
-      ctx.beginPath();
-      ctx.moveTo(c.x + side * 8, c.y);
-      ctx.lineTo(joint.x, joint.y);
-      ctx.lineTo(c.x + side * (70 + spread), c.y - 75);
-      ctx.moveTo(joint.x, joint.y);
-      ctx.lineTo(c.x + side * (65 + spread), c.y - 35);
-      ctx.moveTo(joint.x, joint.y);
-      ctx.lineTo(c.x + side * (55 + spread), c.y - 15);
-      ctx.stroke();
-    }
-    ctx.restore();
+  // 1. Top-level form (god tier), behind the body: each hero has their own.
+  if (tier.ascended) {
+    if (opts.hero === 'dragon') drawDragonSpirit(ctx, pose, opts.time);
+    else drawAngelWings(ctx, pose, opts.time);
   }
 
   // 2. Overdrive lightning crackling from the chest to the hands
@@ -142,6 +122,108 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   ctx.beginPath();
   ctx.arc(pose.chest.x, pose.chest.y + 4, core, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+/** Neon Striker's top-level form: radiant angel wings, gently flapping. */
+function drawAngelWings(ctx: Ctx, pose: SkeletonPose, time: number) {
+  ctx.save();
+  ctx.globalAlpha *= 0.55;
+  ctx.strokeStyle = '#fff1a8';
+  ctx.shadowColor = '#ffe600';
+  ctx.shadowBlur = 16;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  const spread = 38 + Math.sin(time * 8) * 6;
+  for (const side of [-1, 1]) {
+    const c = pose.chest;
+    const joint = { x: c.x + side * (45 + spread), y: c.y - 45 };
+    ctx.beginPath();
+    ctx.moveTo(c.x + side * 8, c.y);
+    ctx.lineTo(joint.x, joint.y);
+    ctx.lineTo(c.x + side * (70 + spread), c.y - 75);
+    ctx.moveTo(joint.x, joint.y);
+    ctx.lineTo(c.x + side * (65 + spread), c.y - 35);
+    ctx.moveTo(joint.x, joint.y);
+    ctx.lineTo(c.x + side * (55 + spread), c.y - 15);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Points along the Little Dragon's spirit, from the tail (by the hips) to the head (above his head). */
+export function dragonSpiritPath(pose: SkeletonPose, time: number, count = 26): Point2D[] {
+  const base = pose.pelvis.y + 22;
+  const top = pose.head.y - 40;
+  const pts: Point2D[] = [];
+  for (let i = 0; i < count; i++) {
+    const s = i / (count - 1);
+    const angle = s * Math.PI * 3 + time * 2.5;
+    pts.push({
+      x: pose.chest.x + Math.cos(angle) * (30 - s * 12),
+      y: base + (top - base) * s + Math.sin(angle) * 6,
+    });
+  }
+  return pts;
+}
+
+/**
+ * The Little Dragon's top-level form: a golden dragon spirit coiling up
+ * around him from hips to head, slowly turning. Two strokes and a head, so
+ * it costs about the same to draw as the wings.
+ */
+function drawDragonSpirit(ctx: Ctx, pose: SkeletonPose, time: number) {
+  const pts = dragonSpiritPath(pose, time);
+  const line = (width: number, color: string, blur: number) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.shadowColor = '#ffb000';
+    ctx.shadowBlur = blur;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  };
+  ctx.save();
+  ctx.globalAlpha *= 0.7;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  line(5, '#ffb000', 16); // glowing body
+  line(1.6, '#fff1a8', 0); // bright spine
+  // Head at the top end, facing along the last stretch of the body
+  const head = pts[pts.length - 1];
+  const prev = pts[pts.length - 3];
+  const dx = head.x - prev.x;
+  const dy = head.y - prev.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  ctx.fillStyle = '#ffb000';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(head.x + ux * 9, head.y + uy * 9);
+  ctx.lineTo(head.x - uy * 5, head.y + ux * 5);
+  ctx.lineTo(head.x + uy * 5, head.y - ux * 5);
+  ctx.closePath();
+  ctx.fill();
+  // Eye and whiskers
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(head.x + ux * 3, head.y + uy * 3, 1.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff1a8';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const side of [-1, 1]) {
+    ctx.moveTo(head.x + ux * 8, head.y + uy * 8);
+    ctx.quadraticCurveTo(
+      head.x + ux * 14 - uy * side * 6,
+      head.y + uy * 14 + ux * side * 6,
+      head.x + ux * 10 - uy * side * 12,
+      head.y + uy * 10 + ux * side * 12
+    );
+  }
+  ctx.stroke();
   ctx.restore();
 }
 
