@@ -8,8 +8,8 @@ import {
   CustomAnimation,
   EDIT_BOUNDS,
   enemyPoseFor,
-  flipBend,
   handleAt,
+  handlePosition,
   KeyValueStore,
   loadSavedAnimations,
   mergeLibraries,
@@ -142,23 +142,58 @@ describe('moveHandle', () => {
     r = moveHandle(r, 'pelvis', { x: 4, y: 20 });
     r = moveHandle(r, 'backHand', { x: -60, y: -100 });
     r = moveHandle(r, 'frontFoot', { x: 30, y: 30 });
-    r = flipBend(r, 'frontLeg');
+    r = moveHandle(r, 'frontKnee', { x: -20, y: 40 });
+    r = moveHandle(r, 'backElbow', { x: 30, y: -60 });
     r = mirrorRig(r);
     expectLimbLengths(sampleAnimation({ beatsPerPose: 1, facingCamera: false, poses: [r] }, 0));
   });
 });
 
-describe('flipBend and mirrorRig', () => {
-  const rig = rigFromPose(enemyPose('dance', 0, 'samurai'));
+describe('dragging elbows and knees', () => {
+  // The guard stance has bent arms and legs, so there's a real elbow / knee to grab.
+  const rig = rigFromPose(enemyPose('stand', 0, 'samurai'));
+  const poseOf = (r: typeof rig) => sampleAnimation({ beatsPerPose: 1, facingCamera: false, poses: [r] }, 0);
 
-  it('flipBend moves the elbow to the other side of the arm', () => {
-    // (A straight arm has nothing to flip, so use the guard stance, where the arm is bent.)
-    const rig = rigFromPose(enemyPose('stand', 0, 'samurai'));
-    const before = sampleAnimation({ beatsPerPose: 1, facingCamera: false, poses: [rig] }, 0);
-    const after = sampleAnimation({ beatsPerPose: 1, facingCamera: false, poses: [flipBend(rig, 'frontArm')] }, 0);
-    expect(dist(before.frontElbow, after.frontElbow)).toBeGreaterThan(1);
-    expect(flipBend(flipBend(rig, 'frontArm'), 'frontArm').bends).toEqual(rig.bends);
+  it('the elbow follows the pointer around the shoulder, and the forearm rides along', () => {
+    const before = poseOf(rig);
+    const target = { x: before.frontShoulder.x + 5, y: before.frontShoulder.y - 30 };
+    const after = poseOf(moveHandle(rig, 'frontElbow', target));
+    // Upper arm now points at the pointer...
+    const dir = Math.atan2(after.frontElbow.y - after.frontShoulder.y, after.frontElbow.x - after.frontShoulder.x);
+    expect(dir).toBeCloseTo(Math.atan2(target.y - after.frontShoulder.y, target.x - after.frontShoulder.x), 3);
+    // ...and the forearm still points the same way it did.
+    const forearm = (p: EnemyPose) => Math.atan2(p.frontHand.y - p.frontElbow.y, p.frontHand.x - p.frontElbow.x);
+    expect(forearm(after)).toBeCloseTo(forearm(before), 3);
+    expectLimbLengths(after);
   });
+
+  it('swinging the elbow past straight bends the arm the other way', () => {
+    const before = poseOf(rig);
+    const sh = before.frontShoulder;
+    // The arm is straight when the upper arm points the same way as the forearm.
+    // Swing the elbow from where it is, past that line, to the other side.
+    const upper = Math.atan2(before.frontElbow.y - sh.y, before.frontElbow.x - sh.x);
+    const fore = Math.atan2(before.frontHand.y - before.frontElbow.y, before.frontHand.x - before.frontElbow.x);
+    const gap = Math.atan2(Math.sin(fore - upper), Math.cos(fore - upper));
+    const past = fore + gap * 0.6;
+    const moved = moveHandle(rig, 'frontElbow', { x: sh.x + Math.cos(past) * 20, y: sh.y + Math.sin(past) * 20 });
+    expect(moved.bends.frontArm).toBe(-rig.bends.frontArm);
+    // Swinging only part way (not past straight) keeps the bend.
+    const part = upper + gap * 0.4;
+    const kept = moveHandle(rig, 'frontElbow', { x: sh.x + Math.cos(part) * 20, y: sh.y + Math.sin(part) * 20 });
+    expect(kept.bends.frontArm).toBe(rig.bends.frontArm);
+    expectLimbLengths(poseOf(moved));
+  });
+
+  it('a knee drag never pushes the foot through the floor', () => {
+    const moved = moveHandle(rig, 'frontKnee', { x: 60, y: 60 });
+    expect(moved.frontFoot.y).toBeLessThanOrEqual(EDIT_BOUNDS.maxY + 1e-9);
+    expectLimbLengths(poseOf(moved));
+  });
+});
+
+describe('mirrorRig', () => {
+  const rig = rigFromPose(enemyPose('dance', 0, 'samurai'));
 
   it('mirroring twice gives back the same pose', () => {
     const twice = mirrorRig(mirrorRig(rig));
@@ -172,13 +207,13 @@ describe('handleAt', () => {
   const rig = rigFromPose(enemyPose('stand', 0, 'samurai'));
 
   it('finds the joint under the pointer', () => {
-    expect(handleAt(rig, { x: rig.head.x + 1, y: rig.head.y }, 6)).toEqual({ kind: 'drag', handle: 'head' });
+    expect(handleAt(rig, { x: rig.head.x + 1, y: rig.head.y }, 6)).toBe('head');
     expect(handleAt(rig, { x: 80, y: -140 }, 6)).toBeNull();
   });
 
-  it('finds elbows and knees for flipping', () => {
-    const pose = sampleAnimation({ beatsPerPose: 1, facingCamera: false, poses: [rig] }, 0);
-    expect(handleAt(rig, pose.frontKnee, 4)).toEqual({ kind: 'bend', limb: 'frontLeg' });
+  it('finds elbows and knees too', () => {
+    expect(handleAt(rig, handlePosition(rig, 'frontKnee'), 4)).toBe('frontKnee');
+    expect(handleAt(rig, handlePosition(rig, 'backElbow'), 4)).toBe('backElbow');
   });
 });
 
