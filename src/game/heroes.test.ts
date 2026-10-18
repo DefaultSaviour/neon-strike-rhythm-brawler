@@ -4,6 +4,8 @@ import { ATTACK_MOVES, getMoveForCombo, getOrientedPose } from './animations';
 import { LIMB } from './enemyMotion';
 import { DEFAULT_HERO, getHero, HEROES } from './heroes';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
+import { comboDuration, comboFrame } from './combo';
+import { muzzlePoint } from '../components/fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 const dragon = getHero('dragon');
@@ -107,6 +109,94 @@ describe('The Little Dragon', () => {
     const left = getOrientedPose(m.pose, 'left');
     expect(left.prop).toBe('nunchaku');
     expect(left.bladeSlash!.end.x).toBeCloseTo(-m.pose.bladeSlash!.end.x, 6);
+  });
+});
+
+describe('Baba Yaga', () => {
+  const baba = getHero('babaYaga');
+  const allKeys = baba.moves.flatMap((m) => m.sequence!);
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(baba.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => baba.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(baba.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [baba.idlePose, ...baba.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of baba.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x).toBeGreaterThan(m.pose.pelvis.x);
+      for (const k of m.sequence!.slice(1)) expect(k.ms).toBeGreaterThan(0);
+    }
+    const multiHit = baba.moves.filter((m) => m.sequence!.filter((k) => k.trail).length >= 3);
+    expect(multiHit.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('always has a weapon in hand, and holds the pistol two-handed at the chest when idle', () => {
+    expect(allKeys.every((k) => k.prop)).toBe(true);
+    const idle = baba.idlePose;
+    expect(idle.prop).toBe('pistol');
+    expect(dist(idle.leftHand, idle.rightHand)).toBeLessThan(6);
+    expect(idle.leftHand.x).toBeGreaterThan(idle.chest.x);
+  });
+
+  it('shots only fire with a trail (the bullet streak), and only on guns', () => {
+    const shots = allKeys.filter((k) => k.shot);
+    expect(shots.length).toBeGreaterThan(40);
+    for (const k of shots) {
+      expect(k.trail).toBeDefined();
+      expect(['pistol', 'pistols', 'shotgun']).toContain(k.prop);
+    }
+    // ...and the kicks, elbows and the pencil never do
+    expect(allKeys.filter((k) => k.prop === 'pencil').some((k) => k.shot)).toBe(false);
+  });
+
+  it('the muzzle flash sits at the end of the gun that is firing', () => {
+    const dual = baba.moves.find((m) => m.name === 'Dual Pistols')!.sequence!.map((k) => keyToPlayerPose(k));
+    // Lead hand fires first, then the rear hand
+    expect(dist(muzzlePoint(dual[0], 1)!, dual[0].leftHand)).toBeCloseTo(9, 3);
+    expect(dist(muzzlePoint(dual[1], 1)!, dual[1].rightHand)).toBeCloseTo(9, 3);
+    const blast = keyToPlayerPose(baba.moves.find((m) => m.name === 'Shotgun Blast')!.sequence![0]);
+    expect(dist(muzzlePoint(blast, 1)!, blast.leftHand)).toBeCloseTo(22, 3);
+    expect(muzzlePoint(baba.idlePose, 1)).toBeUndefined();
+  });
+
+  it('the shotgun, dual pistols and pencil come out for their own moves', () => {
+    const using = (prop: string) => baba.moves.filter((m) => m.sequence!.some((k) => k.prop === prop)).map((m) => m.name);
+    expect(using('shotgun')).toEqual(['Shotgun Blast', 'Shotgun Pump Combo']);
+    expect(using('pencil')).toEqual(['Pencil Strike']);
+    expect(using('pistols')).toEqual(['Dual Pistols', 'Gun-Kata Spin', 'Baba Yaga']);
+  });
+
+  it('the wall run really leaves the ground', () => {
+    const k = baba.moves.find((m) => m.name === 'Wall Run Shot')!.sequence![0];
+    expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y)).toBeLessThan(64);
+  });
+
+  it('facing left mirrors the shot and keeps the gun', () => {
+    const m = baba.moves.find((x) => x.name === 'Double Tap')!;
+    const left = getOrientedPose(m.pose, 'left');
+    expect(left.prop).toBe('pistol');
+    expect(left.shot).toBe('lead');
+    expect(muzzlePoint(left, -1)!.x).toBeCloseTo(-muzzlePoint(m.pose, 1)!.x, 6);
+  });
+
+  it('the flash stops when the combo recovers to the stance', () => {
+    const m = baba.moves.find((x) => x.name === 'Quick Draw')!;
+    const end = comboFrame(comboDuration(m.sequence!) - 0.01, baba.idlePose, m.sequence!, baba.idlePose, 0, (p) => p);
+    expect(end.pose.shot).toBeFalsy();
   });
 });
 

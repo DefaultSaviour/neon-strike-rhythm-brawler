@@ -40,6 +40,8 @@ export interface FighterSpec {
   backLeg: LimbAngles | Point;
   trail?: TrailSpec;
   prop?: SkeletonPose['prop'];
+  /** The gun in this hand fires: the trail becomes the bullet streak */
+  shot?: SkeletonPose['shot'];
 }
 
 const SPINE = 30;
@@ -110,6 +112,7 @@ export function buildKey(spec: FighterSpec, trailColor: string, ms = 0): MoveKey
     ms,
     ...(spec.trail ? { trail: trailFor(pose, spec.trail, trailColor) } : {}),
     ...(spec.prop ? { prop: spec.prop } : {}),
+    ...(spec.shot && spec.trail ? { shot: spec.shot } : {}),
   };
 }
 
@@ -119,6 +122,8 @@ export function keyToPlayerPose(key: MoveKey): SkeletonPose {
   delete pose.scarf;
   if (key.prop) pose.prop = key.prop;
   if (key.trail) pose.bladeSlash = key.trail;
+  // The flash only shows while the bullet streak does.
+  if (key.shot && key.trail) pose.shot = key.shot;
   return pose;
 }
 
