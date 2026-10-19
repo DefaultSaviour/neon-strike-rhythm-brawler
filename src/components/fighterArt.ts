@@ -45,6 +45,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'back');
     else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
     else if (opts.hero === 'stallion') drawSunriseSteps(ctx, pose, opts.time);
+    else if (opts.hero === 'kid') drawCraneSpirit(ctx, pose, opts.time, opts.facing);
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -135,6 +136,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (pose.prop === 'chair') drawSteelChair(ctx, pose, opts.facing);
   if (opts.hero === 'ballerina') drawBallerinaOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (opts.hero === 'stallion') drawStallionOutfit(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'kid') drawKidOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (pose.prop === 'ropeOver' || pose.prop === 'ropeUnder') drawSkippingRope(ctx, pose);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
@@ -1288,6 +1290,158 @@ export function ballerinaArms(pose: SkeletonPose): SkeletonPose {
     rightElbow: stretch(pose.rightShoulder, pose.rightElbow),
     rightHand: stretch(pose.rightShoulder, pose.rightHand),
   };
+}
+
+/** The Kid's crane (his top-level form): where it sits, how wide its wings reach, and how far they are raised (0..1). */
+export function kidCrane(pose: SkeletonPose, time: number) {
+  return { x: pose.chest.x, y: pose.chest.y - 6, span: 150, lift: 0.5 + 0.5 * Math.sin(time * 2.2) };
+}
+
+/**
+ * The Kid's top-level form: a giant white crane behind him, wings spread
+ * wide and slowly beating, its long neck rising over his head and a red
+ * crown on top.
+ */
+function drawCraneSpirit(ctx: Ctx, pose: SkeletonPose, time: number, facing: 1 | -1) {
+  const c = kidCrane(pose, time);
+  const half = c.span / 2;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#bfe9ff';
+  ctx.shadowBlur = 18;
+  // Two wings: a sweep of long feathers fanning out from the shoulders
+  for (const side of [-1, 1]) {
+    const tipY = c.y - 40 - c.lift * 30;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.quadraticCurveTo(c.x + side * half * 0.5, tipY - 20, c.x + side * half, tipY);
+    // The trailing edge, ragged with feather tips
+    const feathers = 6;
+    for (let i = 1; i <= feathers; i++) {
+      const t = i / feathers;
+      const fx = c.x + side * half * (1 - t * 0.75);
+      const fy = tipY + 18 + t * 38;
+      ctx.lineTo(fx + side * 6, fy - 8);
+      ctx.lineTo(fx, fy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(235, 246, 255, 0.28)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(235, 246, 255, 0.85)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    // Black wingtips, like a real crane
+    ctx.fillStyle = 'rgba(20, 22, 34, 0.8)';
+    ctx.beginPath();
+    ctx.arc(c.x + side * half, tipY, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // The long neck rising over his head, the head turned toward the enemy, a red crown on top
+  const neckTop = { x: c.x - facing * 6, y: pose.head.y - 46 };
+  ctx.strokeStyle = 'rgba(235, 246, 255, 0.9)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(c.x, c.y);
+  ctx.quadraticCurveTo(c.x - facing * 26, pose.head.y - 10, neckTop.x, neckTop.y);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(235, 246, 255, 0.95)';
+  ctx.beginPath();
+  ctx.ellipse(neckTop.x + facing * 4, neckTop.y, 7, 4.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ffd36b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(neckTop.x + facing * 10, neckTop.y);
+  ctx.lineTo(neckTop.x + facing * 22, neckTop.y + 2);
+  ctx.stroke();
+  ctx.fillStyle = '#ff3b4a';
+  ctx.shadowColor = '#ff3b4a';
+  ctx.beginPath();
+  ctx.arc(neckTop.x + facing * 3, neckTop.y - 4, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The Kid: a white karate gi with crossed lapels, a black belt with its
+ * ends hanging, and a white headband with a red sun on the forehead, its
+ * tails fluttering behind him.
+ */
+function drawKidOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1, time: number) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // White gi jacket over the torso, flaring a little at the hem
+  ctx.fillStyle = '#eef2fa';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 10, c.y + ny * 10);
+  ctx.lineTo(c.x - nx * 10, c.y - ny * 10);
+  ctx.lineTo(p.x - nx * 10 + sx * 0.15, p.y - ny * 10 + sy * 0.15);
+  ctx.lineTo(p.x + nx * 10 + sx * 0.15, p.y + ny * 10 + sy * 0.15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // The crossed lapels: a V from the neck down to the belt
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#9aa6bf';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 5, c.y + ny * 5);
+  ctx.lineTo(c.x + sx * 0.7, c.y + sy * 0.7);
+  ctx.lineTo(c.x - nx * 5, c.y - ny * 5);
+  ctx.stroke();
+  // Black belt, its two ends hanging at the front
+  const belt = { x: c.x + sx * 0.82, y: c.y + sy * 0.82 };
+  ctx.strokeStyle = '#121218';
+  ctx.lineWidth = 3.6;
+  ctx.beginPath();
+  ctx.moveTo(belt.x + nx * 10.5, belt.y + ny * 10.5);
+  ctx.lineTo(belt.x - nx * 10.5, belt.y - ny * 10.5);
+  ctx.stroke();
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(belt.x + facing * 3, belt.y);
+  ctx.lineTo(belt.x + facing * 5, belt.y + 9);
+  ctx.moveTo(belt.x + facing * 3, belt.y);
+  ctx.lineTo(belt.x + facing * 1, belt.y + 10);
+  ctx.stroke();
+  // Headband: a white band round the head, a red sun on the forehead, tails flowing back
+  const h = pose.head;
+  ctx.strokeStyle = '#f4f6fb';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(h.x - 9.5, h.y - 3);
+  ctx.lineTo(h.x + 9.5, h.y - 3);
+  ctx.stroke();
+  const flutter = Math.sin(time * 9) * 2.5;
+  const knot = { x: h.x - facing * 9, y: h.y - 3 };
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(knot.x, knot.y);
+  ctx.quadraticCurveTo(knot.x - facing * 8, knot.y + 2 + flutter, knot.x - facing * 16, knot.y + 5 - flutter);
+  ctx.moveTo(knot.x, knot.y);
+  ctx.quadraticCurveTo(knot.x - facing * 7, knot.y + 6 - flutter, knot.x - facing * 13, knot.y + 11 + flutter);
+  ctx.stroke();
+  ctx.fillStyle = '#ff3b4a';
+  ctx.shadowColor = '#ff3b4a';
+  ctx.beginPath();
+  ctx.arc(h.x + facing * 4, h.y - 3, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /** Where The Stallion's sunrise sits (his top-level form): a big low sun behind his shoulders. */

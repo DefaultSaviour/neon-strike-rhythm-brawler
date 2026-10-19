@@ -131,7 +131,9 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                         <div className="h-full bg-amber-400/80" style={{ width: `${(progress.current / progress.goal.target) * 100}%` }} />
                       </div>
                       <div className="text-[10px] font-mono text-slate-500">
-                        {progress.current.toLocaleString()} / {progress.goal.target.toLocaleString()}
+                        {progress.goal.stat === 'playSeconds'
+                          ? `${Math.floor(progress.current / 60)} / ${Math.round(progress.goal.target / 60)} min`
+                          : `${progress.current.toLocaleString()} / ${progress.goal.target.toLocaleString()}`}
                       </div>
                     </div>
                   )

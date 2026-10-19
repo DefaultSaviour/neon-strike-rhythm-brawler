@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, kidCrane, stallionSun, swanTutuFeathers } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -149,5 +149,19 @@ describe("The Stallion's sunrise (top-level form)", () => {
 
   it('its rays turn slowly', () => {
     expect(stallionSun(pose, 2).turn).not.toBe(stallionSun(pose, 0).turn);
+  });
+});
+
+describe("The Kid's crane (top-level form)", () => {
+  const pose = getHero('kid').idlePose;
+
+  it('a crane behind his shoulders, its wings spreading far wider than he is', () => {
+    const crane = kidCrane(pose, 0);
+    expect(Math.abs(crane.x - pose.chest.x)).toBeLessThan(1);
+    expect(crane.span).toBeGreaterThan(120);
+  });
+
+  it('its wings slowly beat', () => {
+    expect(kidCrane(pose, 0.7).lift).not.toBeCloseTo(kidCrane(pose, 0).lift, 2);
   });
 });

@@ -8,6 +8,7 @@ import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDrago
 import { PRIMA_BALLERINA_IDLE, PRIMA_BALLERINA_MOVES } from './heroMoves/primaBallerina';
 import { PRO_WRESTLER_IDLE, PRO_WRESTLER_MOVES } from './heroMoves/proWrestler';
 import { STALLION_IDLE, STALLION_MOVES } from './heroMoves/stallion';
+import { THE_KID_IDLE, THE_KID_MOVES } from './heroMoves/theKid';
 import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
 
 /**
@@ -17,7 +18,7 @@ import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -85,6 +86,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Heavyweight boxing: jabs, hooks, body shots and a haymaker that ends it',
     idlePose: STALLION_IDLE,
     moves: STALLION_MOVES,
+  },
+  {
+    id: 'kid',
+    label: 'The Kid',
+    description: 'Karate: crisp punches and kicks, chores that turn into blocks, and the crane kick',
+    idlePose: THE_KID_IDLE,
+    moves: THE_KID_MOVES,
   },
 ];
 
