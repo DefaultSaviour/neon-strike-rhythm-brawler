@@ -30,8 +30,10 @@ export interface FighterDrawOptions {
 
 type Ctx = CanvasRenderingContext2D;
 
-export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptions) {
+export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
   const { tier } = opts;
+  // The Prima Ballerina is drawn with long dancer's arms (see ballerinaArms)
+  const pose = opts.hero === 'ballerina' ? ballerinaArms(skeleton) : skeleton;
   const combo = opts.combo ?? tier.minCombo;
   const rnd = opts.random ?? Math.random;
 
@@ -1187,6 +1189,30 @@ function drawSpinBlur(ctx: Ctx, pose: SkeletonPose) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/** How much longer the Prima Ballerina's arms are drawn than the standard skeleton's. */
+export const BALLERINA_ARM_SCALE = 1.3;
+
+/**
+ * The Prima Ballerina has long dancer's arms. The skeleton (and so every
+ * pose, blend and timing) keeps the standard arm length; only the drawing
+ * stretches each arm out from its shoulder. With standard arms, hands joined
+ * above her head sat right on top of it, as if she were holding her head;
+ * stretched, they meet well clear of it and the elbows loop out wide.
+ */
+export function ballerinaArms(pose: SkeletonPose): SkeletonPose {
+  const stretch = (shoulder: Point2D, p: Point2D) => ({
+    x: shoulder.x + (p.x - shoulder.x) * BALLERINA_ARM_SCALE,
+    y: shoulder.y + (p.y - shoulder.y) * BALLERINA_ARM_SCALE,
+  });
+  return {
+    ...pose,
+    leftElbow: stretch(pose.leftShoulder, pose.leftElbow),
+    leftHand: stretch(pose.leftShoulder, pose.leftHand),
+    rightElbow: stretch(pose.rightShoulder, pose.rightElbow),
+    rightHand: stretch(pose.rightShoulder, pose.rightHand),
+  };
 }
 
 /** Where Baba Yaga's gold coin halo sits and how wide it looks as it spins (1 = face on). */

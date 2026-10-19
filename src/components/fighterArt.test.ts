@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, swanTutuFeathers } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -116,5 +116,23 @@ describe("the Prima Ballerina's swan tutu (top-level form)", () => {
     const a = swanTutuFeathers(pose, 0);
     const b = swanTutuFeathers(pose, 0.25);
     expect(a.some((f, i) => Math.hypot(f.tip.x - b[i].tip.x, f.tip.y - b[i].tip.y) > 1)).toBe(true);
+  });
+});
+
+describe("the Prima Ballerina's long arms", () => {
+  const pose = getHero('ballerina').idlePose;
+  const drawn = ballerinaArms(pose);
+  const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  it('are drawn longer than the skeleton, from the same shoulders', () => {
+    expect(d(drawn.leftShoulder, drawn.leftHand)).toBeGreaterThan(d(pose.leftShoulder, pose.leftHand) * 1.2);
+    expect(drawn.leftShoulder).toEqual(pose.leftShoulder);
+  });
+
+  it('so her joined hands meet well clear above her head, not on it', () => {
+    // Head radius is 9: the hands should be clearly above the top of it
+    expect(drawn.leftHand.y).toBeLessThan(pose.head.y - 9 - 6);
+    expect(drawn.rightHand.y).toBeLessThan(pose.head.y - 9 - 6);
+    expect(d(drawn.leftHand, drawn.rightHand)).toBeLessThan(4);
   });
 });
