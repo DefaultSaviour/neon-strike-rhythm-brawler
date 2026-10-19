@@ -1,6 +1,6 @@
 import { AttackMove, SkeletonPose } from '../../types/game';
 import { FLOOR } from '../enemyMotion';
-import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHolds } from './poseBuilder';
+import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, headOf, LimbAngles, withHolds } from './poseBuilder';
 
 /**
  * THE PRIMA BALLERINA: ballet as a weapon, in the spirit of the boy from
@@ -9,10 +9,17 @@ import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHol
  * straight-legged kicks, whipping turns and flying leaps. Physical only: no
  * magic.
  *
- * Built like the other combo heroes: each move is ONE clear idea in a few
- * big poses, every hit is held for a beat (withHolds), and the hips stay
- * near the centre. Turning steps are marked `spin` for a spin blur. 21
- * combos over the 5 tiers (5, 5, 4, 4, 3); the first keyframe is the hit.
+ * Her look is one exact pose, drawn by the player: both hands joined in a
+ * crown above her head, and the legs in a diamond (knees turned out wide,
+ * feet together). In her normal form (tiers 1-4) she never breaks it: she
+ * only kicks, out to the side at the enemy and back to the other side, and
+ * every kick returns to the diamond. The tier 5 finishers, which arrive
+ * with her swan tutu, are the full ballet: leaps, turns and the bow.
+ *
+ * Built like the other combo heroes: a few big poses per move, every hit
+ * held for a beat (withHolds), hips near the centre. Turning steps are
+ * marked `spin` for a spin blur. 21 combos over the 5 tiers
+ * (5, 5, 4, 4, 3); the first keyframe is the hit.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -23,9 +30,6 @@ const F = FLOOR;
 
 /** An arm or leg held straight out at an angle (- is higher). */
 const straight = (deg: number): LimbAngles => ({ upper: deg, lower: deg });
-/** Bras bas: arms rounded low in front of the hips. */
-const brasBasFront: LimbAngles = { upper: 75, lower: 135 };
-const brasBasBack: LimbAngles = { upper: 85, lower: 145 };
 /** Second position: arms open wide to the sides, softly rounded. */
 const secondFront: LimbAngles = { upper: 5, lower: 20 };
 const secondBack: LimbAngles = { upper: 175, lower: 160 };
@@ -40,109 +44,160 @@ const passe: LimbAngles = { upper: 25, lower: 150 };
 /** A leg tucked up under the body in the air. */
 const tucked: LimbAngles = { upper: 70, lower: 150 };
 
-/** Up on pointe, feet together. */
-const onPointe = { pelvis: { x: 0, y: 6 }, frontLeg: { x: 3, y: F }, backLeg: { x: -3, y: F } };
 /** Standing on one leg, up on pointe. */
 const standing = { x: -2, y: F };
-/** A deep plié in second position, as she lands. */
-const plie = { pelvis: { x: 0, y: 26 }, frontLeg: { x: 22, y: F }, backLeg: { x: -22, y: F } };
 
-type Key = FighterSpec & { ms?: number };
+type Key = FighterSpec & {
+  ms?: number;
+  /** Both hands joined in a crown above her head (fills in both arms) */
+  crown?: boolean;
+};
+
+/** The diamond: thighs turned out wide, shins back in, feet together. */
+const diamondFront: LimbAngles = { upper: 50, lower: 120 };
+const diamondBack: LimbAngles = { upper: 130, lower: 60 };
+/** Hip height that puts the diamond's feet exactly on the floor. */
+const DIAMOND_Y = 16.5;
+
+/**
+ * Her neck is shorter than the default, like a dancer's long-necked but
+ * compact frame drawn by the player: with the standard neck the top of her
+ * head is almost a full arm's length above the shoulders, so joined hands
+ * could only reach it with the arms dead straight. This leaves room for the
+ * rounded crown of arms in the drawing.
+ */
+const NECK = 16;
+
+/** Both hands meet just above her head, the elbows rounded out wide either side. */
+function withCrown(k: Key): FighterSpec {
+  const base: FighterSpec = { neck: NECK, ...k };
+  if (!k.crown) return base;
+  const spec: FighterSpec = { ...base, frontArm: { upper: -60, lower: -120 }, backArm: { upper: -120, lower: -60 } };
+  const h = headOf(spec);
+  // Just above the top of her head (the head is 9 across, so this clears it)
+  const join = { x: h.x, y: h.y - 12 };
+  return { ...spec, frontArm: armReaching(spec, 'front', join), backArm: armReaching(spec, 'back', join, true) };
+}
+
+/**
+ * One keyframe of her side-kick pose: crown arms, diamond legs, with
+ * `front` and/or `back` replacing a leg to kick out that side (front is
+ * toward the enemy, back is the other side).
+ */
+function kick(front?: LimbAngles, back?: LimbAngles, extra: Partial<Key> = {}): Key {
+  return {
+    pelvis: { x: 0, y: DIAMOND_Y },
+    lean: front ? -6 : back ? 6 : 0,
+    frontArm: { upper: 0, lower: 0 },
+    backArm: { upper: 0, lower: 0 },
+    frontLeg: front ?? diamondFront,
+    backLeg: back ?? diamondBack,
+    crown: true,
+    ...(front ? { trail: { from: 'frontFoot' as const, reach: 22 } } : back ? { trail: { from: 'backFoot' as const, reach: 22 } } : {}),
+    ...extra,
+  };
+}
+/** Back to the diamond, hands still joined overhead. */
+const diamond = (ms: number): Key => ({ ...kick(), ms });
 
 let nextId = 601;
 function combo(tier: AttackMove['tier'], name: string, description: string, keys: Key[]): AttackMove {
-  return comboMove(nextId++, tier, name, description, withHolds(keys.map((k) => buildKey(k, TRAIL, k.ms ?? 0))));
+  return comboMove(nextId++, tier, name, description, withHolds(keys.map((k) => buildKey(withCrown(k), TRAIL, k.ms ?? 0))));
 }
 
-/** First position up on pointe, arms in bras bas. */
-export const PRIMA_BALLERINA_IDLE: SkeletonPose = buildFighterPose({ ...onPointe, lean: 0, frontArm: brasBasFront, backArm: brasBasBack }, TRAIL);
+/** Her pose: hands joined in a crown above her head, legs in the diamond. */
+export const PRIMA_BALLERINA_IDLE: SkeletonPose = buildFighterPose(withCrown(kick()), TRAIL);
 
 export const PRIMA_BALLERINA_MOVES: AttackMove[] = [
-  // ======================= Tier 1: from the barre =======================
-  combo(1, 'Battement Kick', 'A sharp straight-legged kick, then she closes into fifth with arms in a crown', [
-    { pelvis: { x: 0, y: 8 }, lean: -10, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-30), backLeg: standing, trail: { from: 'frontFoot', reach: 20 } },
-    { ms: 160, ...onPointe, lean: 0, frontArm: crownFront, backArm: crownBack },
+  // ============ Tiers 1-4: her pose, kicking out to each side ============
+  // ======================= Tier 1: single kicks =======================
+  combo(1, 'Battement Kick', 'A sharp straight-legged kick out to the side, and back to her pose', [
+    kick(straight(0)),
+    diamond(160),
   ]),
-  combo(1, 'Pas de Chat Knee', 'A cat-like little jump, the knee snapping up, and a soft landing', [
-    { pelvis: { x: 2, y: -10 }, lean: 6, frontArm: secondFront, backArm: secondBack, frontLeg: { upper: -40, lower: 80 }, backLeg: tucked, trail: { from: 'frontKnee', reach: 16 } },
-    { ms: 180, ...plie, lean: 4, frontArm: brasBasFront, backArm: brasBasBack },
+  combo(1, 'Low Battement', 'A low kick to the shins, and back to her pose', [
+    kick(straight(28)),
+    diamond(160),
   ]),
-  combo(1, 'Port de Bras Chop', 'The arm sweeps down from high like a blade, carriage and all', [
-    { pelvis: { x: 4, y: 16 }, lean: 16, frontArm: { upper: -40, lower: 10 }, backArm: secondBack, frontLeg: { x: 26, y: F }, backLeg: { x: -18, y: F }, trail: { from: 'frontHand', reach: 20, curve: 16 } },
-    { ms: 160, pelvis: { x: 4, y: 16 }, lean: 22, frontArm: { upper: 60, lower: 90 }, backArm: secondBack, frontLeg: { x: 26, y: F }, backLeg: { x: -18, y: F } },
+  combo(1, 'Battement Frappé', 'The foot strikes out sharp from the ankle, then snaps back', [
+    kick(straight(12), undefined, { trail: { from: 'frontFoot', reach: 18 } }),
+    diamond(150),
   ]),
-  combo(1, 'Relevé Uppercut', 'Rises up onto pointe behind a rising uppercut', [
-    { ...onPointe, lean: 4, frontArm: { upper: -70, lower: -86 }, backArm: secondBack, trail: { from: 'frontHand', reach: 20, curve: -10 } },
-    { ms: 160, ...onPointe, lean: 0, frontArm: crownFront, backArm: crownBack },
+  combo(1, 'Petit Battement', 'Two quick little kicks, back to the diamond between them', [
+    kick(straight(16)),
+    diamond(90),
+    kick(straight(8), undefined, { ms: 90 }),
   ]),
-  combo(1, 'Plié Punch', 'Sinks into a deep plié and punches straight out, then rises', [
-    { ...plie, lean: 8, frontArm: straight(0), backArm: secondBack, trail: { from: 'frontHand', reach: 22 } },
-    { ms: 170, ...onPointe, lean: 0, frontArm: secondFront, backArm: secondBack },
-  ]),
-
-  // ================= Tier 2: centre work =================
-  combo(2, 'Pirouette Heel', 'Whips round in a pirouette and the heel shoots out of the turn', [
-    { pelvis: { x: 0, y: 8 }, lean: 0, frontArm: firstFront, backArm: firstBack, frontLeg: straight(0), backLeg: standing, spin: true, trail: { from: 'frontFoot', reach: 22, curve: 14 } },
-    { ms: 170, pelvis: { x: 0, y: 6 }, lean: 0, frontArm: crownFront, backArm: crownBack, frontLeg: passe, backLeg: standing, spin: true },
-  ]),
-  combo(2, 'Grand Battement', 'A huge straight-legged kick, the foot right up by her ear', [
-    { pelvis: { x: -2, y: 8 }, lean: -16, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-78), backLeg: standing, trail: { from: 'frontFoot', reach: 20, curve: -18 } },
-    { ms: 170, ...onPointe, lean: 0, frontArm: secondFront, backArm: secondBack },
-  ]),
-  combo(2, 'Fouetté Whip', 'Three whipping turns on one leg, the other leg lashing out each time', [
-    { pelvis: { x: 0, y: 8 }, lean: -4, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-6), backLeg: standing, spin: true, trail: { from: 'frontFoot', reach: 22, curve: 16 } },
-    { ms: 110, pelvis: { x: 0, y: 8 }, lean: 0, tilt: 8, frontArm: firstFront, backArm: firstBack, frontLeg: straight(10), backLeg: standing, spin: true, trail: { from: 'frontFoot', reach: 22, curve: 16 } },
-    { ms: 110, pelvis: { x: 0, y: 8 }, lean: -6, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-14), backLeg: standing, spin: true, trail: { from: 'frontFoot', reach: 22, curve: 16 } },
-  ]),
-  combo(2, 'Arabesque Thrust', 'Tips forward into an arabesque, one palm driving out, the back leg high', [
-    { pelvis: { x: 0, y: 10 }, lean: 32, frontArm: straight(-8), backArm: straight(190), frontLeg: { x: 4, y: F }, backLeg: straight(198), trail: { from: 'frontHand', reach: 22 } },
-    { ms: 180, pelvis: { x: 0, y: 10 }, lean: 38, frontArm: straight(-14), backArm: straight(196), frontLeg: { x: 4, y: F }, backLeg: straight(204) },
-  ]),
-  combo(2, 'Sissonne Scissor', 'Springs up and scissors the legs wide open in the air', [
-    { pelvis: { x: 0, y: -12 }, lean: -10, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-10), backLeg: straight(188), trail: { from: 'frontFoot', reach: 22 } },
-    { ms: 200, ...plie, lean: 6, frontArm: brasBasFront, backArm: brasBasBack },
+  combo(1, 'Développé', 'The leg unfolds up high and slow, and folds back into her pose', [
+    kick(straight(-32)),
+    diamond(170),
   ]),
 
-  // =================== Tier 3: allegro (the big jumps) ===================
-  combo(3, 'Grand Jeté', 'A flying split leap, front foot first', [
-    { pelvis: { x: 0, y: -20 }, lean: -6, frontArm: straight(-30), backArm: straight(200), frontLeg: straight(-6), backLeg: straight(188), trail: { from: 'frontFoot', reach: 26 } },
-    { ms: 220, ...plie, lean: 8, frontArm: secondFront, backArm: secondBack },
+  // ================= Tier 2: left and right =================
+  combo(2, 'Battement Left-Right', 'Kicks out to the enemy, then back out the other side', [
+    kick(straight(0)),
+    kick(undefined, straight(180), { ms: 120 }),
+    diamond(160),
   ]),
-  combo(3, "Tour en l'Air", 'Leaps and turns right round in the air, kicking out of the turn', [
-    { pelvis: { x: 0, y: -16 }, lean: -6, frontArm: crownFront, backArm: crownBack, frontLeg: straight(0), backLeg: straight(84), spin: true, trail: { from: 'frontFoot', reach: 22, curve: 12 } },
-    { ms: 160, pelvis: { x: 0, y: -18 }, lean: 0, frontArm: crownFront, backArm: crownBack, frontLeg: straight(86), backLeg: straight(92), spin: true },
-    { ms: 180, ...plie, lean: 4, frontArm: secondFront, backArm: secondBack },
+  combo(2, 'Grand Battement', 'A huge straight-legged kick, the foot up above her head', [
+    kick(straight(-76), undefined, { trail: { from: 'frontFoot', reach: 20, curve: -18 } }),
+    diamond(170),
   ]),
-  combo(3, 'Cabriole Beat', 'Kicks up and beats the legs together in mid-air, twice', [
-    { pelvis: { x: 0, y: -14 }, lean: -14, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-26), backLeg: { upper: 100, lower: 110 }, trail: { from: 'frontFoot', reach: 20 } },
-    { ms: 120, pelvis: { x: 0, y: -16 }, lean: -16, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-30), backLeg: straight(-24), trail: { from: 'backFoot', reach: 20 } },
-    { ms: 190, ...plie, lean: 4, frontArm: brasBasFront, backArm: brasBasBack },
+  combo(2, 'Double Frappé', 'Two sharp strikes of the foot, one low and one high', [
+    kick(straight(18)),
+    diamond(90),
+    kick(straight(-10), undefined, { ms: 90 }),
   ]),
-  combo(3, 'Pas de Bourrée Flurry', 'Tiny quick steps on pointe, a palm strike on every one', [
-    { pelvis: { x: 2, y: 6 }, lean: 10, frontArm: straight(-4), backArm: secondBack, frontLeg: { x: 6, y: F }, backLeg: { x: -2, y: F }, trail: { from: 'frontHand', reach: 18 } },
-    { ms: 80, pelvis: { x: 4, y: 6 }, lean: 12, frontArm: secondFront, backArm: straight(2), frontLeg: { x: 10, y: F }, backLeg: { x: 2, y: F }, trail: { from: 'backHand', reach: 18 } },
-    { ms: 80, pelvis: { x: 6, y: 6 }, lean: 12, frontArm: straight(-8), backArm: secondBack, frontLeg: { x: 12, y: F }, backLeg: { x: 4, y: F }, trail: { from: 'frontHand', reach: 18 } },
+  combo(2, 'Rond de Jambe', 'The leg sweeps round in a big arc, low to high', [
+    kick(straight(24), undefined, { trail: { from: 'frontFoot', reach: 22, curve: 18 } }),
+    kick(straight(-28), undefined, { ms: 120, trail: { from: 'frontFoot', reach: 22, curve: 18 } }),
+  ]),
+  combo(2, 'Fondu Kick', 'Melts down low on the standing leg, then kicks out from there', [
+    kick(straight(4), { upper: 140, lower: 40 }, { pelvis: { x: 0, y: 26 } }),
+    diamond(170),
   ]),
 
-  // ================= Tier 4: virtuoso =================
-  combo(4, '32 Fouettés', 'The famous run of whipping turns: on and on, lashing out every time', [
-    { pelvis: { x: 0, y: 8 }, lean: -6, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-10), backLeg: standing, spin: true, trail: { from: 'frontFoot', reach: 24, curve: 18 } },
-    { ms: 95, pelvis: { x: 0, y: 8 }, lean: 0, tilt: 10, frontArm: firstFront, backArm: firstBack, frontLeg: passe, backLeg: standing, spin: true },
-    { ms: 95, pelvis: { x: 0, y: 8 }, lean: -8, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-18), backLeg: standing, spin: true, trail: { from: 'frontFoot', reach: 24, curve: 18 } },
+  // =================== Tier 3: combinations ===================
+  combo(3, 'Grand Battement Left-Right', 'A huge kick to the enemy, then just as high out the other side', [
+    kick(straight(-70), undefined, { trail: { from: 'frontFoot', reach: 20, curve: -16 } }),
+    kick(undefined, straight(250), { ms: 130, trail: { from: 'backFoot', reach: 20, curve: 16 } }),
+    diamond(170),
   ]),
-  combo(4, 'Lift-Off Leap', 'Soars straight up as if lifted, one leg kicking high', [
-    { pelvis: { x: 0, y: -26 }, lean: -10, frontArm: crownFront, backArm: crownBack, frontLeg: straight(-44), backLeg: tucked, trail: { from: 'frontFoot', reach: 24 } },
-    { ms: 230, ...plie, lean: 6, frontArm: secondFront, backArm: secondBack },
+  combo(3, 'Triple Battement', 'Low, middle, high: three kicks climbing up', [
+    kick(straight(26)),
+    kick(straight(0), undefined, { ms: 90 }),
+    kick(straight(-34), undefined, { ms: 90 }),
   ]),
-  combo(4, 'Arabesque Spin', 'Turns in a full arabesque, striking ahead with the hand, then behind with the leg', [
-    { pelvis: { x: 0, y: 10 }, lean: 30, frontArm: straight(-6), backArm: straight(190), frontLeg: { x: 4, y: F }, backLeg: straight(196), spin: true, trail: { from: 'frontHand', reach: 22, curve: 14 } },
-    { ms: 150, pelvis: { x: 0, y: 10 }, lean: 30, tilt: -10, frontArm: straight(190), backArm: straight(-6), frontLeg: { x: 4, y: F }, backLeg: straight(196), spin: true, trail: { from: 'backFoot', reach: 22, curve: 14 } },
-    { ms: 170, ...onPointe, lean: 0, frontArm: crownFront, backArm: crownBack },
+  combo(3, 'Battement en Cloche', 'Swings the leg like a bell: out front, out behind, out front again', [
+    kick(straight(-20)),
+    kick(undefined, straight(200), { ms: 120 }),
+    kick(straight(-30), undefined, { ms: 120 }),
   ]),
-  combo(4, 'Développé Axe', 'The leg slowly unfolds right up high, hangs there, and chops down', [
-    { pelvis: { x: -2, y: 8 }, lean: -14, frontArm: secondFront, backArm: secondBack, frontLeg: straight(-82), backLeg: standing, trail: { from: 'frontFoot', reach: 18, curve: -20 } },
-    { ms: 220, pelvis: { x: -2, y: 6 }, lean: -16, frontArm: crownFront, backArm: crownBack, frontLeg: straight(-86), backLeg: standing },
-    { ms: 120, pelvis: { x: 2, y: 14 }, lean: 12, frontArm: secondFront, backArm: secondBack, frontLeg: straight(40), backLeg: standing, trail: { from: 'frontFoot', reach: 20, curve: -16 } },
+  combo(3, 'Sauté Battement', 'A little hop off the floor with the kick, landing back in her pose', [
+    kick(straight(-10), undefined, { pelvis: { x: 0, y: 6 } }),
+    diamond(180),
+  ]),
+
+  // ================= Tier 4: fury =================
+  combo(4, 'Grand Battement Fury', 'Three huge kicks: to the enemy, out the other side, and to the enemy again', [
+    kick(straight(-70), undefined, { trail: { from: 'frontFoot', reach: 22, curve: -16 } }),
+    kick(undefined, straight(250), { ms: 110, trail: { from: 'backFoot', reach: 22, curve: 16 } }),
+    kick(straight(-78), undefined, { ms: 110, trail: { from: 'frontFoot', reach: 22, curve: -16 } }),
+  ]),
+  combo(4, 'Développé Axe', 'The leg unfolds right up high, hangs there, and chops down', [
+    kick(straight(-82), undefined, { trail: { from: 'frontFoot', reach: 18, curve: -20 } }),
+    kick(straight(-86), undefined, { ms: 220, trail: undefined }),
+    kick(straight(36), undefined, { ms: 120, trail: { from: 'frontFoot', reach: 20, curve: -16 } }),
+  ]),
+  combo(4, 'Battement Storm', 'Low to the enemy, middle out the other side, high to the enemy', [
+    kick(straight(24)),
+    kick(undefined, straight(180), { ms: 100 }),
+    kick(straight(-40), undefined, { ms: 100 }),
+  ]),
+  combo(4, 'Fouetté Kick', 'Whips round on the standing leg, lashing out a kick on each turn', [
+    kick(straight(0), undefined, { spin: true, trail: { from: 'frontFoot', reach: 24, curve: 18 } }),
+    kick(undefined, undefined, { ms: 100, spin: true }),
+    kick(straight(-16), undefined, { ms: 100, spin: true, trail: { from: 'frontFoot', reach: 24, curve: 18 } }),
   ]),
 
   // ================= Tier 5: legendary finishers =================

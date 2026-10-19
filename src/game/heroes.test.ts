@@ -503,10 +503,42 @@ describe('The Prima Ballerina', () => {
     }
   });
 
-  it('stands up on pointe in her stance: tall, feet together', () => {
+  it('her stance is the drawn pose: hands joined above her head, legs in a diamond', () => {
     const idle = pb.idlePose;
-    expect(Math.abs(idle.leftFoot.x - idle.rightFoot.x)).toBeLessThan(8);
-    expect(idle.pelvis.y).toBeLessThan(10);
+    // Hands meet, above the head
+    expect(dist(idle.leftHand, idle.rightHand)).toBeLessThan(2);
+    expect(idle.leftHand.y).toBeLessThan(idle.head.y);
+    // Elbows rounded out either side
+    expect(Math.abs(idle.leftElbow.x - idle.rightElbow.x)).toBeGreaterThan(15);
+    // Diamond legs: feet together, knees turned out wide
+    expect(Math.abs(idle.leftFoot.x - idle.rightFoot.x)).toBeLessThan(10);
+    expect(Math.abs(idle.leftKnee.x - idle.rightKnee.x)).toBeGreaterThan(30);
+    expect(idle.leftFoot.y).toBeCloseTo(68, 0);
+  });
+
+  it('in her normal form (tiers 1-4) she never breaks the pose: hands joined overhead, only kicking', () => {
+    for (const m of pb.moves.filter((x) => x.tier <= 4)) {
+      for (const k of m.sequence!) {
+        const p = keyToPlayerPose(k);
+        expect(dist(p.leftHand, p.rightHand), m.name).toBeLessThan(2);
+        expect(p.leftHand.y, m.name).toBeLessThan(p.head.y);
+        // Every hit is a kick, never a punch
+        if (k.trail) expect(dist(k.trail.end, p.head), m.name).toBeGreaterThan(20);
+      }
+      for (const k of m.sequence!.filter((x) => x.trail)) {
+        const p = keyToPlayerPose(k);
+        const footEnd = Math.min(dist(k.trail!.end, p.leftFoot), dist(k.trail!.end, p.rightFoot));
+        expect(footEnd, m.name).toBeLessThan(30);
+      }
+    }
+  });
+
+  it('kicks both ways: out to the enemy, and back out the other side', () => {
+    const lowTiers = pb.moves.filter((m) => m.tier <= 4).flatMap((m) => m.sequence!.filter((k) => k.trail));
+    const toEnemy = lowTiers.filter((k) => k.trail!.end.x > k.pose.pelvis.x);
+    const otherSide = lowTiers.filter((k) => k.trail!.end.x < k.pose.pelvis.x);
+    expect(toEnemy.length).toBeGreaterThan(15);
+    expect(otherSide.length).toBeGreaterThanOrEqual(4);
   });
 
   it('really kicks to the ceiling: the grand battements put the foot above her head', () => {
@@ -516,18 +548,15 @@ describe('The Prima Ballerina', () => {
     }
   });
 
-  it('the leaps leave the ground, and the grand jeté is a real split in the air', () => {
-    for (const name of ['Grand Jeté', 'Sissonne Scissor', "Tour en l'Air", 'Lift-Off Leap']) {
-      const k = pb.moves.find((m) => m.name === name)!.sequence![0].pose;
-      expect(Math.max(k.frontFoot.y, k.backFoot.y), name).toBeLessThan(64);
-    }
-    const jete = pb.moves.find((m) => m.name === 'Grand Jeté')!.sequence![0].pose;
+  it('her swan-tutu finishers are the full ballet: Swan Lake opens with a flying split leap', () => {
+    const jete = pb.moves.find((m) => m.name === 'Swan Lake')!.sequence![0].pose;
+    expect(Math.max(jete.frontFoot.y, jete.backFoot.y)).toBeLessThan(64);
     expect(jete.frontFoot.x - jete.backFoot.x).toBeGreaterThan(100);
   });
 
   it('the turning steps are marked for a spin blur, and the plain kicks are not', () => {
     const spins = pb.moves.filter((m) => m.sequence!.some((k) => k.pose && keyToPlayerPose(k).spin));
-    expect(spins.map((m) => m.name)).toEqual(expect.arrayContaining(['Pirouette Heel', 'Fouetté Whip', '32 Fouettés', 'Black Swan']));
+    expect(spins.map((m) => m.name)).toEqual(expect.arrayContaining(['Fouetté Kick', 'Black Swan']));
     expect(spins.map((m) => m.name)).not.toContain('Grand Battement');
   });
 
