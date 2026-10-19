@@ -222,7 +222,8 @@ describe("The Bride's katana and blossom storm", () => {
 
   it('a storm of petals whirling round her, some behind and some in front', () => {
     const petals = blossomStorm(br.idlePose, 0);
-    expect(petals.length).toBeGreaterThanOrEqual(24);
+    expect(petals.length).toBeGreaterThanOrEqual(10);
+    expect(petals.length).toBeLessThanOrEqual(16); // sparse: a calm drift, not clutter
     expect(petals.some((p) => p.front)).toBe(true);
     expect(petals.some((p) => !p.front)).toBe(true);
     const xs = petals.map((p) => p.x);

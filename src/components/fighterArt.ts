@@ -1322,25 +1322,26 @@ export function katanaTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
  * passing in front after her body.
  */
 export function blossomStorm(pose: SkeletonPose, time: number) {
-  const count = 36;
+  // Kept sparse and slow so it reads as a calm drift, not clutter
+  const count = 14;
   return Array.from({ length: count }, (_, i) => {
-    const a = time * 1.4 + (i / count) * Math.PI * 2;
-    const ring = 50 + (i % 4) * 9;
-    const rise = ((i * 37) % 90) - 60 + Math.sin(time * 2 + i) * 6;
-    return { x: pose.chest.x + Math.cos(a) * ring, y: pose.chest.y + rise, front: Math.sin(a) > 0, spin: time * 3 + i };
+    const a = time * 0.7 + (i / count) * Math.PI * 2;
+    const ring = 56 + (i % 2) * 12;
+    const rise = ((i * 37) % 80) - 55 + Math.sin(time * 1.2 + i) * 4;
+    return { x: pose.chest.x + Math.cos(a) * ring, y: pose.chest.y + rise, front: Math.sin(a) > 0.6, spin: time * 1.5 + i };
   });
 }
 
 function drawBlossomStorm(ctx: Ctx, pose: SkeletonPose, time: number, layer: 'back' | 'front') {
   ctx.save();
   ctx.shadowColor = '#ff9fcf';
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 4;
   for (const p of blossomStorm(pose, time)) {
     if (p.front !== (layer === 'front')) continue;
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.spin);
-    ctx.fillStyle = layer === 'front' ? '#ffc2e0' : 'rgba(255, 170, 210, 0.7)';
+    ctx.fillStyle = layer === 'front' ? 'rgba(255, 194, 224, 0.85)' : 'rgba(255, 170, 210, 0.5)';
     ctx.beginPath();
     ctx.ellipse(0, 0, 4, 2.2, 0, 0, Math.PI * 2);
     ctx.fill();
