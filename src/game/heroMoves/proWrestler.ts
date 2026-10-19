@@ -224,7 +224,7 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
   // ================= Tier 5: legendary finishers =================
   combo(
     5,
-    'Five Moves of Doom',
+    'Five-Move Finale',
     'Shoulder tackle, a slam, the hand wave in front of his face, and the leg drop',
     [
       { ...lunge, lean: 45, frontArm: { upper: 80, lower: -40 }, backArm: armsBack, trail: { from: 'frontElbow', reach: 20 } },
