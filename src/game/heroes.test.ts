@@ -907,6 +907,7 @@ describe('The Disco King', () => {
 });
 
 describe('The Bride', () => {
+  const GRIP_GAP = 9;
   const br = getHero('bride');
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
@@ -955,6 +956,15 @@ describe('The Bride', () => {
     const idle = br.idlePose;
     expect(dist(idle.leftHand, idle.rightHand)).toBeLessThan(10);
     expect(idle.leftHand.x).toBeGreaterThan(idle.chest.x + 10);
+  });
+
+  it('holds the sword in both hands in every attack: the rear hand on the hilt behind the lead hand', () => {
+    for (const m of br.moves) {
+      for (const k of m.sequence!) {
+        if (!k.trail) continue;
+        expect(dist(k.pose.frontHand, k.pose.backHand), m.name).toBeLessThan(GRIP_GAP);
+      }
+    }
   });
 
   it('finishes with a whirlwind: two spins', () => {

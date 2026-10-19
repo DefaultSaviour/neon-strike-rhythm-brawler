@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, katanaTip, moonlitSnow, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -208,27 +208,24 @@ describe("The Disco King's disco fever (top-level form)", () => {
   });
 });
 
-describe("The Bride's katana and blossom storm", () => {
+describe("The Bride's katana and moonlit snow", () => {
   const br = getHero('bride');
 
   it('every sword hit lands at the tip of her blade', () => {
     for (const m of br.moves) {
       for (const k of m.sequence!) {
         if (!k.trail) continue;
-        // Kicks land by the foot; everything else is the katana
-        if (dist(k.trail.end, k.pose.frontFoot) < 30) continue;
         expect(dist(katanaTip(keyToPlayerPose(k), 1), k.trail.end), m.name).toBeLessThan(6);
       }
     }
   });
 
-  it('a storm of petals whirling round her, some behind and some in front', () => {
-    const petals = blossomStorm(br.idlePose, 0);
-    expect(petals.length).toBeGreaterThanOrEqual(24);
-    expect(petals.some((p) => p.front)).toBe(true);
-    expect(petals.some((p) => !p.front)).toBe(true);
-    const xs = petals.map((p) => p.x);
-    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(90);
-    expect(blossomStorm(br.idlePose, 0.5)[0].x).not.toBeCloseTo(petals[0].x, 1);
+  it('a giant full moon behind her, bigger than she is, and snow drifting down', () => {
+    const { moon, flakes } = moonlitSnow(br.idlePose, 0);
+    expect(moon.radius * 2).toBeGreaterThan(100);
+    expect(moon.y).toBeLessThan(br.idlePose.chest.y);
+    expect(flakes.length).toBeGreaterThanOrEqual(30);
+    expect(flakes.some((f) => f.front)).toBe(true);
+    expect(moonlitSnow(br.idlePose, 0.5).flakes[0].y).toBeGreaterThan(flakes[0].y);
   });
 });
