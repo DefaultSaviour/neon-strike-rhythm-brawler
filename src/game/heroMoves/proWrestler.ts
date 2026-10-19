@@ -121,10 +121,16 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
     ],
     { slam: true }
   ),
-  combo(2, 'Dropkick', 'Leaps and hits them with both feet at once', [
-    { pelvis: { x: 0, y: -10 }, lean: -50, frontArm: armsBack, backArm: armsBack, frontLeg: straight(-6), backLeg: straight(2), trail: { from: 'frontFoot', reach: 24 } },
-    { ms: 200, pelvis: { x: 2, y: 30 }, lean: 16, frontArm: flexFront, backArm: armsBack, frontLeg: { x: 22, y: F }, backLeg: { x: -18, y: F } },
-  ]),
+  combo(
+    2,
+    'Flying Elbow from the Top Rope',
+    'Leaps off the top rope, elbow cocked, and crashes down onto it',
+    [
+      { pelvis: { x: 0, y: -24 }, lean: 20, frontArm: { upper: 80, lower: -100 }, backArm: straight(-120), frontLeg: tucked, backLeg: { upper: 100, lower: 150 }, trail: { from: 'frontElbow', reach: 18 } },
+      { ms: 180, pelvis: { x: 2, y: 46 }, lean: 70, frontArm: { upper: 95, lower: -60 }, backArm: armsBack, frontLeg: straight(172), backLeg: straight(178), trail: { from: 'frontElbow', reach: 16 } },
+    ],
+    { slam: true }
+  ),
   combo(
     2,
     'Leg Drop',
@@ -166,9 +172,10 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
   combo(
     3,
     'Spear',
-    'Runs in bent double and drives his shoulder through their middle, then roars on his knees',
+    'Bent flat with one leg kicked up behind, he drives his shoulder through their middle, then roars on his knees',
     [
-      { pelvis: { x: 6, y: 34 }, lean: 70, frontArm: straight(20), backArm: straight(30), frontLeg: { x: 32, y: F }, backLeg: { x: -20, y: F }, trail: { from: 'frontElbow', reach: 22 } },
+      { pelvis: { x: 4, y: 30 }, lean: 75, tilt: -12, frontArm: { upper: 95, lower: -170 }, backArm: armsBack, frontLeg: { x: 26, y: F }, backLeg: { upper: 200, lower: -110 }, trail: { from: 'head', reach: 18 } },
+      { ms: 150, pelvis: { x: 6, y: 40 }, lean: 70, tilt: -8, frontArm: { upper: 95, lower: -170 }, backArm: armsBack, frontLeg: { x: 30, y: F }, backLeg: { upper: 180, lower: 200 }, trail: { from: 'head', reach: 18 } },
       { ms: 200, pelvis: { x: 2, y: 38 }, lean: -6, tilt: -14, frontArm: armsUp, backArm: armsUpBack, frontLeg: { x: 24, y: F }, backLeg: { upper: 100, lower: 175 } },
     ],
     { slam: true }
@@ -227,16 +234,11 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
     ],
     { slam: true }
   ),
-  combo(
-    5,
-    'Flying Elbow from the Top Rope',
-    'Leaps off the top rope, elbow cocked, and crashes down onto it',
-    [
-      { pelvis: { x: 0, y: -24 }, lean: 20, frontArm: { upper: 80, lower: -100 }, backArm: straight(-120), frontLeg: tucked, backLeg: { upper: 100, lower: 150 }, trail: { from: 'frontElbow', reach: 18 } },
-      { ms: 180, pelvis: { x: 2, y: 46 }, lean: 70, frontArm: { upper: 95, lower: -60 }, backArm: armsBack, frontLeg: straight(172), backLeg: straight(178), trail: { from: 'frontElbow', reach: 16 } },
-    ],
-    { slam: true }
-  ),
+  combo(5, 'Flying Double Dropkick', 'Launches flat out through the air and drives both feet through them at once', [
+    { pelvis: { x: 0, y: -4 }, lean: -78, frontArm: straight(195), backArm: straight(205), frontLeg: straight(-2), backLeg: straight(6), trail: { from: 'frontFoot', reach: 28 } },
+    { ms: 160, pelvis: { x: 4, y: 0 }, lean: -74, frontArm: straight(192), backArm: straight(202), frontLeg: straight(4), backLeg: straight(10), trail: { from: 'frontFoot', reach: 26 } },
+    { ms: 220, pelvis: { x: 2, y: 30 }, lean: 16, frontArm: flexFront, backArm: armsBack, frontLeg: { x: 22, y: F }, backLeg: { x: -18, y: F } },
+  ]),
   combo(
     5,
     'Championship Finisher',

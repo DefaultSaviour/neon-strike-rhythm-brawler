@@ -427,6 +427,23 @@ describe('The Pro Wrestler', () => {
     }
   });
 
+  it('the flat double dropkick is a finisher, and the shoulder-first Spear is mid-level', () => {
+    const dropkick = pw.moves.find((m) => m.name === 'Flying Double Dropkick')!;
+    expect(dropkick.tier).toBe(5);
+    // Flat out in the air, both feet driving forward together
+    const k = dropkick.sequence![0].pose;
+    expect(Math.abs(k.frontFoot.y - k.backFoot.y)).toBeLessThan(10);
+    expect(Math.min(k.frontFoot.x, k.backFoot.x)).toBeGreaterThan(k.pelvis.x + 40);
+    expect(Math.abs(k.chest.y - k.pelvis.y)).toBeLessThan(12);
+
+    const spear = pw.moves.find((m) => m.name === 'Spear')!;
+    expect(spear.tier).toBe(3);
+    // Bent almost flat, head driving forward, one leg kicked up behind
+    const s = spear.sequence![0].pose;
+    expect(s.head.x).toBeGreaterThan(s.pelvis.x + 40);
+    expect(Math.min(s.frontFoot.y, s.backFoot.y)).toBeLessThan(s.pelvis.y);
+  });
+
   it('the steel chair comes out for the chair shot only, in both hands', () => {
     const withChair = pw.moves.filter((m) => m.sequence!.some((k) => k.prop === 'chair'));
     expect(withChair.map((m) => m.name)).toEqual(['Steel Chair Shot']);
@@ -434,7 +451,7 @@ describe('The Pro Wrestler', () => {
   });
 
   it('jumping moves really leave the ground', () => {
-    for (const name of ['Dropkick', 'Flying Crossbody', 'Moonsault', 'Flying Elbow from the Top Rope']) {
+    for (const name of ['Flying Double Dropkick', 'Flying Crossbody', 'Moonsault', 'Flying Elbow from the Top Rope']) {
       const k = pw.moves.find((m) => m.name === name)!.sequence![0];
       expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y), name).toBeLessThan(64);
     }
