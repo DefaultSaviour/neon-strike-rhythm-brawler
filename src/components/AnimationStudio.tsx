@@ -15,20 +15,17 @@ import {
   X,
 } from 'lucide-react';
 import { EnemyTier, FrequencyBand } from '../types/game';
-import { assemblePose, ENEMY_MOTION_STYLES, EnemyMotionStyle, FLOOR, PoseRig } from '../game/enemyMotion';
+import { assemblePose, ENEMY_MOTION_STYLES, EnemyMotionStyle, PoseRig } from '../game/enemyMotion';
 import {
   AnimationLibrary,
   animationPhase,
   BEATS_PER_POSE_OPTIONS,
   builtInAnimation,
   CustomAnimation,
-  DRAG_HANDLES,
   DragHandle,
   ENEMY_KEYS,
   EnemyKey,
-  HIP_ZONE,
   handleAt,
-  handlePosition,
   MAX_POSES,
   mergeLibraries,
   mirrorRig,
@@ -43,6 +40,8 @@ import { getEnemyStyle } from '../game/enemyStyles';
 import { SIGNATURE_DANCE_NAMES } from '../game/signatureDances';
 import { drawEnemyArt } from './enemyArt';
 import { studioView } from './studioView';
+import { drawBackdrop, drawHandles, HANDLE_HINTS, SmallButton } from './studioShared';
+import { HeroPoseEditor } from './HeroPoseEditor';
 
 /**
  * Pose Studio (the Animation Studio): make your own moves for each enemy.
@@ -57,27 +56,6 @@ import { studioView } from './studioView';
 const HISTORY_LIMIT = 60;
 /** How close (in screen pixels) the pointer must be to grab a joint. */
 const GRAB_RADIUS_PX = 14;
-
-const HANDLE_HINTS: Record<DragHandle, string> = {
-  head: 'Head: drag to tilt',
-  chest: 'Chest: drag to lean the body',
-  pelvis: 'Hips: drag to move the body. They stay inside the shaded timing zone so the enemy stays in time',
-  frontHand: 'Front hand: drag to place',
-  backHand: 'Back hand: drag to place',
-  frontFoot: 'Front foot: drag to place',
-  backFoot: 'Back foot: drag to place',
-  frontElbow: 'Front elbow: drag to swing the arm (past straight bends it the other way)',
-  backElbow: 'Back elbow: drag to swing the arm (past straight bends it the other way)',
-  frontKnee: 'Front knee: drag to swing the leg (past straight bends it the other way)',
-  backKnee: 'Back knee: drag to swing the leg (past straight bends it the other way)',
-};
-
-/** Handle colours: cyan for the body line, yellow for hands and feet, pink for elbows and knees. */
-function handleColour(h: DragHandle) {
-  if (h === 'head' || h === 'chest' || h === 'pelvis') return '#00e5ff';
-  if (h.endsWith('Elbow') || h.endsWith('Knee')) return '#ff4fd8';
-  return '#ffe600';
-}
 
 function bandTier(key: EnemyKey): { band: FrequencyBand; tier: EnemyTier } {
   const [band, tier] = key.split('-');
@@ -106,56 +84,6 @@ function beatsLabel(b: number) {
 // Drawing
 // ---------------------------------------------------------------------------
 
-function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  ctx.fillStyle = '#070816';
-  ctx.fillRect(0, 0, w, h);
-  const view = studioView(w, h);
-  ctx.lineWidth = 1;
-  // Faint 10-unit grid to help line poses up
-  ctx.strokeStyle = 'rgba(120, 140, 255, 0.07)';
-  ctx.beginPath();
-  for (let x = -200; x <= 200; x += 10) {
-    const s = view.toScreen({ x, y: 0 }).x;
-    ctx.moveTo(s, 0);
-    ctx.lineTo(s, h);
-  }
-  for (let y = -300; y <= 200; y += 10) {
-    const s = view.toScreen({ x: 0, y }).y;
-    ctx.moveTo(0, s);
-    ctx.lineTo(w, s);
-  }
-  ctx.stroke();
-  // Timing zone: the hips must stay inside it (see HIP_ZONE)
-  const zoneLeft = view.toScreen({ x: -HIP_ZONE, y: 0 }).x;
-  const zoneRight = view.toScreen({ x: HIP_ZONE, y: 0 }).x;
-  const zoneFloor = view.toScreen({ x: 0, y: FLOOR }).y;
-  ctx.fillStyle = 'rgba(0, 229, 255, 0.06)';
-  ctx.fillRect(zoneLeft, 0, zoneRight - zoneLeft, zoneFloor);
-  ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
-  ctx.font = '10px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('timing zone', (zoneLeft + zoneRight) / 2, 14);
-  ctx.textAlign = 'left';
-  // Centre line and floor
-  const floor = view.toScreen({ x: 0, y: FLOOR }).y;
-  const centre = view.toScreen({ x: 0, y: 0 }).x;
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.15)';
-  ctx.setLineDash([4, 6]);
-  ctx.beginPath();
-  ctx.moveTo(centre, 0);
-  ctx.lineTo(centre, floor);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.6)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, floor);
-  ctx.lineTo(w, floor);
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(0, 229, 255, 0.05)';
-  ctx.fillRect(0, floor, w, h - floor);
-}
-
 /** Draw the enemy in pose units, mapped onto the canvas by `view`. */
 function drawEnemyAt(
   ctx: CanvasRenderingContext2D,
@@ -179,30 +107,6 @@ function drawEnemyAt(
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   drawEnemyArt(ctx, pose, band, tier, { main: style.color, accent: style.accent }, beat, false);
-  ctx.restore();
-}
-
-function drawHandles(
-  ctx: CanvasRenderingContext2D,
-  view: ReturnType<typeof studioView>,
-  rig: PoseRig,
-  hover: DragHandle | null
-) {
-  ctx.save();
-  for (const h of DRAG_HANDLES) {
-    const s = view.toScreen(handlePosition(rig, h));
-    const on = hover === h;
-    const colour = handleColour(h);
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, on ? 9 : 7, 0, Math.PI * 2);
-    ctx.fillStyle = on ? colour : 'rgba(10, 10, 25, 0.75)';
-    ctx.strokeStyle = colour;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = colour;
-    ctx.shadowBlur = on ? 12 : 6;
-    ctx.fill();
-    ctx.stroke();
-  }
   ctx.restore();
 }
 
@@ -240,7 +144,38 @@ function PoseThumb({
 // The studio
 // ---------------------------------------------------------------------------
 
+/** Enemies or heroes: what the studio is editing. */
+type StudioMode = 'enemies' | 'heroes';
+
+/**
+ * The Pose Studio: an enemy editor and a hero editor, with a switch between
+ * them in the header. Switching asks first if there are unsaved changes.
+ */
 export function AnimationStudio({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<StudioMode>('heroes');
+  const modeSwitch = (confirmDiscard: () => boolean) => (
+    <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-xs" role="tablist" aria-label="What to edit">
+      {(['heroes', 'enemies'] as const).map((m) => (
+        <button
+          key={m}
+          role="tab"
+          aria-selected={mode === m}
+          onClick={() => m !== mode && confirmDiscard() && setMode(m)}
+          className={`px-3 py-1.5 rounded font-bold capitalize cursor-pointer ${mode === m ? 'bg-cyan-400 text-black' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+  return mode === 'heroes' ? (
+    <HeroPoseEditor onClose={onClose} modeSwitch={modeSwitch} />
+  ) : (
+    <EnemyStudio onClose={onClose} modeSwitch={modeSwitch} />
+  );
+}
+
+function EnemyStudio({ onClose, modeSwitch }: { onClose: () => void; modeSwitch: (confirm: () => boolean) => React.ReactNode }) {
   const [saved, setSaved] = useState<AnimationLibrary>(() => getSavedAnimations());
   const [enemy, setEnemy] = useState<EnemyKey>('bass-3');
   const [stance, setStance] = useState<EnemyMotionStyle>('dance');
@@ -527,9 +462,12 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 bg-[#05060f] text-slate-200 flex flex-col overflow-y-auto font-mono">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800">
-        <div>
-          <div className="text-lg font-black tracking-widest text-cyan-400">POSE STUDIO</div>
-          <div className="text-[11px] text-slate-500">Make your own moves for each enemy</div>
+        <div className="flex items-center gap-4">
+          <div>
+            <div className="text-lg font-black tracking-widest text-cyan-400">POSE STUDIO</div>
+            <div className="text-[11px] text-slate-500">Make your own moves for each enemy</div>
+          </div>
+          {modeSwitch(confirmDiscard)}
         </div>
         <button
           onClick={close}
@@ -724,31 +662,5 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function SmallButton({
-  onClick,
-  icon,
-  label,
-  title,
-  disabled,
-}: {
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  title?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900/70 hover:border-slate-500 flex items-center justify-center gap-1.5 disabled:opacity-35 cursor-pointer disabled:cursor-default"
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
