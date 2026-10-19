@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import type { LifetimeStats } from '../game/heroUnlocks';
 import { Track, HighScoreRecord, AudioSettings } from '../types/game';
 import { GameOptions } from './GameOptions';
 import { PRELOADED_TRACKS, audioEngine } from '../audio/audioEngine';
@@ -15,6 +16,8 @@ interface TrackSelectModalProps {
   onTrackDeleted: (trackId: string) => void;
   onUpdateSettings: (settings: Partial<AudioSettings>) => void;
   onClose: () => void;
+  /** Lifetime totals, so locked heroes show their goal */
+  lifetimeStats?: LifetimeStats;
 }
 
 export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
@@ -28,6 +31,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
   onTrackDeleted,
   onUpdateSettings,
   onClose,
+  lifetimeStats,
 }) => {
   const [activeTab, setActiveTab] = useState<'tracks' | 'custom' | 'settings'>('tracks');
   const [analyzing, setAnalyzing] = useState(false);
@@ -323,7 +327,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
 
           {activeTab === 'settings' && (
             <div className="flex flex-col gap-6 max-w-lg mx-auto">
-              <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['hero', 'motion', 'hitSound']} />
+              <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['hero', 'motion', 'hitSound']} lifetimeStats={lifetimeStats} />
 
               {/* Music Volume */}
               <div className="flex flex-col gap-2">

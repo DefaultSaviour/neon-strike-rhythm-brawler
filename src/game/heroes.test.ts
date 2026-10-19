@@ -458,7 +458,7 @@ describe('The Pro Wrestler', () => {
   });
 });
 
-describe('The Prima Ballerina', () => {
+describe('The White Swan', () => {
   const pb = getHero('ballerina');
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));

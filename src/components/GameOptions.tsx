@@ -2,6 +2,7 @@ import React from 'react';
 import { AudioSettings, HitSoundMode } from '../types/game';
 import { ENEMY_MOTION_STYLES } from '../game/enemyMotion';
 import { HEROES } from '../game/heroes';
+import { LifetimeStats, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
 
 /**
  * Quick in-game options, shared by the pause menu and the Settings tab.
@@ -21,6 +22,15 @@ interface GameOptionsProps {
   settings: AudioSettings;
   onUpdateSettings: (settings: Partial<AudioSettings>) => void;
   sections?: OptionSection[];
+  /** The player's lifetime totals: heroes not yet earned show their goal and can't be picked */
+  lifetimeStats?: LifetimeStats;
+}
+
+/** A choice that can't be picked yet, and what it takes to earn it. */
+interface Lock {
+  label: string;
+  current: number;
+  target: number;
 }
 
 function ChoiceGrid<T extends string>({
@@ -30,7 +40,7 @@ function ChoiceGrid<T extends string>({
   onChange,
 }: {
   title: string;
-  options: Array<{ id: T; label: string; description: string }>;
+  options: Array<{ id: T; label: string; description: string; lock?: Lock }>;
   value: T;
   onChange: (id: T) => void;
 }) {
@@ -39,21 +49,43 @@ function ChoiceGrid<T extends string>({
     <div className="flex flex-col gap-2">
       <div className="text-xs font-semibold text-slate-300">{title}</div>
       <div className="grid grid-cols-2 gap-2">
-        {options.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            onClick={() => onChange(o.id)}
-            aria-pressed={o.id === value}
-            className={`px-2.5 py-2 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
-              o.id === value
-                ? 'bg-cyan-400/15 border-cyan-400 text-cyan-300'
-                : 'bg-slate-900/70 border-slate-700 text-slate-300 hover:border-slate-500'
-            }`}
-          >
-            {o.label}
-          </button>
-        ))}
+        {options.map((o) =>
+          o.lock ? (
+            <button
+              key={o.id}
+              type="button"
+              disabled
+              title={`Locked: ${o.lock.label}`}
+              className="px-2.5 py-2 rounded-lg border text-xs font-bold bg-slate-950/70 border-slate-800 text-slate-500 cursor-not-allowed flex flex-col items-start gap-0.5 text-left"
+            >
+              <span>
+                <span aria-hidden="true">🔒 </span>
+                {o.label}
+              </span>
+              <span className="text-[10px] font-medium text-slate-500">{o.lock.label}</span>
+              <span className="w-full h-1 rounded bg-slate-800 overflow-hidden" aria-label={`${o.lock.current} of ${o.lock.target}`}>
+                <span className="block h-full bg-cyan-500/70" style={{ width: `${(o.lock.current / o.lock.target) * 100}%` }} />
+              </span>
+              <span className="text-[10px] font-mono text-slate-500">
+                {o.lock.current.toLocaleString()} / {o.lock.target.toLocaleString()}
+              </span>
+            </button>
+          ) : (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => onChange(o.id)}
+              aria-pressed={o.id === value}
+              className={`px-2.5 py-2 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+                o.id === value
+                  ? 'bg-cyan-400/15 border-cyan-400 text-cyan-300'
+                  : 'bg-slate-900/70 border-slate-700 text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              {o.label}
+            </button>
+          )
+        )}
       </div>
       {selected && <div className="text-[11px] text-slate-500">{selected.description}</div>}
     </div>
@@ -100,14 +132,23 @@ export const GameOptions: React.FC<GameOptionsProps> = ({
   settings,
   onUpdateSettings,
   sections = ['hero', 'motion', 'hitSound', 'volume', 'latency'],
+  lifetimeStats,
 }) => {
+  const ordered = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
+  const heroOptions = ordered.map((h) => {
+    const progress = lifetimeStats ? unlockProgress(h.id, lifetimeStats) : null;
+    const lock = progress && !progress.done ? { label: progress.goal.label, current: progress.current, target: progress.goal.target } : undefined;
+    return { id: h.id, label: h.label, description: h.description, lock };
+  });
+  // A saved choice the player hasn't earned (yet) shows as the hero they'll actually play.
+  const heroValue = heroOptions.find((o) => o.id === settings.hero && !o.lock) ? settings.hero : HEROES[0].id;
   return (
     <div className="flex flex-col gap-5 text-left">
       {sections.includes('hero') && (
         <ChoiceGrid
           title="Hero"
-          options={HEROES.map((h) => ({ id: h.id, label: h.label, description: h.description }))}
-          value={settings.hero}
+          options={heroOptions}
+          value={heroValue}
           onChange={(hero) => onUpdateSettings({ hero })}
         />
       )}

@@ -734,14 +734,14 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     facing: engine.attackDirection === 'left' ? -1 : 1,
     time: performance.now() / 1000,
     corePulse: audioEngine.bassMeter,
-    hero: engine.settings.hero,
+    hero: engine.hero.id,
   });
 
   // Blade slash, in front of the body: a glowing crescent with a white-hot edge
   if (pose.bladeSlash && engine.strikeActive) {
     drawSlashCrescent(ctx, pose.bladeSlash);
     drawShotFlash(ctx, pose, engine.attackDirection === 'left' ? -1 : 1);
-    if (engine.settings.hero === 'theOne') drawImpactRipple(ctx, pose);
+    if (engine.hero.id === 'theOne') drawImpactRipple(ctx, pose);
   }
 
   // Move & tier banner

@@ -472,7 +472,7 @@ export default function App() {
             </div>
 
             <div className="mt-5 p-4 rounded-lg bg-slate-950/70 border border-slate-800">
-              <GameOptions settings={audioSettings} onUpdateSettings={handleUpdateSettings} />
+              <GameOptions settings={audioSettings} onUpdateSettings={handleUpdateSettings} lifetimeStats={engine.lifetimeStats} />
             </div>
 
             <div className="mt-5 w-full flex flex-col gap-3">
@@ -508,7 +508,9 @@ export default function App() {
           cleared={clearedOutcome}
           deathReport={deathReport}
           runProgress={engine.lastRun}
-          heroId={audioSettings.hero}
+          heroId={engine.hero.id}
+          newUnlocks={engine.newUnlocks}
+          onPickHero={(hero) => handleUpdateSettings({ hero })}
           track={selectedTrack}
           scoreState={scoreState}
           highScoreRecord={engine.getHighScore(selectedTrack.id)}
@@ -545,6 +547,7 @@ export default function App() {
           onTrackAdded={handleTrackAdded}
           onTrackDeleted={handleTrackDeleted}
           onUpdateSettings={handleUpdateSettings}
+          lifetimeStats={engine.lifetimeStats}
           onClose={() => {
             setShowTrackSelect(false);
           }}

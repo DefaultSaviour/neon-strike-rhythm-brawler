@@ -12,7 +12,8 @@ import {
   AudioSettings,
 } from '../types/game';
 import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
-import { DEFAULT_HERO, getHero, HeroDefinition, HEROES } from './heroes';
+import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes';
+import { addRun, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
@@ -138,12 +139,56 @@ export class GameEngine {
 
   constructor(callbacks: GameEngineCallbacks) {
     this.callbacks = callbacks;
+    this.lifetimeStats = loadStats(safeStorage());
+    // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
+    // stripped from the published build (import.meta.env.DEV is false there).
+    if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9 };
+      this.devUnlockAll = true;
+    }
     this.loadSettings();
   }
 
-  /** The hero being played (from the settings). */
+  /** The player's totals over every song, which unlock the heroes (see heroUnlocks). */
+  public lifetimeStats: LifetimeStats;
+  /** Heroes the last song unlocked, for the results screen to announce */
+  public newUnlocks: HeroId[] = [];
+  /** This song's results have already been added to the lifetime totals */
+  private runCounted = false;
+  /** Dev ?unlockAll mode: every hero open, and real progress never saved over */
+  private devUnlockAll = false;
+
+  /** The hero being played (from the settings). A hero not yet earned plays as the default one. */
   public get hero(): HeroDefinition {
-    return getHero(this.settings.hero);
+    return getHero(this.isHeroUnlocked(this.settings.hero) ? this.settings.hero : DEFAULT_HERO);
+  }
+
+  public isHeroUnlocked(id: HeroId): boolean {
+    return isHeroUnlocked(id, this.lifetimeStats);
+  }
+
+  /**
+   * Add this song to the lifetime totals, once, however it ended (cleared,
+   * died, or quit part way: the enemies you beat still count), and note any
+   * heroes it unlocked.
+   */
+  private countRun(cleared: boolean) {
+    if (!this.track || this.runCounted) return;
+    this.runCounted = true;
+    const s = this.scoreState;
+    const before = this.lifetimeStats;
+    this.lifetimeStats = addRun(before, {
+      enemiesDefeated: s.perfectCount + s.goodCount + s.okCount,
+      perfects: s.perfectCount,
+      maxCombo: s.maxCombo,
+      cleared,
+    });
+    this.newUnlocks = newlyUnlocked(
+      HEROES.map((h) => h.id),
+      before,
+      this.lifetimeStats
+    );
+    if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
   }
 
   public loadSettings() {
@@ -185,6 +230,8 @@ export class GameEngine {
     this.hitOffsets = [];
     this.recentPresses = [];
     this.lastRun = null;
+    this.runCounted = false;
+    this.newUnlocks = [];
     this.currentMoveIndex = 0;
     this.isAttacking = false;
     this.strikeActive = false;
@@ -254,6 +301,8 @@ export class GameEngine {
 
   public stop() {
     this.songSession++;
+    // Quitting part way through still counts the enemies beaten so far.
+    if (this.isRunning) this.countRun(false);
     this.isRunning = false;
     this.paused = false;
     audioEngine.stop();
@@ -713,6 +762,7 @@ export class GameEngine {
   private triggerPlayerDeath(killer: Enemy) {
     this.isRunning = false;
     this.recordProgress(false);
+    this.countRun(false);
     const report = explainDeath(
       { name: getEnemyStyle(killer.band, killer.tier).name, lane: killer.lane, targetTime: killer.targetTime },
       this.recentPresses,
@@ -761,6 +811,7 @@ export class GameEngine {
     if (!this.isRunning) return;
     this.isRunning = false;
     this.recordProgress(cleared);
+    this.countRun(cleared);
     audioEngine.stop();
     this.saveHighScore(cleared);
     this.callbacks.onGameOver(this.scoreState, cleared);
@@ -831,5 +882,14 @@ export class GameEngine {
     } catch {
       return {};
     }
+  }
+}
+
+/** localStorage, or nothing when the browser won't allow it (some privacy modes throw just for touching it). */
+function safeStorage(): Storage | undefined {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage : undefined;
+  } catch {
+    return undefined;
   }
 }

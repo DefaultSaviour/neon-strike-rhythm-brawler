@@ -32,7 +32,7 @@ type Ctx = CanvasRenderingContext2D;
 
 export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
   const { tier } = opts;
-  // The Prima Ballerina is drawn with long dancer's arms (see ballerinaArms)
+  // The White Swan is drawn with long dancer's arms (see ballerinaArms)
   const pose = opts.hero === 'ballerina' ? ballerinaArms(skeleton) : skeleton;
   const combo = opts.combo ?? tier.minCombo;
   const rnd = opts.random ?? Math.random;
@@ -44,7 +44,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'theOne') drawCodeRain(ctx, pose, opts.time);
     else if (opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'back');
     else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
-    // The Prima Ballerina's swan tutu is part of her outfit, drawn over the body (step 5b)
+    // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
     }
@@ -91,7 +91,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     }
   }
 
-  // 4a. The Prima Ballerina's spin blur when she turns, behind the body
+  // 4a. The White Swan's spin blur when she turns, behind the body
   if (opts.hero === 'ballerina' && pose.spin) drawSpinBlur(ctx, pose);
 
   // 4b. The One's long coat tail, flaring out behind his legs
@@ -1003,7 +1003,7 @@ function drawSteelChair(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
 }
 
 /**
- * The feathers of the Prima Ballerina's swan tutu (her top-level form): two
+ * The feathers of the White Swan's swan tutu (her top-level form): two
  * layers fanned out round her hips, each feather's base and tip. They
  * flutter gently with time.
  */
@@ -1056,7 +1056,7 @@ function drawFeather(ctx: Ctx, base: Point2D, tip: Point2D, width: number) {
 }
 
 /**
- * The Prima Ballerina: a hair bun and pointe shoes with crossed ribbons, and
+ * The White Swan: a hair bun and pointe shoes with crossed ribbons, and
  * a pink tutu, which in her top-level form becomes a huge swan tutu of white
  * feathers with a feather crown. She kicks up a puff of dust when she lands
  * in a deep plié.
@@ -1191,11 +1191,11 @@ function drawSpinBlur(ctx: Ctx, pose: SkeletonPose) {
   ctx.restore();
 }
 
-/** How much longer the Prima Ballerina's arms are drawn than the standard skeleton's. */
+/** How much longer the White Swan's arms are drawn than the standard skeleton's. */
 export const BALLERINA_ARM_SCALE = 1.3;
 
 /**
- * The Prima Ballerina has long dancer's arms. The skeleton (and so every
+ * The White Swan has long dancer's arms. The skeleton (and so every
  * pose, blend and timing) keeps the standard arm length; only the drawing
  * stretches each arm out from its shoulder. With standard arms, hands joined
  * above her head sat right on top of it, as if she were holding her head;
