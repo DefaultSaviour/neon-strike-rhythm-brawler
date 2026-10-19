@@ -79,6 +79,12 @@ export function beatPulse(songTime: number, grid: Pick<BeatGrid, 'bpm' | 'offset
 /**
  * Fit a grid to a chart. Kick ("sub") notes sit on the beat in almost all
  * dance music, so we prefer them; off-beat notes would blur the fit.
+ *
+ * Some songs put a kick on every half beat (double-time kicks). Those kicks
+ * point both ways on the one-beat clock and cancel out, so the fit looks
+ * hopeless even at the right tempo. So we also fit at twice the tempo; if the
+ * kicks line up much better there, we keep the original beat length but take
+ * the tempo and offset from the double-time fit.
  */
 export function gridForNotes(
   notes: ReadonlyArray<{ time: number; band?: string }>,
@@ -87,5 +93,19 @@ export function gridForNotes(
 ): BeatGrid {
   const kicks = notes.filter((n) => n.band === 'sub').map((n) => n.time);
   const times = kicks.length >= 16 ? kicks : notes.map((n) => n.time);
-  return fitBeatGrid(times, roughBpm, searchFraction);
+  const single = fitBeatGrid(times, roughBpm, searchFraction);
+  const double = fitBeatGrid(times, roughBpm * 2, searchFraction);
+  if (double.strength > Math.max(0.25, single.strength * 1.5)) {
+    const bpm = Math.round((double.bpm / 2) * 100) / 100;
+    const beatSec = 60 / bpm;
+    return { bpm, offset: ((double.offset % beatSec) + beatSec) % beatSec, strength: double.strength };
+  }
+  return single;
+}
+
+/** True when `time` is within `toleranceSec` of an eighth note (a beat or exactly halfway between two). */
+export function onEighthNote(time: number, grid: Pick<BeatGrid, 'bpm' | 'offset'>, toleranceSec: number): boolean {
+  const halfBeats = beatPosition(time, grid) * 2;
+  const off = Math.abs(halfBeats - Math.round(halfBeats)) * (30 / grid.bpm);
+  return off <= toleranceSec;
 }
