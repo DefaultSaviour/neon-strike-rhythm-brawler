@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -205,5 +205,30 @@ describe("The Disco King's disco fever (top-level form)", () => {
   it('the ball turns and the floor lights change', () => {
     expect(discoFever(pose, 1).ball.turn).not.toBe(discoFever(pose, 0).ball.turn);
     expect(discoFever(pose, 0.3).tiles[0].color).not.toBe(discoFever(pose, 0).tiles[0].color);
+  });
+});
+
+describe("The Bride's katana and blossom storm", () => {
+  const br = getHero('bride');
+
+  it('every sword hit lands at the tip of her blade', () => {
+    for (const m of br.moves) {
+      for (const k of m.sequence!) {
+        if (!k.trail) continue;
+        // Kicks land by the foot; everything else is the katana
+        if (dist(k.trail.end, k.pose.frontFoot) < 30) continue;
+        expect(dist(katanaTip(keyToPlayerPose(k), 1), k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+  });
+
+  it('a storm of petals whirling round her, some behind and some in front', () => {
+    const petals = blossomStorm(br.idlePose, 0);
+    expect(petals.length).toBeGreaterThanOrEqual(24);
+    expect(petals.some((p) => p.front)).toBe(true);
+    expect(petals.some((p) => !p.front)).toBe(true);
+    const xs = petals.map((p) => p.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(90);
+    expect(blossomStorm(br.idlePose, 0.5)[0].x).not.toBeCloseTo(petals[0].x, 1);
   });
 });

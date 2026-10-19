@@ -48,6 +48,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'kid') drawCraneSpirit(ctx, pose, opts.time, opts.facing);
     else if (opts.hero === 'spartan') drawShieldWall(ctx, pose, opts.time, opts.facing);
     else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
+    else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -55,7 +56,9 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else drawAngelWings(ctx, pose, opts.time);
   }
 
-  // 1b. The Spartan's red cape hangs behind him
+  // 1b. The Bride's ponytail swings behind her head
+  if (opts.hero === 'bride') drawPonytail(ctx, pose, opts.facing, opts.time);
+  // The Spartan's red cape hangs behind him
   if (opts.hero === 'spartan') drawSpartanCape(ctx, pose, opts.facing, opts.time);
 
   // The Stallion's side of beef hangs in front of him, behind his arms
@@ -144,6 +147,8 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'kid') drawKidOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing);
   if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
+  if (tier.ascended && opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'front');
   if (pose.prop === 'ropeOver' || pose.prop === 'ropeUnder') drawSkippingRope(ctx, pose);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
@@ -1297,6 +1302,163 @@ export function ballerinaArms(pose: SkeletonPose): SkeletonPose {
     rightElbow: stretch(pose.rightShoulder, pose.rightElbow),
     rightHand: stretch(pose.rightShoulder, pose.rightHand),
   };
+}
+
+/** The katana's blade length past her hand. */
+const KATANA = 40;
+
+/** Where the tip of The Bride's katana is (the blade lies along her lead forearm). */
+export function katanaTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
+  const { lead } = arms(pose, facing);
+  return weaponAt(lead.hand, lead.elbow, KATANA).muzzle;
+}
+
+/**
+ * The Bride's top-level form: a storm of cherry blossom petals whirling
+ * round her in a wide ring. Petals behind her are drawn first, the ones
+ * passing in front after her body.
+ */
+export function blossomStorm(pose: SkeletonPose, time: number) {
+  const count = 36;
+  return Array.from({ length: count }, (_, i) => {
+    const a = time * 1.4 + (i / count) * Math.PI * 2;
+    const ring = 50 + (i % 4) * 9;
+    const rise = ((i * 37) % 90) - 60 + Math.sin(time * 2 + i) * 6;
+    return { x: pose.chest.x + Math.cos(a) * ring, y: pose.chest.y + rise, front: Math.sin(a) > 0, spin: time * 3 + i };
+  });
+}
+
+function drawBlossomStorm(ctx: Ctx, pose: SkeletonPose, time: number, layer: 'back' | 'front') {
+  ctx.save();
+  ctx.shadowColor = '#ff9fcf';
+  ctx.shadowBlur = 8;
+  for (const p of blossomStorm(pose, time)) {
+    if (p.front !== (layer === 'front')) continue;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.spin);
+    ctx.fillStyle = layer === 'front' ? '#ffc2e0' : 'rgba(255, 170, 210, 0.7)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 4, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** Her long blonde ponytail, tied high and swinging out behind her head. */
+function drawPonytail(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number) {
+  const h = pose.head;
+  const back = -facing;
+  const swing = Math.sin(time * 6) * 4;
+  const tie = { x: h.x + back * 8, y: h.y - 5 };
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#f2d36b';
+  ctx.shadowColor = '#ffe14f';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(tie.x, tie.y);
+  ctx.quadraticCurveTo(tie.x + back * 14, tie.y + 2 + swing, tie.x + back * 12, tie.y + 26 + swing);
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(tie.x + back * 12, tie.y + 24 + swing);
+  ctx.lineTo(tie.x + back * 9, tie.y + 34 + swing);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The Bride: a bright yellow jumpsuit with a black stripe down each side,
+ * blonde hair over the top of her head, and the katana in her lead hand:
+ * a long pale blade, a small gold guard and a black wrapped hilt.
+ */
+function drawBrideOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // Yellow jumpsuit over the torso
+  ctx.fillStyle = '#ffd400';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#ffe14f';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 9.5, c.y + ny * 9.5);
+  ctx.lineTo(c.x - nx * 9.5, c.y - ny * 9.5);
+  ctx.lineTo(p.x - nx * 7.5, p.y - ny * 7.5);
+  ctx.lineTo(p.x + nx * 7.5, p.y + ny * 7.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // The black stripe down the side, on down the lead leg
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#111116';
+  ctx.lineWidth = 2.6;
+  const lead = facing > 0 ? { knee: pose.leftKnee, foot: pose.leftFoot } : { knee: pose.rightKnee, foot: pose.rightFoot };
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 6 * facing, c.y + ny * 6 * facing);
+  ctx.lineTo(p.x + nx * 5 * facing, p.y + ny * 5 * facing);
+  ctx.lineTo(lead.knee.x, lead.knee.y);
+  ctx.lineTo(lead.foot.x, lead.foot.y);
+  ctx.stroke();
+  // Blonde hair over the top of the head
+  const h = pose.head;
+  ctx.fillStyle = '#f2d36b';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = '#ffe14f';
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y - 0.5, 10.5, Math.PI * 0.95, Math.PI * 2.05);
+  ctx.lineTo(h.x + facing * 7, h.y - 3);
+  ctx.lineTo(h.x - facing * 10, h.y + 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // The katana along her lead forearm
+  const arm = arms(pose, facing).lead;
+  const blade = weaponAt(arm.hand, arm.elbow, KATANA);
+  const d = blade.dir;
+  const n = { x: -d.y, y: d.x };
+  const hiltEnd = { x: arm.hand.x - d.x * 10, y: arm.hand.y - d.y * 10 };
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4.5;
+  ctx.beginPath();
+  ctx.moveTo(hiltEnd.x, hiltEnd.y);
+  ctx.lineTo(arm.hand.x + d.x * 2, arm.hand.y + d.y * 2);
+  ctx.stroke();
+  // The blade: very slightly curved, bright edge
+  const mid = { x: arm.hand.x + d.x * KATANA * 0.5 + n.x * 2.5 * facing, y: arm.hand.y + d.y * KATANA * 0.5 + n.y * 2.5 * facing };
+  ctx.beginPath();
+  ctx.moveTo(arm.hand.x + d.x * 3, arm.hand.y + d.y * 3);
+  ctx.quadraticCurveTo(mid.x, mid.y, blade.muzzle.x, blade.muzzle.y);
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 3.6;
+  ctx.stroke();
+  ctx.strokeStyle = '#eef4ff';
+  ctx.shadowColor = '#bfe0ff';
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+  // The guard
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#d4a017';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(arm.hand.x + d.x * 3 + n.x * 3.5, arm.hand.y + d.y * 3 + n.y * 3.5);
+  ctx.lineTo(arm.hand.x + d.x * 3 - n.x * 3.5, arm.hand.y + d.y * 3 - n.y * 3.5);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** The Disco King's top-level form: where the disco ball hangs and how far it has turned, and the lit floor tiles. */
