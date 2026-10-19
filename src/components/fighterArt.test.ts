@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, kidCrane, stallionSun, swanTutuFeathers } from './fighterArt';
+import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
+import { Point2D } from '../types/game';
+import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+
+const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -163,5 +167,26 @@ describe("The Kid's crane (top-level form)", () => {
 
   it('its wings slowly beat', () => {
     expect(kidCrane(pose, 0.7).lift).not.toBeCloseTo(kidCrane(pose, 0).lift, 2);
+  });
+});
+
+describe("The Spartan's gear and shield wall", () => {
+  const sp = getHero('spartan');
+
+  it('every spear hit lands at the tip of his spear', () => {
+    for (const m of sp.moves) {
+      for (const k of m.sequence!) {
+        if (!k.trail) continue;
+        // Shield and kick hits land by the lead hand or foot; anything else is the spear
+        const nearLimb = [k.pose.frontHand, k.pose.frontFoot].some((e) => dist(k.trail!.end, e) < 30);
+        if (!nearLimb) expect(dist(spearTip(keyToPlayerPose(k), 1), k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+  });
+
+  it('a wall of shields behind him, wider than he is, with arrows falling', () => {
+    const w = spartanWall(sp.idlePose, 0);
+    expect(w.shields * w.radius * 1.55).toBeGreaterThan(80);
+    expect(spartanWall(sp.idlePose, 0.5).arrows[0].y).toBeGreaterThan(w.arrows[0].y);
   });
 });

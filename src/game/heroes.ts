@@ -7,6 +7,7 @@ import { DRUNKEN_MASTER_IDLE, DRUNKEN_MASTER_MOVES } from './heroMoves/drunkenMa
 import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDragon';
 import { PRIMA_BALLERINA_IDLE, PRIMA_BALLERINA_MOVES } from './heroMoves/primaBallerina';
 import { PRO_WRESTLER_IDLE, PRO_WRESTLER_MOVES } from './heroMoves/proWrestler';
+import { SPARTAN_IDLE, SPARTAN_MOVES } from './heroMoves/spartan';
 import { STALLION_IDLE, STALLION_MOVES } from './heroMoves/stallion';
 import { THE_KID_IDLE, THE_KID_MOVES } from './heroMoves/theKid';
 import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
@@ -18,7 +19,7 @@ import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid' | 'spartan';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -93,6 +94,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Karate: crisp punches and kicks, chores that turn into blocks, and the crane kick',
     idlePose: THE_KID_IDLE,
     moves: THE_KID_MOVES,
+  },
+  {
+    id: 'spartan',
+    label: 'The Spartan',
+    description: 'Shield and spear: thrusts over the shield, shield bashes, and the kick into the pit',
+    idlePose: SPARTAN_IDLE,
+    moves: SPARTAN_MOVES,
   },
 ];
 
