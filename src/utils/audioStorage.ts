@@ -3,7 +3,7 @@
 const DB_NAME = 'neon_strike_audio_db_v2';
 const STORE_NAME = 'custom_tracks';
 const DB_VERSION = 1;
-export const CURRENT_ANALYSIS_VERSION = 5;
+export const CURRENT_ANALYSIS_VERSION = 6;
 
 interface StoredTrackData {
   id: string;

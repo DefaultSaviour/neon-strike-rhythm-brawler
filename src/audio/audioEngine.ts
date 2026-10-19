@@ -1,11 +1,26 @@
 import { Track, BeatNote, Lane, TimingJudgementType, FrequencyBand, HitSoundMode } from '../types/game';
 import { audioStorage } from '../utils/audioStorage';
-import { gridForNotes } from './beatGrid';
+import { BeatGrid, gridForNotes, onEighthNote } from './beatGrid';
 import { computeHeardSongTime } from './songClock';
 import { foldIntoOctave, peakHzInBand } from './hitTone';
 
 /** How late the kick/bass onset detector lands after the real attack (see analyzeAudioBuffer step 5b). */
 export const LOW_BAND_DETECTOR_LAG_SEC = 0.015;
+
+/** Songs at or below this tempo keep their extra (off-main-beat) notes on the eighth-note grid. */
+export const SLOW_SONG_MAX_BPM = 120;
+/** How close to an eighth note an extra note must be in a slow song (seconds). */
+export const EIGHTH_NOTE_TOLERANCE_SEC = 0.05;
+
+/**
+ * Which extra notes (beyond the main beats) a song may keep, given the grid
+ * fitted to its main beats. Slow songs with a clear grid keep only extras on
+ * an eighth note; fast songs, or songs with no clear grid, keep them all.
+ */
+export function extraNoteFilter(grid: BeatGrid): (time: number) => boolean {
+  if (grid.bpm > SLOW_SONG_MAX_BPM || grid.strength < 0.3) return () => true;
+  return (time) => onEighthNote(time, grid, EIGHTH_NOTE_TOLERANCE_SEC);
+}
 
 type BiquadCoeffs = [number, number, number, number, number];
 
@@ -1114,11 +1129,30 @@ class AudioEngine {
     lockedBeats.push(...bridged);
     lockedBeats.sort((a, b) => a.time - b.time);
 
+    // Extra notes (passes 2 and 3) need a gap measured in BEATS, not just seconds: a
+    // fixed gap lets a slow song cram in two or three notes per beat (most of them
+    // off the beat), so it plays far harder than a fast one. Scaled like this, extra
+    // notes come at most every eighth note at any tempo; fast songs, whose
+    // eighth notes are already near the old fixed gaps, are almost unchanged.
+    const extraSpacing = Math.max(0.185, beatSec * 0.45);
+
+    // Slow songs also keep their extra notes ON the eighth-note grid (fitted to the
+    // main beats found so far). A rolling bassline gives onsets all over the beat;
+    // at a slow tempo there is room for them between the beats, so without this
+    // they land at random points and the chart feels unreadable. Fast songs keep
+    // their charts as they were: their spacing already limits the extras.
+    const allowedExtra = extraNoteFilter(
+      gridForNotes(
+        lockedBeats.map((b) => ({ time: b.time, band: b.kind === 'kick' ? 'sub' : 'bass' })),
+        estimatedBpm
+      )
+    );
+
     // PASS 2: Fast / Rolling / Syncopated Bassline Sub-Beats (follows changing bassline riffs & off-beat bounces)
     const pass2Sorted = [...bassCandidates].sort((a, b) => b.val - a.val);
     for (const c of pass2Sorted) {
-      if (c.val > Math.max(0.27, c.locMean * 1.46) && c.lowEnv > 0.22) {
-        if (lockedBeats.every((b) => Math.abs(c.time - b.time) >= 0.185)) {
+      if (c.val > Math.max(0.27, c.locMean * 1.46) && c.lowEnv > 0.22 && allowedExtra(c.time)) {
+        if (lockedBeats.every((b) => Math.abs(c.time - b.time) >= extraSpacing)) {
           lockedBeats.push({ ...c, source: 'sub_bass' });
         }
       }
@@ -1142,7 +1176,7 @@ class AudioEngine {
         const thresh = isLowBassSec
           ? Math.max(0.22, locHighMean[i] * 1.35)
           : Math.max(0.48, locHighMean[i] * 1.65);
-        const minDist = isLowBassSec ? 0.22 : 0.34;
+        const minDist = isLowBassSec ? Math.max(0.22, extraSpacing) : Math.max(0.34, beatSec * 0.6);
         if (val > thresh) {
           highCandidates.push({ frame: i, time: t, val, minDist });
         }
@@ -1151,6 +1185,7 @@ class AudioEngine {
 
     highCandidates.sort((a, b) => b.val - a.val);
     for (const hc of highCandidates) {
+      if (!allowedExtra(hc.time)) continue;
       if (lockedBeats.every((b) => Math.abs(hc.time - b.time) >= hc.minDist)) {
         lockedBeats.push({
           frame: hc.frame,
