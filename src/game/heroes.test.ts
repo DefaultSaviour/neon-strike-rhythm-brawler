@@ -615,8 +615,8 @@ describe('The Stallion', () => {
     for (const m of st.moves) {
       for (const k of m.sequence!) {
         if (k.trail) expect(Math.min(dist(k.trail.end, k.pose.frontHand), dist(k.trail.end, k.pose.backHand)), m.name).toBeLessThan(30);
-        // No kicks, no jumps
-        expect(Math.min(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(67);
+        // No kicks, no jumps (rising onto the toes behind a punch is fine)
+        expect(Math.min(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(64);
       }
     }
   });

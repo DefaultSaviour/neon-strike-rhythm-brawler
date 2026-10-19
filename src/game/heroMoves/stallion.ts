@@ -1,6 +1,8 @@
 import { AttackMove, SkeletonPose } from '../../types/game';
 import { FLOOR } from '../enemyMotion';
+import { applyEdit } from '../heroPoses';
 import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHolds } from './poseBuilder';
+import { STALLION_POSE_EDITS } from './stallionPoses';
 
 /**
  * THE STALLION: a heavyweight boxer in the spirit of the 70s underdog
@@ -75,7 +77,7 @@ const cross = (deg = -2, extra: Partial<Key> = {}): Key => ({
 /** Back in his guard, hands up. */
 const guardUp = (ms: number, extra: Partial<Key> = {}): Key => ({ ms, pelvis: { x: 0, y: 12 }, lean: 10, tilt: 6, frontArm: guardFront, backArm: guardBack, ...stance, ...extra });
 
-export const STALLION_MOVES: AttackMove[] = [
+const BUILT_MOVES: AttackMove[] = [
   // ======================= Tier 1: the fundamentals =======================
   combo(1, 'Jab', 'A stiff lead jab, snapped straight back to the chin', [jab(), guardUp(150)]),
   combo(1, 'One-Two', 'Jab to set it up, then the rear hand crashes straight through', [jab(), { ms: 90, ...cross() }]),
@@ -173,3 +175,6 @@ export const STALLION_MOVES: AttackMove[] = [
     { ms: 100, ...cross(-4) },
   ]),
 ];
+
+/** The moves, with the poses the designer drew in the Pose Studio (stallionPoses.ts) in place of the built ones. */
+export const STALLION_MOVES: AttackMove[] = BUILT_MOVES.map((m) => (STALLION_POSE_EDITS[m.name] ? applyEdit(m, STALLION_POSE_EDITS[m.name]) : m));
