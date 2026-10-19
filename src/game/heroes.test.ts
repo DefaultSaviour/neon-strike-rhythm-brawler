@@ -571,11 +571,11 @@ describe('The Stallion', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 18 moves spread over the 5 combo tiers (5, 5, 4, 1, 3), all with different names', () => {
-    expect(st.moves).toHaveLength(18);
+  it('has 16 moves spread over the 5 combo tiers (5, 5, 4, 1, 1), all with different names', () => {
+    expect(st.moves).toHaveLength(16);
     const perTier = [1, 2, 3, 4, 5].map((t) => st.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 1, 3]); // tier 4 is one move: the skipping rope
-    expect(new Set(st.moves.map((m) => m.name)).size).toBe(18);
+    expect(perTier).toEqual([5, 5, 4, 1, 1]); // tiers 4 and 5 are one move each: the skipping rope and the meat locker
+    expect(new Set(st.moves.map((m) => m.name)).size).toBe(16);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -619,6 +619,16 @@ describe('The Stallion', () => {
         if (m.name !== 'Skipping Rope') expect(Math.min(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(64);
       }
     }
+  });
+
+  it('holds the skipping rope over his head between tier 4 attacks, and every attack is the hop with the rope under his feet', () => {
+    const rope = st.moves.find((m) => m.tier === 4)!;
+    expect(rope.restPose?.prop).toBe('ropeOver');
+    expect(rope.sequence![0].prop).toBe('ropeUnder');
+    expect(rope.sequence![rope.sequence!.length - 1].prop).toBe('ropeOver');
+    const meat = st.moves.find((m) => m.tier === 5)!;
+    expect(meat.restPose?.prop).toBe('meat');
+    expect(meat.sequence!.every((k) => k.prop === 'meat')).toBe(true);
   });
 
   it('stands in a boxing guard: both gloves up by his chin', () => {

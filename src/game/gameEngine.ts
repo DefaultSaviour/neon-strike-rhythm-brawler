@@ -753,7 +753,9 @@ export class GameEngine {
     // 4. PLAYER ANIMATION
     const pulse = beatPulse(effectiveTime, this.beatGrid, 5);
     const sway = Math.sin(beatPos * Math.PI) * 1.5;
-    const restPose = idleBouncePose(this.hero.idlePose, pulse, sway);
+    // Some tiers have their own pose between attacks (The Stallion's skipping rope)
+    const tierRest = getMoveForCombo(this.scoreState.combo, this.currentMoveIndex, this.hero.moves).restPose;
+    const restPose = idleBouncePose(tierRest ?? this.hero.idlePose, pulse, sway);
 
     if (this.isAttacking) {
       const progress = (this.animClock - this.strikeStart) / this.strikeDuration;

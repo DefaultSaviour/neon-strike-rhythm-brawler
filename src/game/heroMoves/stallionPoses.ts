@@ -85,12 +85,4 @@ export const STALLION_POSE_EDITS: Record<string, HeroPoseEdit> = {
       pose({ pelvis: { x: 0, y: 12 }, chest: { x: 5.2, y: -17.5 }, head: { x: 5.2, y: -43.5 }, frontHand: { x: 12.6, y: -19.9 }, backHand: { x: 6.3, y: -20.2 }, frontFoot: { x: 22, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, 1, -1, -1]),
     ],
   },
-  'Comeback': {
-    ms: [0, 110, 100],
-    poses: [
-      pose({ pelvis: { x: 0.2, y: 29.5 }, chest: { x: 13.5, y: 2.5 }, head: { x: 10.2, y: -23.2 }, frontHand: { x: 20.8, y: 0.2 }, backHand: { x: 44.9, y: -20.5 }, frontFoot: { x: 30.4, y: 68 }, backFoot: { x: -32.4, y: 68 } }, [1, 1, -1, -1]),
-      pose({ pelvis: { x: 4, y: 20 }, chest: { x: 6.1, y: -9.9 }, head: { x: 7.9, y: -35.9 }, frontHand: { x: 25.9, y: -16.4 }, backHand: { x: 7.1, y: -12.6 }, frontFoot: { x: 26, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, 1, -1, -1]),
-      pose({ pelvis: { x: 6, y: 16 }, chest: { x: 17.2, y: -11.8 }, head: { x: 27, y: -35.9 }, frontHand: { x: 24.6, y: -14.2 }, backHand: { x: 56.1, y: -13.7 }, frontFoot: { x: 30, y: 68 }, backFoot: { x: -14, y: 68 } }, [1, 1, -1, -1]),
-    ],
-  },
 };

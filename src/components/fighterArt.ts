@@ -52,6 +52,9 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else drawAngelWings(ctx, pose, opts.time);
   }
 
+  // 1b. The Stallion's side of beef hangs in front of him, behind his arms
+  if (pose.prop === 'meat') drawSideOfBeef(ctx, pose, opts.facing);
+
   // 2. Overdrive lightning crackling from the chest to the hands
   if (tier.lightning) {
     ctx.save();
@@ -965,6 +968,51 @@ function drawWrestlerOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, fac
 }
 
 /** A folding steel chair, folded flat, gripped in both hands and swung seat-first. */
+/** A frozen side of beef hanging from a hook in front of him; it swings away when punched. */
+function drawSideOfBeef(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  const hit = !!pose.bladeSlash;
+  const top = { x: pose.pelvis.x + facing * 40, y: pose.head.y - 34 };
+  ctx.save();
+  ctx.translate(top.x, top.y);
+  ctx.rotate(hit ? facing * -0.22 : 0);
+  // The chain up out of view
+  ctx.strokeStyle = '#8a90a6';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -30);
+  ctx.lineTo(0, 6);
+  ctx.stroke();
+  // The slab: a long rounded wedge of red meat with a white fat edge
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-9, 6);
+  ctx.quadraticCurveTo(-16, 40, -11, 82);
+  ctx.quadraticCurveTo(0, 92, 11, 82);
+  ctx.quadraticCurveTo(16, 40, 9, 6);
+  ctx.closePath();
+  ctx.fillStyle = '#b8323a';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fill();
+  ctx.strokeStyle = '#ffd9d4';
+  ctx.shadowColor = '#ff4a3d';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  // Marbling: a few curved streaks of fat
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#f4c6c0';
+  ctx.lineWidth = 1.2;
+  for (const y of [24, 44, 64]) {
+    ctx.beginPath();
+    ctx.moveTo(-8, y);
+    ctx.quadraticCurveTo(0, y + 6, 8, y - 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** A skipping rope held in both hands, its loop swung up over the head or down under the feet. */
 function drawSkippingRope(ctx: Ctx, pose: SkeletonPose) {
   const a = pose.leftHand;

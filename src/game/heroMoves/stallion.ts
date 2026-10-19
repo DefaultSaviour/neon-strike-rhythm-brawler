@@ -99,6 +99,11 @@ const ropeOverhead = (ms: number): Key => ({
 /** Back in his guard, hands up. */
 const guardUp = (ms: number, extra: Partial<Key> = {}): Key => ({ ms, pelvis: { x: 0, y: 12 }, lean: 10, tilt: 6, frontArm: guardFront, backArm: guardBack, ...stance, ...extra });
 
+/** Tier 4 between attacks: the skipping rope held up over his head. */
+const ROPE_REST: SkeletonPose = buildFighterPose(ropeOverhead(0), TRAIL);
+/** Tier 5 between attacks: guard up beside the hanging side of beef. */
+const MEAT_REST: SkeletonPose = buildFighterPose(guardUp(0, { prop: 'meat' }), TRAIL);
+
 const BUILT_MOVES: AttackMove[] = [
   // ======================= Tier 1: the fundamentals =======================
   combo(1, 'Jab', 'A stiff lead jab, snapped straight back to the chin', [jab(), guardUp(150)]),
@@ -160,27 +165,23 @@ const BUILT_MOVES: AttackMove[] = [
   ]),
 
   // ================= Tier 4: the skipping rope =================
-  // His whole tier 4 is one move: skipping, like the training-gym scenes.
-  // The hop (rope whipping under his feet) is the hit; between hops the rope
-  // swings up over his head.
-  combo(4, 'Skipping Rope', 'Skips rope like it is the last week of training camp', [ropeHop(), ropeOverhead(120), { ms: 110, ...ropeHop() }]),
+  // His whole tier 4 is one move. Between attacks he holds the rope up over
+  // his head (ROPE_REST); each attack is the hop with the rope whipping under
+  // his feet, then the rope comes back up over his head.
+  { ...combo(4, 'Skipping Rope', 'Skips rope like it is the last week of training camp', [ropeHop(), ropeOverhead(150)]), restPose: ROPE_REST },
 
-  // ================= Tier 5: legendary finishers =================
-  combo(5, 'The Distance', 'Jab, cross, hook and uppercut: everything he has left, still standing at the end', [
-    jab(),
-    { ms: 80, ...cross() },
-    { ms: 90, pelvis: { x: 4, y: 14 }, lean: 10, tilt: -6, frontArm: hook, backArm: guardBack, ...stance, trail: { from: 'frontHand', reach: 18, curve: 20 } },
-    { ms: 100, ...low, pelvis: { x: 4, y: 22 }, lean: 6, frontArm: guardFront, backArm: uppercut, trail: { from: 'backHand', reach: 22, curve: -12 } },
-  ]),
-  combo(5, 'Final Round', 'One last haymaker that ends it, then both arms thrown up high', [
-    { ...stepIn, lean: 32, tilt: 6, frontArm: { upper: 120, lower: 100 }, backArm: straight(-8), trail: { from: 'backHand', reach: 28, curve: 24 } },
-    { ms: 260, pelvis: { x: 0, y: 10 }, lean: -6, tilt: -12, frontArm: armsUp, backArm: armsUpBack, ...stance },
-  ]),
-  combo(5, 'Comeback', 'Ducks low, bursts up with an uppercut, and finishes with a cross', [
-    { ...low, pelvis: { x: 0, y: 30 }, lean: 30, tilt: 10, frontArm: guardFront, backArm: straight(24), trail: { from: 'backHand', reach: 18 } },
-    { ms: 110, ...low, pelvis: { x: 4, y: 20 }, lean: 4, frontArm: uppercut, backArm: guardBack, trail: { from: 'frontHand', reach: 22, curve: -12 } },
-    { ms: 100, ...cross(-4) },
-  ]),
+  // ================= Tier 5: the meat locker =================
+  // His whole tier 5 is one move. A side of beef hangs in front of him
+  // (MEAT_REST) and every attack is a pair of body shots into it.
+  {
+    ...combo(5, 'Meat Locker', 'Pounds a frozen side of beef like it is the cold store all over again', [
+      { ...low, lean: 22, tilt: -6, frontArm: straight(14), backArm: guardBack, prop: 'meat', trail: { from: 'frontHand', reach: 16, curve: 16 } },
+      { ms: 90, ...low, lean: 24, tilt: 6, frontArm: guardFront, backArm: straight(12), prop: 'meat', trail: { from: 'backHand', reach: 16, curve: -16 } },
+      guardUp(150, { prop: 'meat' }),
+    ]),
+    slam: true,
+    restPose: MEAT_REST,
+  },
 ];
 
 /** The moves, with the poses the designer drew in the Pose Studio (stallionPoses.ts) in place of the built ones. */
