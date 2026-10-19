@@ -41,6 +41,7 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
     else if (opts.hero === 'babaYaga') drawGoldCoinHalo(ctx, pose, opts.time);
     else if (opts.hero === 'theOne') drawCodeRain(ctx, pose, opts.time);
     else if (opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'back');
+    else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
     else drawAngelWings(ctx, pose, opts.time);
   }
 
@@ -117,6 +118,8 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   if (opts.hero === 'theOne') drawTheOneOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'drunkenMaster') drawDrunkenOutfit(ctx, pose, tier, opts.facing, combo);
   if (pose.prop === 'gourd' || pose.prop === 'gourdSwing' || pose.prop === 'bench') drawDrunkenProps(ctx, pose, opts.facing);
+  if (opts.hero === 'proWrestler') drawWrestlerOutfit(ctx, pose, tier, opts.facing);
+  if (pose.prop === 'chair') drawSteelChair(ctx, pose, opts.facing);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
@@ -774,6 +777,218 @@ function drawDrunkenProps(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
       ctx.fill();
     }
   }
+  ctx.restore();
+}
+
+/** Where the Pro Wrestler's championship belt floats in his top-level form: high above his head, bobbing. */
+export function championBelt(pose: SkeletonPose, time: number) {
+  return { x: pose.head.x, y: pose.head.y - 34 + Math.sin(time * 3) * 3, halfWidth: 30 };
+}
+
+/** A gold championship belt plate with black straps either side, centred on (x, y). */
+function drawBeltPlate(ctx: Ctx, x: number, y: number, scale: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  // Straps
+  ctx.fillStyle = '#111118';
+  ctx.strokeStyle = '#ffd34d';
+  ctx.lineWidth = 0.8;
+  ctx.fillRect(-15, -2.6, 30, 5.2);
+  ctx.strokeRect(-15, -2.6, 30, 5.2);
+  // Big gold plate, with a ruby in the middle
+  ctx.fillStyle = '#ffc23a';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#ffb000';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 7.5, 5.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffe9a0';
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(side * 10.5, 0, 2.6, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#ff2a3d';
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The Pro Wrestler's top-level form: a bright spotlight beaming down on him
+ * from above, and the gold championship belt floating high over his head.
+ */
+function drawChampionSpotlight(ctx: Ctx, pose: SkeletonPose, time: number) {
+  const x = pose.pelvis.x;
+  ctx.save();
+  // The spotlight cone, from a point far above down to a pool on the floor
+  const g = ctx.createLinearGradient(0, -230, 0, 68);
+  g.addColorStop(0, 'rgba(255, 250, 225, 0.05)');
+  g.addColorStop(1, 'rgba(255, 250, 225, 0.32)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(x - 12, -230);
+  ctx.lineTo(x + 12, -230);
+  ctx.lineTo(x + 54, 68);
+  ctx.lineTo(x - 54, 68);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 250, 225, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(x, 68, 54, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // The belt, held aloft over his head
+  const belt = championBelt(pose, time);
+  drawBeltPlate(ctx, belt.x, belt.y, belt.halfWidth / 15);
+}
+
+/**
+ * The Pro Wrestler: a red singlet with one strap over the shoulder, the
+ * championship belt round his waist, a headband and taped wrists. Every hit
+ * flicks a few drops of sweat off him.
+ */
+function drawWrestlerOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  const along = (t: number, side: number) => ({ x: c.x + sx * t + nx * side, y: c.y + sy * t + ny * side });
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // Singlet: from mid-chest to the hips
+  const a = along(0.35, 9);
+  const b = along(0.35, -9);
+  const d = along(1.08, -7);
+  const e = along(1.08, 7);
+  ctx.fillStyle = '#b3122a';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#ff3355';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.lineTo(d.x, d.y);
+  ctx.lineTo(e.x, e.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // One strap up over the front shoulder
+  ctx.strokeStyle = '#b3122a';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  const strapFrom = facing > 0 ? a : b;
+  ctx.moveTo(strapFrom.x, strapFrom.y);
+  ctx.lineTo(pose.leftShoulder.x, pose.leftShoulder.y);
+  ctx.stroke();
+  // The championship belt round his waist
+  ctx.shadowBlur = 0;
+  const waist = along(0.86, 0);
+  ctx.save();
+  ctx.translate(waist.x, waist.y);
+  ctx.rotate(Math.atan2(ny, nx) - Math.PI / 2);
+  drawBeltPlate(ctx, 0, 0, 0.62);
+  ctx.restore();
+  // Headband
+  const h = pose.head;
+  ctx.strokeStyle = '#ff3355';
+  ctx.shadowColor = '#ff3355';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 2.6;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 9.3, Math.PI * 1.08, Math.PI * 1.92);
+  ctx.stroke();
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(h.x - facing * 8, h.y - 3);
+  ctx.lineTo(h.x - facing * 15, h.y + 2);
+  ctx.moveTo(h.x - facing * 8, h.y - 3);
+  ctx.lineTo(h.x - facing * 14, h.y + 6);
+  ctx.stroke();
+  // White tape round both wrists
+  ctx.strokeStyle = '#f4f4f8';
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 3.4;
+  ctx.beginPath();
+  for (const [hand, elbow] of [
+    [pose.leftHand, pose.leftElbow],
+    [pose.rightHand, pose.rightElbow],
+  ] as const) {
+    const dx = hand.x - elbow.x;
+    const dy = hand.y - elbow.y;
+    const l = Math.hypot(dx, dy) || 1;
+    ctx.moveTo(hand.x - (dx / l) * 6, hand.y - (dy / l) * 6);
+    ctx.lineTo(hand.x - (dx / l) * 2, hand.y - (dy / l) * 2);
+  }
+  ctx.stroke();
+  // Sweat flying off him on every hit
+  if (pose.bladeSlash) {
+    ctx.fillStyle = '#a8e6ff';
+    ctx.shadowColor = '#a8e6ff';
+    ctx.shadowBlur = 6;
+    for (const [ox, oy, r] of [
+      [-12, -10, 1.8],
+      [-17, -2, 1.4],
+      [-8, -16, 1.3],
+    ]) {
+      ctx.beginPath();
+      ctx.ellipse(h.x + ox * facing, h.y + oy, r * 0.75, r * 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/** A folding steel chair, folded flat, gripped in both hands and swung seat-first. */
+function drawSteelChair(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  const { lead, rear } = arms(pose, facing);
+  const dx = lead.hand.x - rear.hand.x;
+  const dy = lead.hand.y - rear.hand.y;
+  const l = Math.hypot(dx, dy);
+  const d = l > 3 ? { x: dx / l, y: dy / l } : weaponAt(lead.hand, lead.elbow, 1).dir;
+  const n = { x: -d.y, y: d.x };
+  const base = { x: lead.hand.x + d.x * 2, y: lead.hand.y + d.y * 2 };
+  const corner = (along: number, across: number) => ({ x: base.x + d.x * along + n.x * across, y: base.y + d.y * along + n.y * across });
+  ctx.save();
+  ctx.lineJoin = 'round';
+  // The folded seat and back: one flat slab of steel
+  const pts = [corner(0, -6), corner(28, -6), corner(28, 6), corner(0, 6)];
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+  ctx.closePath();
+  ctx.fillStyle = '#9aa3b8';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fill();
+  ctx.strokeStyle = '#e6eaf7';
+  ctx.shadowColor = '#c8d2ff';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  // Folded legs along the back edge
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#5a6278';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const l1 = corner(4, 2);
+  const l2 = corner(26, 2);
+  ctx.moveTo(l1.x, l1.y);
+  ctx.lineTo(l2.x, l2.y);
+  ctx.stroke();
   ctx.restore();
 }
 

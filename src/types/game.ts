@@ -115,7 +115,7 @@ export interface SkeletonPose {
   rightFoot: Point2D;
   scarf?: Point2D[];
   /** A weapon held in the lead hand during this pose (drawn by fighterArt) */
-  prop?: 'nunchaku' | 'pistol' | 'pistols' | 'shotgun' | 'pencil' | 'gourd' | 'gourdSwing' | 'bench';
+  prop?: 'nunchaku' | 'pistol' | 'pistols' | 'shotgun' | 'pencil' | 'gourd' | 'gourdSwing' | 'bench' | 'chair';
   /** The gun in this hand fires in this pose (muzzle flash; the trail is the bullet streak) */
   shot?: 'lead' | 'rear';
   bladeSlash?: {
@@ -155,6 +155,8 @@ export interface AttackMove {
    */
   sequence?: MoveKey[];
   impactOffset?: Point2D;
+  /** A slam: shakes the screen harder and gets a crowd-pop flash at the screen edges */
+  slam?: boolean;
   tier: 1 | 2 | 3 | 4 | 5; // 1: Basic, 2: Advanced Acrobatic, 3: Superhuman Cyber, 4: Overdrive Master, 5: God-Tier Finisher
 }
 

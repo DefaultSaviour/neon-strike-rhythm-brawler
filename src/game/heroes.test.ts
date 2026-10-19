@@ -362,9 +362,105 @@ describe('Drunken Master', () => {
   });
 });
 
+describe('The Pro Wrestler', () => {
+  const pw = getHero('proWrestler');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(pw.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => pw.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(pw.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [pw.idlePose, ...pw.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of pw.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of pw.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of pw.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('the slams are marked, and every slam drives him down toward the mat', () => {
+    const slams = pw.moves.filter((m) => m.slam);
+    expect(slams.length).toBeGreaterThanOrEqual(10);
+    expect(slams.map((m) => m.name)).toEqual(expect.arrayContaining(['Suplex', 'Powerbomb', 'Piledriver Drop', 'Championship Finisher']));
+    for (const m of slams) {
+      const lowest = Math.max(...m.sequence!.map((k) => k.pose.pelvis.y));
+      expect(lowest, m.name).toBeGreaterThan(30);
+    }
+    // The plain strikes are not slams
+    expect(pw.moves.find((m) => m.name === 'Chop')!.slam).toBeFalsy();
+  });
+
+  it('lifts them overhead before the big slams', () => {
+    for (const name of ['Powerbomb', 'Suplex', 'Championship Finisher']) {
+      const keys = pw.moves.find((m) => m.name === name)!.sequence!;
+      const highestHands = Math.min(...keys.map((k) => Math.min(k.pose.frontHand.y, k.pose.backHand.y)));
+      expect(highestHands, name).toBeLessThan(keys[0].pose.head.y);
+    }
+  });
+
+  it('the flat double dropkick is a finisher, and the shoulder-first Spear is mid-level', () => {
+    const dropkick = pw.moves.find((m) => m.name === 'Flying Double Dropkick')!;
+    expect(dropkick.tier).toBe(5);
+    // Flat out in the air, both feet driving forward together
+    const k = dropkick.sequence![0].pose;
+    expect(Math.abs(k.frontFoot.y - k.backFoot.y)).toBeLessThan(10);
+    expect(Math.min(k.frontFoot.x, k.backFoot.x)).toBeGreaterThan(k.pelvis.x + 40);
+    expect(Math.abs(k.chest.y - k.pelvis.y)).toBeLessThan(12);
+
+    const spear = pw.moves.find((m) => m.name === 'Spear')!;
+    expect(spear.tier).toBe(3);
+    // Bent almost flat, head driving forward, one leg kicked up behind
+    const s = spear.sequence![0].pose;
+    expect(s.head.x).toBeGreaterThan(s.pelvis.x + 40);
+    expect(Math.min(s.frontFoot.y, s.backFoot.y)).toBeLessThan(s.pelvis.y);
+  });
+
+  it('the steel chair comes out for the chair shot only, in both hands', () => {
+    const withChair = pw.moves.filter((m) => m.sequence!.some((k) => k.prop === 'chair'));
+    expect(withChair.map((m) => m.name)).toEqual(['Steel Chair Shot']);
+    for (const k of withChair[0].sequence!) expect(dist(k.pose.frontHand, k.pose.backHand)).toBeLessThan(14);
+  });
+
+  it('jumping moves really leave the ground', () => {
+    for (const name of ['Flying Double Dropkick', 'Flying Crossbody', 'Moonsault', 'Flying Elbow from the Top Rope']) {
+      const k = pw.moves.find((m) => m.name === name)!.sequence![0];
+      expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y), name).toBeLessThan(64);
+    }
+  });
+});
+
 describe('hit effects on held combos', () => {
   it("never blink off and back on during one hit: the trail stays on from the hit through its hold", () => {
-    for (const hero of [getHero('babaYaga'), getHero('theOne'), getHero('drunkenMaster')]) {
+    for (const hero of [getHero('babaYaga'), getHero('theOne'), getHero('drunkenMaster'), getHero('proWrestler')]) {
       for (const m of hero.moves) {
         const keys = m.sequence!;
         const total = comboDuration(keys);

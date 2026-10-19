@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath } from './fighterArt';
+import { championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -81,5 +81,21 @@ describe("the Drunken Master's dizzy halo (top-level form)", () => {
     const a = dizzyHalo(pose, 0, 50)[0];
     const b = dizzyHalo(pose, 0.2, 50)[0];
     expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(3);
+  });
+});
+
+describe("the Pro Wrestler's championship belt (top-level form)", () => {
+  const pose = getHero('proWrestler').idlePose;
+
+  it('floats high above his head, wider than his shoulders', () => {
+    const belt = championBelt(pose, 0);
+    expect(Math.abs(belt.x - pose.head.x)).toBeLessThan(1);
+    expect(belt.y).toBeLessThan(pose.head.y - 25);
+    expect(belt.halfWidth * 2).toBeGreaterThan(40);
+  });
+
+  it('bobs gently over time', () => {
+    const ys = [0, 0.3, 0.6, 0.9].map((t) => championBelt(pose, t).y);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(2);
   });
 });
