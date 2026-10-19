@@ -205,7 +205,7 @@ export const BABA_YAGA_MOVES: AttackMove[] = [
   ]),
 
   // ================= Tier 5: legendary finishers =================
-  combo(5, 'Excommunicado', 'Front kick, hip throw, one shot down, then he holsters and walks', [
+  combo(5, 'Blacklisted', 'Front kick, hip throw, one shot down, then he holsters and walks', [
     { pelvis: { x: -2, y: 6 }, lean: -26, frontArm: relock, backArm: armsBack, frontLeg: straight(-20), backLeg: { x: -12, y: F }, trail: { from: 'frontFoot', reach: 20 } },
     { ms: 130, pelvis: { x: 2, y: 20 }, lean: 50, frontArm: { upper: -40, lower: -10 }, backArm: { upper: 20, lower: 60 }, ...wide, trail: { from: 'frontHand', reach: 22, curve: 24 } },
     { ms: 140, ...aimed(55, { pelvis: { x: 6, y: 32 }, lean: 24, frontLeg: { x: 30, y: F }, backLeg: { x: -22, y: F } }), ...bullet('frontHand', 40) },

@@ -42,7 +42,7 @@ Rules from the player:
 | 2 | Judo Throw Shot (hip-throw pose, shoot down), Arm Lock Triple Tap, Reload Kick (kick while the mag drops), Headshot Pivot, Dual Pistols |
 | 3 | Shotgun Blast (big recoil step back), Slide Shot (knee slide, firing), Pencil Strike (a stab with a pencil prop), Wall Run Shot (airborne, sideways) |
 | 4 | Gun-Kata Spin (360 spin, shots at each quarter), Grapple and Execute, Shotgun Pump Combo (3 pumps, 3 blasts), Rolling Fire (roll, then kneel firing) |
-| 5 | Excommunicado (6-hit chain: kick, whip, double tap, throw, shot, holster), Baba Yaga (dual pistols fanning in a long spin), Last Bullet (a slow aim, one huge recoil shot, then blowing on the barrel) |
+| 5 | Blacklisted (6-hit chain: kick, whip, double tap, throw, shot, holster), Baba Yaga (dual pistols fanning in a long spin), Last Bullet (a slow aim, one huge recoil shot, then blowing on the barrel) |
 
 ## 2. The One: bullet-time martial artist (Neo style)
 
@@ -62,7 +62,7 @@ Rules from the player:
 | 2 | Bullet Dodge Lean-Back (bends right back, then springs up into a punch), Wall-Run Kick, Corkscrew Kick, Twin Palm Strike, Flying Knee |
 | 3 | Air Pirouette Kick, Staff-less Spin (hands-only spinning strikes), Lean-Back Flip Kick, Hundred Punch Blur |
 | 4 | **Float Kick** (floats up, 3 slow kicks in the air), **Hover Spin**, **Hang-Time Axe**, **Slow-Mo Flying Side Kick** |
-| 5 | Burly Brawl (6 hits, spinning between imagined attackers), Superman Punch (horizontal flying punch), I Know Kung Fu (classic stance, 5 lightning strikes, then he beckons) |
+| 5 | Surrounded (6 hits, spinning between imagined attackers), Superman Punch (horizontal flying punch), Instant Master (classic stance, 5 lightning strikes, then he beckons) |
 
 ## 3. Drunken Master: drunken boxing (Jackie Chan style)
 
@@ -121,7 +121,7 @@ Rules from the player:
 | 2 | Spinebuster (lift and slam), Running Shoulder Tackle, Elbow Drop (drops onto the floor), Dropkick (both feet, airborne), Leg Drop |
 | 3 | Suplex (arch back, slam), Flying Crossbody, Steel Chair Shot (chair prop), Spear (low running tackle) |
 | 4 | Powerbomb (lift high, slam down), Moonsault (backflip off the top, imagined ropes), Lariat Spin (spinning clothesline, 3 rotations), Piledriver Drop |
-| 5 | Five Moves of Doom (5-hit chain: shoulder, slam, boot, taunt, leg drop), Flying Elbow from the Top Rope (huge airborne drop), Championship Finisher (belt raise, then a running powerbomb slam) |
+| 5 | Five-Move Finale (5-hit chain: shoulder, slam, boot, taunt, leg drop), Flying Elbow from the Top Rope (huge airborne drop), Championship Finisher (belt raise, then a running powerbomb slam) |
 
 ---
 

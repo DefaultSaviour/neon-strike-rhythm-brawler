@@ -149,7 +149,7 @@ export const THE_ONE_MOVES: AttackMove[] = [
   ]),
 
   // ================= Tier 5: legendary finishers =================
-  combo(5, 'Burly Brawl', 'Surrounded: a punch ahead, a kick behind, a kick ahead, and a final palm', [
+  combo(5, 'Surrounded', 'Surrounded: a punch ahead, a kick behind, a kick ahead, and a final palm', [
     { pelvis: { x: 2, y: 12 }, lean: 12, frontArm: straight(-4), backArm: guard, ...wide, trail: { from: 'frontHand', reach: 18 } },
     { ms: 110, pelvis: { x: 0, y: 8 }, lean: 30, frontArm: { upper: 120, lower: 100 }, backArm: guard, frontLeg: { x: 10, y: F }, backLeg: straight(176), trail: { from: 'backFoot', reach: 20 } },
     { ms: 110, pelvis: { x: 0, y: 8 }, lean: -26, frontArm: guard, backArm: armsBack, frontLeg: straight(-12), backLeg: { x: -12, y: F }, trail: { from: 'frontFoot', reach: 20 } },
@@ -159,7 +159,7 @@ export const THE_ONE_MOVES: AttackMove[] = [
     { pelvis: { x: 0, y: -10 }, lean: 70, frontArm: straight(-2), backArm: straight(170), frontLeg: straight(165), backLeg: straight(175), trail: { from: 'frontHand', reach: 28 } },
     { ms: 220, pelvis: { x: 4, y: 40 }, lean: 30, frontArm: { upper: 70, lower: 90 }, backArm: armsBack, frontLeg: { x: 24, y: F }, backLeg: { upper: 100, lower: 175 } },
   ]),
-  combo(5, 'I Know Kung Fu', 'Jab, high kick, a palm to the chest, then he stands tall and beckons', [
+  combo(5, 'Instant Master', 'Jab, high kick, a palm to the chest, then he stands tall and beckons', [
     { pelvis: { x: 2, y: 12 }, lean: 10, frontArm: straight(-4), backArm: guard, ...wide, trail: { from: 'frontHand', reach: 18 } },
     { ms: 110, pelvis: { x: 0, y: 8 }, lean: -28, frontArm: guard, backArm: armsBack, frontLeg: straight(-22), backLeg: { x: -12, y: F }, trail: { from: 'frontFoot', reach: 22 } },
     { ms: 120, ...lunge, lean: 20, frontArm: straight(0), backArm: relaxed, trail: { from: 'frontHand', reach: 22 } },
