@@ -20,7 +20,7 @@ export interface LimbAngles {
 
 /** A trail for the hit effect, swept by the end of one limb. */
 export interface TrailSpec {
-  from: 'frontHand' | 'backHand' | 'frontFoot' | 'backFoot' | 'frontKnee' | 'frontElbow';
+  from: 'frontHand' | 'backHand' | 'frontFoot' | 'backFoot' | 'frontKnee' | 'frontElbow' | 'head';
   /** How far the trail reaches past the limb (world units) */
   reach?: number;
   /** Bend of the crescent (+ curves one way, - the other) */
@@ -48,6 +48,43 @@ const SPINE = 30;
 const NECK = 26;
 const SHOULDER_SPREAD = 3;
 const rad = (d: number) => (d * Math.PI) / 180;
+
+/** Where the chest and a shoulder end up for this spec (same maths as buildKey). */
+function shoulderOf(spec: FighterSpec, side: 'front' | 'back'): Point {
+  const lean = rad(spec.lean ?? 0);
+  const chest = { x: spec.pelvis.x + Math.sin(lean) * SPINE, y: spec.pelvis.y - Math.cos(lean) * SPINE };
+  return { x: chest.x + (side === 'front' ? SHOULDER_SPREAD : -SHOULDER_SPREAD), y: chest.y + 1 };
+}
+
+/** Where a hand ends up for this spec. */
+export function handOf(spec: FighterSpec, side: 'front' | 'back'): Point {
+  const s = shoulderOf(spec, side);
+  const a = safeFold(side === 'front' ? spec.frontArm : spec.backArm);
+  return limbByAngles(s, a.upper, a.lower, LIMB.upperArm, LIMB.forearm).end;
+}
+
+/** Where the head ends up for this spec. */
+export function headOf(spec: FighterSpec): Point {
+  const lean = rad(spec.lean ?? 0);
+  const tilt = rad((spec.lean ?? 0) + (spec.tilt ?? 0));
+  const chest = { x: spec.pelvis.x + Math.sin(lean) * SPINE, y: spec.pelvis.y - Math.cos(lean) * SPINE };
+  return { x: chest.x + Math.sin(tilt) * NECK, y: chest.y - Math.cos(tilt) * NECK };
+}
+
+/**
+ * Arm angles that put this side's hand on `target` (as near as the arm can
+ * reach), elbow bent downward. For hands that must meet something: a hand
+ * gripping the same weapon, or lifting a drink to the mouth.
+ */
+export function armReaching(spec: FighterSpec, side: 'front' | 'back', target: Point): LimbAngles {
+  const s = shoulderOf(spec, side);
+  const reach = LIMB.upperArm + LIMB.forearm;
+  const d = Math.min(reach - 0.5, Math.max(4, Math.hypot(target.x - s.x, target.y - s.y)));
+  const toward = Math.atan2(target.y - s.y, target.x - s.x);
+  const bend = Math.acos(d / reach);
+  const deg = (r: number) => (r * 180) / Math.PI;
+  return { upper: deg(toward + bend), lower: deg(toward - bend) };
+}
 
 function isAngles(v: LimbAngles | Point): v is LimbAngles {
   return 'upper' in v;
@@ -144,7 +181,9 @@ function trailFor(p: EnemyPose, trail: TrailSpec, color: string): NonNullable<Sk
             ? [p.backKnee, p.backFoot]
             : trail.from === 'frontElbow'
               ? [p.frontShoulder, p.frontElbow]
-              : [p.pelvis, p.frontKnee];
+              : trail.from === 'head'
+                ? [p.chest, p.head]
+                : [p.pelvis, p.frontKnee];
   const dx = end.x - joint.x;
   const dy = end.y - joint.y;
   const len = Math.hypot(dx, dy) || 1;

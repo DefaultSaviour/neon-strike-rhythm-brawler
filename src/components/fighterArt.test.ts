@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { codeRainStreaks, coinHalo, dragonSpiritPath } from './fighterArt';
+import { codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -58,5 +58,28 @@ describe("The One's code rain (top-level form)", () => {
     const a = codeRainStreaks(pose, 0);
     const b = codeRainStreaks(pose, 0.1);
     expect(b.filter((s, i) => s.y > a[i].y).length).toBeGreaterThan(a.length / 2);
+  });
+});
+
+describe("the Drunken Master's dizzy halo (top-level form)", () => {
+  const pose = getHero('drunkenMaster').idlePose;
+
+  it('stars and birds circle his head, some in front and some behind', () => {
+    const items = dizzyHalo(pose, 0.3, 50);
+    expect(items.filter((i) => i.kind === 'star').length).toBeGreaterThanOrEqual(3);
+    expect(items.filter((i) => i.kind === 'bird').length).toBeGreaterThanOrEqual(2);
+    for (const i of items) {
+      expect(Math.abs(i.x - pose.head.x)).toBeLessThanOrEqual(34 + 1e-6);
+      expect(Math.abs(i.y - (pose.head.y - 16))).toBeLessThanOrEqual(10 + 1e-6);
+    }
+    expect(items.some((i) => i.front)).toBe(true);
+    expect(items.some((i) => !i.front)).toBe(true);
+  });
+
+  it('spins faster as the combo climbs', () => {
+    expect(dizzySpeed(80)).toBeGreaterThan(dizzySpeed(50));
+    const a = dizzyHalo(pose, 0, 50)[0];
+    const b = dizzyHalo(pose, 0.2, 50)[0];
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(3);
   });
 });
