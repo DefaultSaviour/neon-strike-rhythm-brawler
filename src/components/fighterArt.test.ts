@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, katanaTip, moonlitSnow, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -205,5 +205,27 @@ describe("The Disco King's disco fever (top-level form)", () => {
   it('the ball turns and the floor lights change', () => {
     expect(discoFever(pose, 1).ball.turn).not.toBe(discoFever(pose, 0).ball.turn);
     expect(discoFever(pose, 0.3).tiles[0].color).not.toBe(discoFever(pose, 0).tiles[0].color);
+  });
+});
+
+describe("The Bride's katana and moonlit snow", () => {
+  const br = getHero('bride');
+
+  it('every sword hit lands at the tip of her blade', () => {
+    for (const m of br.moves) {
+      for (const k of m.sequence!) {
+        if (!k.trail) continue;
+        expect(dist(katanaTip(keyToPlayerPose(k), 1), k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+  });
+
+  it('a giant full moon behind her, bigger than she is, and snow drifting down', () => {
+    const { moon, flakes } = moonlitSnow(br.idlePose, 0);
+    expect(moon.radius * 2).toBeGreaterThan(100);
+    expect(moon.y).toBeLessThan(br.idlePose.chest.y);
+    expect(flakes.length).toBeGreaterThanOrEqual(30);
+    expect(flakes.some((f) => f.front)).toBe(true);
+    expect(moonlitSnow(br.idlePose, 0.5).flakes[0].y).toBeGreaterThan(flakes[0].y);
   });
 });

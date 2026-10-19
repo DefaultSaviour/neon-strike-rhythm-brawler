@@ -10,6 +10,7 @@ import { PRIMA_BALLERINA_IDLE, PRIMA_BALLERINA_MOVES } from './heroMoves/primaBa
 import { PRO_WRESTLER_IDLE, PRO_WRESTLER_MOVES } from './heroMoves/proWrestler';
 import { SPARTAN_IDLE, SPARTAN_MOVES } from './heroMoves/spartan';
 import { STALLION_IDLE, STALLION_MOVES } from './heroMoves/stallion';
+import { BRIDE_IDLE, BRIDE_MOVES } from './heroMoves/theBride';
 import { THE_KID_IDLE, THE_KID_MOVES } from './heroMoves/theKid';
 import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
 
@@ -20,7 +21,7 @@ import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid' | 'spartan' | 'discoKing';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid' | 'spartan' | 'discoKing' | 'bride';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -109,6 +110,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Fights like he dances: the point to the sky, hip-swing kicks, spins and knee slides',
     idlePose: DISCO_KING_IDLE,
     moves: DISCO_KING_MOVES,
+  },
+  {
+    id: 'bride',
+    label: 'The Bride',
+    description: 'A katana and a list: quick draws, clean cuts and thrusts, and a whirlwind finisher',
+    idlePose: BRIDE_IDLE,
+    moves: BRIDE_MOVES,
   },
 ];
 
