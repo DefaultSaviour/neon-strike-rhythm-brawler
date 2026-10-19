@@ -74,6 +74,28 @@ const cross = (deg = -2, extra: Partial<Key> = {}): Key => ({
   trail: { from: 'backHand', reach: 20 },
   ...extra,
 });
+/** Skipping: tucked in a little hop, the rope whipping under his feet (the hit). */
+const ropeHop = (): Key => ({
+  pelvis: { x: 0, y: 30 },
+  lean: 6,
+  frontArm: { upper: 60, lower: 10 },
+  backArm: { upper: 120, lower: 170 },
+  frontLeg: { x: 10, y: 60 },
+  backLeg: { x: -8, y: 60 },
+  prop: 'ropeUnder',
+  trail: { from: 'frontHand', reach: 16, curve: 20 },
+});
+/** Skipping: standing tall, hands out by the shoulders, the rope swung up over his head. */
+const ropeOverhead = (ms: number): Key => ({
+  ms,
+  pelvis: { x: 0, y: 12 },
+  lean: 0,
+  frontArm: { upper: 40, lower: -60 },
+  backArm: { upper: 140, lower: -120 },
+  frontLeg: { x: 6, y: F },
+  backLeg: { x: -4, y: F },
+  prop: 'ropeOver',
+});
 /** Back in his guard, hands up. */
 const guardUp = (ms: number, extra: Partial<Key> = {}): Key => ({ ms, pelvis: { x: 0, y: 12 }, lean: 10, tilt: 6, frontArm: guardFront, backArm: guardBack, ...stance, ...extra });
 
@@ -137,26 +159,11 @@ const BUILT_MOVES: AttackMove[] = [
     guardUp(180, { tilt: -10 }),
   ]),
 
-  // ================= Tier 4: heavyweight =================
-  combo(4, 'Haymaker', 'Winds right back and throws everything into one huge rear hand', [
-    { ...stepIn, lean: 30, tilt: 6, frontArm: { upper: 120, lower: 100 }, backArm: straight(-8), trail: { from: 'backHand', reach: 26, curve: 24 } },
-    guardUp(190),
-  ]),
-  combo(4, 'Three-Piece', 'Hook, hook, uppercut, digging in close', [
-    { pelvis: { x: 4, y: 14 }, lean: 10, tilt: -6, frontArm: hook, backArm: guardBack, ...stance, trail: { from: 'frontHand', reach: 18, curve: 20 } },
-    { ms: 90, pelvis: { x: 4, y: 14 }, lean: 12, tilt: 6, frontArm: guardFront, backArm: hook, ...stance, trail: { from: 'backHand', reach: 18, curve: 20 } },
-    { ms: 90, ...low, pelvis: { x: 4, y: 22 }, lean: 6, frontArm: uppercut, backArm: guardBack, trail: { from: 'frontHand', reach: 20, curve: -12 } },
-  ]),
-  combo(4, 'Corner Barrage', 'Traps them on the ropes and unloads both hands', [
-    cross(4),
-    { ms: 75, ...jab(2, { pelvis: { x: 6, y: 14 } }) },
-    { ms: 75, ...cross(-4) },
-  ]),
-  combo(4, 'Training Montage', 'A blur of punches as if the whole training montage plays at once', [
-    { ...low, lean: 24, frontArm: straight(18), backArm: guardBack, trail: { from: 'frontHand', reach: 18 } },
-    { ms: 80, ...jab(-4) },
-    { ms: 90, pelvis: { x: 0, y: 10 }, lean: -4, frontArm: armsUp, backArm: armsUpBack, ...stance },
-  ]),
+  // ================= Tier 4: the skipping rope =================
+  // His whole tier 4 is one move: skipping, like the training-gym scenes.
+  // The hop (rope whipping under his feet) is the hit; between hops the rope
+  // swings up over his head.
+  combo(4, 'Skipping Rope', 'Skips rope like it is the last week of training camp', [ropeHop(), ropeOverhead(120), { ms: 110, ...ropeHop() }]),
 
   // ================= Tier 5: legendary finishers =================
   combo(5, 'The Distance', 'Jab, cross, hook and uppercut: everything he has left, still standing at the end', [

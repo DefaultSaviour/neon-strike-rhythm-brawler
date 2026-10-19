@@ -85,29 +85,6 @@ export const STALLION_POSE_EDITS: Record<string, HeroPoseEdit> = {
       pose({ pelvis: { x: 0, y: 12 }, chest: { x: 5.2, y: -17.5 }, head: { x: 5.2, y: -43.5 }, frontHand: { x: 12.6, y: -19.9 }, backHand: { x: 6.3, y: -20.2 }, frontFoot: { x: 22, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, 1, -1, -1]),
     ],
   },
-  'Haymaker': {
-    ms: [0, 190],
-    poses: [
-      pose({ pelvis: { x: 6, y: 16 }, chest: { x: 23.4, y: -8.4 }, head: { x: 40.6, y: -27.9 }, frontHand: { x: 15.5, y: 33 }, backHand: { x: 58.2, y: -18.5 }, frontFoot: { x: 30, y: 68 }, backFoot: { x: -14, y: 68 } }, [1, 1, -1, -1]),
-      pose({ pelvis: { x: 0, y: 12 }, chest: { x: 5.2, y: -17.5 }, head: { x: 12.4, y: -42.5 }, frontHand: { x: 12.6, y: -19.9 }, backHand: { x: 6.3, y: -20.2 }, frontFoot: { x: 22, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, 1, -1, -1]),
-    ],
-  },
-  'Three-Piece': {
-    ms: [0, 90, 90],
-    poses: [
-      pose({ pelvis: { x: 4, y: 14 }, chest: { x: 19.4, y: -11.7 }, head: { x: 30.3, y: -35.3 }, frontHand: { x: 51.1, y: 16.1 }, backHand: { x: 48.3, y: -5.4 }, frontFoot: { x: 22, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, 1, -1, -1]),
-      pose({ pelvis: { x: 4, y: 14 }, chest: { x: 10.2, y: -15.3 }, head: { x: 18.3, y: -40.1 }, frontHand: { x: 17.6, y: -17.7 }, backHand: { x: 38.5, y: 0.9 }, frontFoot: { x: 22, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, -1, -1, -1]),
-      pose({ pelvis: { x: 4, y: 22 }, chest: { x: 7.1, y: -7.8 }, head: { x: 9.9, y: -33.7 }, frontHand: { x: 27, y: -14.3 }, backHand: { x: 8.2, y: -10.5 }, frontFoot: { x: 26, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, 1, -1, -1]),
-    ],
-  },
-  'Training Montage': {
-    ms: [0, 80, 90],
-    poses: [
-      pose({ pelvis: { x: 8.8, y: 25.5 }, chest: { x: 21, y: -1.9 }, head: { x: 31.6, y: -25.6 }, frontHand: { x: 62.4, y: 11.3 }, backHand: { x: 22.1, y: -4.6 }, frontFoot: { x: 26, y: 68 }, backFoot: { x: -24.4, y: 67.1 } }, [1, 1, -1, -1]),
-      pose({ pelvis: { x: 4, y: 13 }, chest: { x: 11.3, y: -16.1 }, head: { x: 17.5, y: -41.3 }, frontHand: { x: 56.2, y: -18 }, backHand: { x: 12.3, y: -18.8 }, frontFoot: { x: 22, y: 68 }, backFoot: { x: -18, y: 68 } }, [1, 1, -1, -1]),
-      pose({ pelvis: { x: 0, y: 10 }, chest: { x: -2.1, y: -19.9 }, head: { x: -3.9, y: -45.9 }, frontHand: { x: 0.9, y: -60.9 }, backHand: { x: -9.5, y: -60.7 }, frontFoot: { x: 22, y: 68 }, backFoot: { x: -18, y: 68 } }, [-1, 1, -1, -1]),
-    ],
-  },
   'Comeback': {
     ms: [0, 110, 100],
     poses: [

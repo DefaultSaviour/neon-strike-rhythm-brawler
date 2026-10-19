@@ -132,6 +132,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (pose.prop === 'chair') drawSteelChair(ctx, pose, opts.facing);
   if (opts.hero === 'ballerina') drawBallerinaOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (opts.hero === 'stallion') drawStallionOutfit(ctx, pose, tier, opts.facing);
+  if (pose.prop === 'ropeOver' || pose.prop === 'ropeUnder') drawSkippingRope(ctx, pose);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
@@ -964,6 +965,30 @@ function drawWrestlerOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, fac
 }
 
 /** A folding steel chair, folded flat, gripped in both hands and swung seat-first. */
+/** A skipping rope held in both hands, its loop swung up over the head or down under the feet. */
+function drawSkippingRope(ctx: Ctx, pose: SkeletonPose) {
+  const a = pose.leftHand;
+  const b = pose.rightHand;
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const apexY = pose.prop === 'ropeOver' ? pose.head.y - 28 : Math.max(pose.leftFoot.y, pose.rightFoot.y) + 5;
+  // A quadratic curve through the apex: its control point sits twice as far out
+  const control = { x: mid.x, y: 2 * apexY - mid.y };
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.quadraticCurveTo(control.x, control.y, b.x, b.y);
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.strokeStyle = '#ffe9e6';
+  ctx.shadowColor = '#ff4a3d';
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawSteelChair(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
   const { lead, rear } = arms(pose, facing);
   const dx = lead.hand.x - rear.hand.x;

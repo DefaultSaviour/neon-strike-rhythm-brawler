@@ -571,11 +571,11 @@ describe('The Stallion', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(st.moves).toHaveLength(21);
+  it('has 18 moves spread over the 5 combo tiers (5, 5, 4, 1, 3), all with different names', () => {
+    expect(st.moves).toHaveLength(18);
     const perTier = [1, 2, 3, 4, 5].map((t) => st.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(st.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 4, 1, 3]); // tier 4 is one move: the skipping rope
+    expect(new Set(st.moves.map((m) => m.name)).size).toBe(18);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -615,8 +615,8 @@ describe('The Stallion', () => {
     for (const m of st.moves) {
       for (const k of m.sequence!) {
         if (k.trail) expect(Math.min(dist(k.trail.end, k.pose.frontHand), dist(k.trail.end, k.pose.backHand)), m.name).toBeLessThan(30);
-        // No kicks, no jumps (rising onto the toes behind a punch is fine)
-        expect(Math.min(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(64);
+        // No kicks, no jumps (rising onto the toes behind a punch is fine; skipping rope hops)
+        if (m.name !== 'Skipping Rope') expect(Math.min(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(64);
       }
     }
   });
