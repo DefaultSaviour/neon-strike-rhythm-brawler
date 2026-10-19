@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -188,5 +188,22 @@ describe("The Spartan's gear and shield wall", () => {
     const w = spartanWall(sp.idlePose, 0);
     expect(w.shields * w.radius * 1.55).toBeGreaterThan(80);
     expect(spartanWall(sp.idlePose, 0.5).arrows[0].y).toBeGreaterThan(w.arrows[0].y);
+  });
+});
+
+describe("The Disco King's disco fever (top-level form)", () => {
+  const pose = getHero('discoKing').idlePose;
+
+  it('a big mirror ball hanging over his head, and a light-up floor under his feet', () => {
+    const { ball, tiles } = discoFever(pose, 0);
+    expect(ball.y).toBeLessThan(pose.head.y - 30);
+    expect(ball.radius * 2).toBeGreaterThan(36);
+    expect(tiles.length).toBeGreaterThanOrEqual(8);
+    for (const t of tiles) expect(t.y).toBeGreaterThanOrEqual(60);
+  });
+
+  it('the ball turns and the floor lights change', () => {
+    expect(discoFever(pose, 1).ball.turn).not.toBe(discoFever(pose, 0).ball.turn);
+    expect(discoFever(pose, 0.3).tiles[0].color).not.toBe(discoFever(pose, 0).tiles[0].color);
   });
 });

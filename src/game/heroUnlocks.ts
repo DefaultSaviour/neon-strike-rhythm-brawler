@@ -41,13 +41,14 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
   stallion: { stat: 'songsCleared', target: 3, label: 'Complete 3 songs' },
   kid: { stat: 'playSeconds', target: 1800, label: 'Train for 30 minutes' },
   spartan: { stat: 'enemiesDefeated', target: 300, label: 'Defeat 300 enemies' },
+  discoKing: { stat: 'perfects', target: 100, label: 'Land 100 PERFECT hits' },
   proWrestler: { stat: 'enemiesDefeated', target: 1000, label: 'Defeat 1,000 enemies' },
   babaYaga: { stat: 'bestCombo', target: 100, label: 'Reach a 100 combo' },
   ballerina: { stat: 'perfects', target: 200, label: 'Land 200 PERFECT hits' },
 };
 
 /** Heroes in the order players earn them, easiest first: the picker lists them this way, as a path. */
-export const UNLOCK_ORDER: HeroId[] = ['striker', 'dragon', 'theOne', 'drunkenMaster', 'stallion', 'spartan', 'kid', 'proWrestler', 'babaYaga', 'ballerina'];
+export const UNLOCK_ORDER: HeroId[] = ['striker', 'dragon', 'theOne', 'drunkenMaster', 'stallion', 'spartan', 'kid', 'discoKing', 'proWrestler', 'babaYaga', 'ballerina'];
 
 export function isHeroUnlocked(id: HeroId, stats: LifetimeStats): boolean {
   const goal = HERO_UNLOCKS[id];

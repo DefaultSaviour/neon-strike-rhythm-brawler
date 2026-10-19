@@ -841,3 +841,67 @@ describe('The Spartan', () => {
     expect(isHeroUnlocked('spartan', after(300))).toBe(true);
   });
 });
+
+describe('The Disco King', () => {
+  const dk = getHero('discoKing');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(dk.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => dk.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(dk.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [dk.idlePose, ...dk.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of dk.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of dk.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of dk.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('strikes the pose: finger to the sky, other hand on the hip', () => {
+    const pose = dk.moves.find((m) => m.name === 'Point to the Sky')!.pose;
+    expect(pose.leftHand.y).toBeLessThan(pose.head.y);
+    expect(pose.leftHand.x).toBeGreaterThan(pose.chest.x);
+    expect(dist(pose.rightHand, pose.pelvis)).toBeLessThan(14);
+  });
+
+  it('spins in his spin moves', () => {
+    const spin = dk.moves.find((m) => m.name === 'Disco Spin')!;
+    expect(spin.sequence![0].spin).toBe(true);
+  });
+
+  it('is earned by landing 100 PERFECT hits', () => {
+    const after = (n: number) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0 });
+    expect(isHeroUnlocked('discoKing', after(99))).toBe(false);
+    expect(isHeroUnlocked('discoKing', after(100))).toBe(true);
+  });
+});

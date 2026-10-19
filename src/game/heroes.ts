@@ -3,6 +3,7 @@ import { getSavedHeroPoses } from './heroPoseLibrary';
 import { HeroPoseLibrary, heroWithEdits } from './heroPoses';
 import { ATTACK_MOVES, IDLE_POSE } from './animations';
 import { BABA_YAGA_IDLE, BABA_YAGA_MOVES } from './heroMoves/babaYaga';
+import { DISCO_KING_IDLE, DISCO_KING_MOVES } from './heroMoves/discoKing';
 import { DRUNKEN_MASTER_IDLE, DRUNKEN_MASTER_MOVES } from './heroMoves/drunkenMaster';
 import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDragon';
 import { PRIMA_BALLERINA_IDLE, PRIMA_BALLERINA_MOVES } from './heroMoves/primaBallerina';
@@ -19,7 +20,7 @@ import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid' | 'spartan';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid' | 'spartan' | 'discoKing';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -101,6 +102,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Shield and spear: thrusts over the shield, shield bashes, and the kick into the pit',
     idlePose: SPARTAN_IDLE,
     moves: SPARTAN_MOVES,
+  },
+  {
+    id: 'discoKing',
+    label: 'The Disco King',
+    description: 'Fights like he dances: the point to the sky, hip-swing kicks, spins and knee slides',
+    idlePose: DISCO_KING_IDLE,
+    moves: DISCO_KING_MOVES,
   },
 ];
 
