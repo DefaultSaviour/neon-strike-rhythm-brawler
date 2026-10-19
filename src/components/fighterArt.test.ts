@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanHalo, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -170,7 +170,7 @@ describe("The Kid's crane (top-level form)", () => {
   });
 });
 
-describe("The Spartan's gear and golden halo", () => {
+describe("The Spartan's gear and battle plate", () => {
   const sp = getHero('spartan');
 
   it('every spear hit lands at the tip of his spear', () => {
@@ -184,12 +184,15 @@ describe("The Spartan's gear and golden halo", () => {
     }
   });
 
-  it('a halo of golden light flaring behind his shoulders, wider than he is, turning and pulsing', () => {
-    const h = spartanHalo(sp.idlePose, 0);
-    expect(Math.abs(h.x - sp.idlePose.chest.x)).toBeLessThan(1);
-    expect(h.radius * 2).toBeGreaterThan(80);
-    expect(spartanHalo(sp.idlePose, 1).turn).not.toBe(h.turn);
-    expect(spartanHalo(sp.idlePose, 0.4).pulse).not.toBeCloseTo(h.pulse, 2);
+  it('his battle plate: greaves down both shins and guards along both forearms', () => {
+    const pose = sp.idlePose;
+    const plate = battlePlate(pose);
+    expect(plate.greaves).toHaveLength(2);
+    expect(plate.armGuards).toHaveLength(2);
+    for (const [a, b] of plate.greaves) {
+      expect(a.y).toBeGreaterThan(Math.min(pose.leftKnee.y, pose.rightKnee.y) - 1);
+      expect(dist(a, b)).toBeGreaterThan(15);
+    }
   });
 });
 
