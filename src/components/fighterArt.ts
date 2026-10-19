@@ -56,8 +56,8 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else drawAngelWings(ctx, pose, opts.time);
   }
 
-  // 1b. The Bride's ponytail swings behind her head
-  if (opts.hero === 'bride') drawPonytail(ctx, pose, opts.facing, opts.time);
+  // 1b. The Bride's ponytail swings behind her head (tucked into the helmet in her top form)
+  if (opts.hero === 'bride' && !tier.ascended) drawPonytail(ctx, pose, opts.facing, opts.time);
   // The Spartan's red cape hangs behind him
   if (opts.hero === 'spartan') drawSpartanCape(ctx, pose, opts.facing, opts.time);
 
