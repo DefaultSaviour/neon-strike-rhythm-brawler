@@ -3,6 +3,7 @@ import { AttackMove, Point2D, SkeletonPose } from '../types/game';
 import { ATTACK_MOVES, getMoveForCombo, getOrientedPose } from './animations';
 import { LIMB } from './enemyMotion';
 import { DEFAULT_HERO, getHero, HEROES } from './heroes';
+import { isHeroUnlocked } from './heroUnlocks';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
 import { COMBO_SNAP_SEC, comboDuration, comboFrame } from './combo';
 import { muzzlePoint } from '../components/fighterArt';
@@ -565,9 +566,79 @@ describe('The White Swan', () => {
   });
 });
 
+describe('The Stallion', () => {
+  const st = getHero('stallion');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(st.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => st.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(st.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [st.idlePose, ...st.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of st.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of st.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of st.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('is a boxer: every hit is a punch, and his feet stay planted', () => {
+    for (const m of st.moves) {
+      for (const k of m.sequence!) {
+        if (k.trail) expect(Math.min(dist(k.trail.end, k.pose.frontHand), dist(k.trail.end, k.pose.backHand)), m.name).toBeLessThan(30);
+        // No kicks, no jumps
+        expect(Math.min(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(67);
+      }
+    }
+  });
+
+  it('stands in a boxing guard: both gloves up by his chin', () => {
+    const idle = st.idlePose;
+    for (const hand of [idle.leftHand, idle.rightHand]) {
+      expect(dist(hand, idle.head)).toBeLessThan(26);
+      expect(hand.y).toBeLessThan(idle.chest.y);
+    }
+  });
+
+  it('is earned by completing 3 songs', () => {
+    const later = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: n, playSeconds: 0, adUnlocks: 0 });
+    expect(isHeroUnlocked('stallion', later(2))).toBe(false);
+    expect(isHeroUnlocked('stallion', later(3))).toBe(true);
+  });
+});
+
 describe('hit effects on held combos', () => {
   it("never blink off and back on during one hit: the trail stays on from the hit through its hold", () => {
-    for (const hero of [getHero('babaYaga'), getHero('theOne'), getHero('drunkenMaster'), getHero('proWrestler'), getHero('ballerina')]) {
+    for (const hero of [getHero('babaYaga'), getHero('theOne'), getHero('drunkenMaster'), getHero('proWrestler'), getHero('ballerina'), getHero('stallion')]) {
       for (const m of hero.moves) {
         const keys = m.sequence!;
         const total = comboDuration(keys);
