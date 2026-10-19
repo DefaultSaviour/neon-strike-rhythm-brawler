@@ -47,6 +47,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'stallion') drawSunriseSteps(ctx, pose, opts.time);
     else if (opts.hero === 'kid') drawCraneSpirit(ctx, pose, opts.time, opts.facing);
     else if (opts.hero === 'spartan') drawShieldWall(ctx, pose, opts.time, opts.facing);
+    else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -142,6 +143,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'stallion') drawStallionOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'kid') drawKidOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
   if (pose.prop === 'ropeOver' || pose.prop === 'ropeUnder') drawSkippingRope(ctx, pose);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
@@ -1295,6 +1297,164 @@ export function ballerinaArms(pose: SkeletonPose): SkeletonPose {
     rightElbow: stretch(pose.rightShoulder, pose.rightElbow),
     rightHand: stretch(pose.rightShoulder, pose.rightHand),
   };
+}
+
+/** The Disco King's top-level form: where the disco ball hangs and how far it has turned, and the lit floor tiles. */
+export function discoFever(pose: SkeletonPose, time: number) {
+  const ball = { x: pose.chest.x, y: pose.head.y - 52, radius: 22, turn: time * 1.6 };
+  const colors = ['#ff4fd8', '#4fd8ff', '#ffe14f', '#7dff6a'];
+  // Five tiles across, two rows deep, under his feet; the colours step round on the beat-ish clock
+  const step = Math.floor(time * 4);
+  const tiles = [];
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 5; col++) {
+      tiles.push({ x: pose.pelvis.x - 60 + col * 24, y: 66 + row * 9, color: colors[(col + row * 2 + step) % colors.length] });
+    }
+  }
+  return { ball, tiles };
+}
+
+/** A giant mirror ball turning over his head, beams of light sweeping down, and a light-up floor. */
+function drawDiscoFever(ctx: Ctx, pose: SkeletonPose, time: number) {
+  const { ball, tiles } = discoFever(pose, time);
+  ctx.save();
+  // The floor: glowing tiles, a little in perspective
+  for (const t of tiles) {
+    ctx.fillStyle = t.color;
+    ctx.globalAlpha = 0.45;
+    ctx.shadowColor = t.color;
+    ctx.shadowBlur = 12;
+    ctx.fillRect(t.x, t.y, 22, 8);
+  }
+  ctx.globalAlpha = 1;
+  // Beams of light from the ball, sweeping as it turns
+  ctx.shadowBlur = 0;
+  for (let i = 0; i < 5; i++) {
+    const a = Math.PI / 2 + Math.sin(ball.turn * 0.7 + i * 1.3) * 0.9;
+    ctx.strokeStyle = ['rgba(255,79,216,0.25)', 'rgba(79,216,255,0.25)', 'rgba(255,225,79,0.25)'][i % 3];
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(ball.x, ball.y);
+    ctx.lineTo(ball.x + Math.cos(a) * 170, ball.y + Math.sin(a) * 170);
+    ctx.stroke();
+  }
+  // The chain, and the ball: silver, with a grid of mirror facets that slide round as it turns
+  ctx.strokeStyle = '#8a90a6';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ball.x, ball.y - ball.radius - 30);
+  ctx.lineTo(ball.x, ball.y - ball.radius);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+  ctx.fillStyle = '#b9c0d4';
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 18;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.shadowBlur = 0;
+  const facet = 6;
+  const shift = ((ball.turn * 10) % facet) - facet;
+  for (let y = ball.y - ball.radius; y < ball.y + ball.radius; y += facet) {
+    for (let x = ball.x - ball.radius + shift; x < ball.x + ball.radius; x += facet) {
+      const glint = Math.sin(x * 0.9 + y * 1.3 + ball.turn * 3) > 0.6;
+      ctx.fillStyle = glint ? '#ffffff' : (Math.floor((x - shift) / facet + y / facet) % 2 === 0 ? '#9aa1b6' : '#d6dbe8');
+      ctx.fillRect(x + 0.5, y + 0.5, facet - 1, facet - 1);
+    }
+  }
+  ctx.restore();
+  ctx.restore();
+}
+
+/**
+ * The Disco King: a white suit jacket with huge pointed collar, an open
+ * black shirt, flared white trousers and big dark feathered hair.
+ */
+function drawDiscoSuit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // White jacket over the torso
+  ctx.fillStyle = '#f4f4f8';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 11, c.y + ny * 11);
+  ctx.lineTo(c.x - nx * 11, c.y - ny * 11);
+  ctx.lineTo(p.x - nx * 9, p.y - ny * 9);
+  ctx.lineTo(p.x + nx * 9, p.y + ny * 9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // The open black shirt: a deep V down the chest
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#16121c';
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 5, c.y + ny * 5);
+  ctx.lineTo(c.x + sx * 0.55, c.y + sy * 0.55);
+  ctx.lineTo(c.x - nx * 5, c.y - ny * 5);
+  ctx.closePath();
+  ctx.fill();
+  // The huge collar: two long white points spread out over the shoulders
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  for (const side of [1, -1]) {
+    ctx.beginPath();
+    ctx.moveTo(c.x + nx * 4 * side, c.y + ny * 4 * side - 1);
+    ctx.lineTo(c.x + nx * 15 * side + sx * 0.18, c.y + ny * 15 * side + sy * 0.18);
+    ctx.lineTo(c.x + nx * 6 * side + sx * 0.22, c.y + ny * 6 * side + sy * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  // Flares: the trouser legs bell out over each foot
+  for (const [knee, foot] of [
+    [pose.leftKnee, pose.leftFoot],
+    [pose.rightKnee, pose.rightFoot],
+  ] as const) {
+    const dx = foot.x - knee.x;
+    const dy = foot.y - knee.y;
+    const l = Math.hypot(dx, dy) || 1;
+    const fnx = -dy / l;
+    const fny = dx / l;
+    const top = { x: foot.x - (dx / l) * 12, y: foot.y - (dy / l) * 12 };
+    ctx.fillStyle = '#f4f4f8';
+    ctx.beginPath();
+    ctx.moveTo(top.x + fnx * 2.5, top.y + fny * 2.5);
+    ctx.lineTo(foot.x + fnx * 6, foot.y + fny * 6);
+    ctx.lineTo(foot.x - fnx * 6, foot.y - fny * 6);
+    ctx.lineTo(top.x - fnx * 2.5, top.y - fny * 2.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  // Big dark feathered hair: full on top and swept back over the ears
+  const h = pose.head;
+  ctx.fillStyle = '#2a1a12';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 9, h.y - 3);
+  ctx.quadraticCurveTo(h.x + facing * 8, h.y - 15, h.x - facing * 2, h.y - 14);
+  ctx.quadraticCurveTo(h.x - facing * 15, h.y - 12, h.x - facing * 13, h.y + 6);
+  ctx.quadraticCurveTo(h.x - facing * 8, h.y + 2, h.x - facing * 4, h.y - 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** The Spartan's top-level form: a wall of shields behind him and arrows raining down. */
