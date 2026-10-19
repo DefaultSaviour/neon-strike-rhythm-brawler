@@ -362,13 +362,22 @@ function rotateAround(p: Point, centre: Point, angle: number): Point {
  *    forearm / shin rides along, still pointing the same way (drag across
  *    the limb to bend it the other way).
  */
-export function moveHandle(rig: PoseRig, handle: DragHandle, target: Point): PoseRig {
+/** How far the hips may move while editing. Enemies keep to the timing zone; heroes get more room. */
+export interface HipLimits {
+  /** The hips stay within this distance either side of the centre */
+  zone: number;
+  /** The hips can't sink lower than this */
+  lowest: number;
+}
+export const ENEMY_HIP_LIMITS: HipLimits = { zone: HIP_ZONE, lowest: LOWEST_HIPS };
+
+export function moveHandle(rig: PoseRig, handle: DragHandle, target: Point, limits: HipLimits = ENEMY_HIP_LIMITS): PoseRig {
   const to = clampToBounds(target);
   const next: PoseRig = { ...rig, bends: { ...rig.bends } };
 
   if (handle === 'pelvis') {
     // The hips stay inside the timing zone (see HIP_ZONE) and above a deep squat.
-    const hips = { x: Math.min(HIP_ZONE, Math.max(-HIP_ZONE, to.x)), y: Math.min(LOWEST_HIPS, to.y) };
+    const hips = { x: Math.min(limits.zone, Math.max(-limits.zone, to.x)), y: Math.min(limits.lowest, to.y) };
     const d = { x: hips.x - rig.pelvis.x, y: hips.y - rig.pelvis.y };
     next.pelvis = hips;
     next.chest = add(rig.chest, d);

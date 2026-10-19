@@ -1,4 +1,6 @@
 import { AttackMove, SkeletonPose } from '../types/game';
+import { getSavedHeroPoses } from './heroPoseLibrary';
+import { HeroPoseLibrary, heroWithEdits } from './heroPoses';
 import { ATTACK_MOVES, IDLE_POSE } from './animations';
 import { BABA_YAGA_IDLE, BABA_YAGA_MOVES } from './heroMoves/babaYaga';
 import { DRUNKEN_MASTER_IDLE, DRUNKEN_MASTER_MOVES } from './heroMoves/drunkenMaster';
@@ -80,7 +82,24 @@ export const HEROES: HeroDefinition[] = [
 
 export const DEFAULT_HERO: HeroId = 'striker';
 
-/** The hero with this id, or the default one if it's unknown (old or hand-edited settings). */
+let editsSeen: HeroPoseLibrary | null = null;
+const edited = new Map<HeroId, HeroDefinition>();
+
+/**
+ * The hero with this id, or the default one if it's unknown (old or
+ * hand-edited settings), with any poses saved from the Pose Studio applied.
+ */
 export function getHero(id: string | undefined): HeroDefinition {
-  return HEROES.find((h) => h.id === id) ?? HEROES[0];
+  const base = HEROES.find((h) => h.id === id) ?? HEROES[0];
+  const lib = getSavedHeroPoses();
+  if (lib !== editsSeen) {
+    editsSeen = lib;
+    edited.clear();
+  }
+  let hero = edited.get(base.id);
+  if (!hero) {
+    hero = heroWithEdits(base, lib);
+    edited.set(base.id, hero);
+  }
+  return hero;
 }

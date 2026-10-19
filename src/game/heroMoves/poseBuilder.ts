@@ -179,7 +179,7 @@ export function buildFighterPose(spec: FighterSpec, trailColor: string): Skeleto
 }
 
 /** The glowing crescent swept by a limb: from partway down the limb to just past its end. */
-function trailFor(p: EnemyPose, trail: TrailSpec, color: string): NonNullable<SkeletonPose['bladeSlash']> {
+export function trailFor(p: EnemyPose, trail: TrailSpec, color: string): NonNullable<SkeletonPose['bladeSlash']> {
   const [joint, end] =
     trail.from === 'frontHand'
       ? [p.frontElbow, p.frontHand]
