@@ -45,7 +45,7 @@ import { drawEnemyArt } from './enemyArt';
 import { studioView } from './studioView';
 
 /**
- * Animation Studio: make your own moves for each enemy.
+ * Pose Studio (the Animation Studio): make your own moves for each enemy.
  *
  * Pick an enemy and the stance to replace, then drag the joints to build
  * Pose 1, Pose 2, ... The preview loops them on the beat. "Save to game"
@@ -528,7 +528,7 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800">
         <div>
-          <div className="text-lg font-black tracking-widest text-cyan-400">ANIMATION STUDIO</div>
+          <div className="text-lg font-black tracking-widest text-cyan-400">POSE STUDIO</div>
           <div className="text-[11px] text-slate-500">Make your own moves for each enemy</div>
         </div>
         <button
