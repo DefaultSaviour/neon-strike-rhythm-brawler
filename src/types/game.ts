@@ -118,6 +118,8 @@ export interface SkeletonPose {
   prop?: 'nunchaku' | 'pistol' | 'pistols' | 'shotgun' | 'pencil' | 'gourd' | 'gourdSwing' | 'bench' | 'chair';
   /** The gun in this hand fires in this pose (muzzle flash; the trail is the bullet streak) */
   shot?: 'lead' | 'rear';
+  /** Turning fast in this pose (a pirouette): draws a spin blur round the body */
+  spin?: boolean;
   bladeSlash?: {
     start: Point2D;
     end: Point2D;
@@ -138,6 +140,8 @@ export interface MoveKey {
   prop?: SkeletonPose['prop'];
   /** The gun in this hand fires on the way into this keyframe (needs a trail: it's the bullet streak) */
   shot?: SkeletonPose['shot'];
+  /** Turning fast on the way into this keyframe (a pirouette) */
+  spin?: boolean;
   /** A hold: the previous pose kept still, with its hit effect (trail, flash) still showing */
   hold?: boolean;
 }

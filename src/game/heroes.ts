@@ -3,6 +3,7 @@ import { ATTACK_MOVES, IDLE_POSE } from './animations';
 import { BABA_YAGA_IDLE, BABA_YAGA_MOVES } from './heroMoves/babaYaga';
 import { DRUNKEN_MASTER_IDLE, DRUNKEN_MASTER_MOVES } from './heroMoves/drunkenMaster';
 import { LITTLE_DRAGON_IDLE, LITTLE_DRAGON_MOVES } from './heroMoves/littleDragon';
+import { PRIMA_BALLERINA_IDLE, PRIMA_BALLERINA_MOVES } from './heroMoves/primaBallerina';
 import { PRO_WRESTLER_IDLE, PRO_WRESTLER_MOVES } from './heroMoves/proWrestler';
 import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
 
@@ -13,7 +14,7 @@ import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -67,6 +68,13 @@ export const HEROES: HeroDefinition[] = [
     description: 'Championship wrestling: chops, a steel chair and earth-shaking slams',
     idlePose: PRO_WRESTLER_IDLE,
     moves: PRO_WRESTLER_MOVES,
+  },
+  {
+    id: 'ballerina',
+    label: 'The Prima Ballerina',
+    description: 'Ballet as a weapon: whipping fouettés, flying leaps and kicks to the ceiling',
+    idlePose: PRIMA_BALLERINA_IDLE,
+    moves: PRIMA_BALLERINA_MOVES,
   },
 ];
 

@@ -33,6 +33,8 @@ export interface FighterSpec {
   lean?: number;
   /** Extra head tilt in degrees on top of the lean */
   tilt?: number;
+  /** Chest-to-head distance (default 26). Shorter for a dancer whose arms must loop over her head. */
+  neck?: number;
   frontArm: LimbAngles;
   backArm: LimbAngles;
   /** Leg angles, or a point where the foot is planted */
@@ -42,6 +44,8 @@ export interface FighterSpec {
   prop?: SkeletonPose['prop'];
   /** The gun in this hand fires: the trail becomes the bullet streak */
   shot?: SkeletonPose['shot'];
+  /** Turning fast: a spin blur round the body */
+  spin?: boolean;
 }
 
 const SPINE = 30;
@@ -68,20 +72,23 @@ export function headOf(spec: FighterSpec): Point {
   const lean = rad(spec.lean ?? 0);
   const tilt = rad((spec.lean ?? 0) + (spec.tilt ?? 0));
   const chest = { x: spec.pelvis.x + Math.sin(lean) * SPINE, y: spec.pelvis.y - Math.cos(lean) * SPINE };
-  return { x: chest.x + Math.sin(tilt) * NECK, y: chest.y - Math.cos(tilt) * NECK };
+  const neck = spec.neck ?? NECK;
+  return { x: chest.x + Math.sin(tilt) * neck, y: chest.y - Math.cos(tilt) * neck };
 }
 
 /**
  * Arm angles that put this side's hand on `target` (as near as the arm can
- * reach), elbow bent downward. For hands that must meet something: a hand
- * gripping the same weapon, or lifting a drink to the mouth.
+ * reach). For hands that must meet something: a hand gripping the same
+ * weapon, lifting a drink to the mouth, or both hands joined overhead.
+ * The elbow bends clockwise from the line to the target (downward for a
+ * forward reach, forward for an upward one); `flip` bends it the other way.
  */
-export function armReaching(spec: FighterSpec, side: 'front' | 'back', target: Point): LimbAngles {
+export function armReaching(spec: FighterSpec, side: 'front' | 'back', target: Point, flip = false): LimbAngles {
   const s = shoulderOf(spec, side);
   const reach = LIMB.upperArm + LIMB.forearm;
   const d = Math.min(reach - 0.5, Math.max(4, Math.hypot(target.x - s.x, target.y - s.y)));
   const toward = Math.atan2(target.y - s.y, target.x - s.x);
-  const bend = Math.acos(d / reach);
+  const bend = Math.acos(d / reach) * (flip ? -1 : 1);
   const deg = (r: number) => (r * 180) / Math.PI;
   return { upper: deg(toward + bend), lower: deg(toward - bend) };
 }
@@ -119,7 +126,8 @@ export function buildKey(spec: FighterSpec, trailColor: string, ms = 0): MoveKey
   const tilt = rad((spec.lean ?? 0) + (spec.tilt ?? 0));
   const pelvis = spec.pelvis;
   const chest = { x: pelvis.x + Math.sin(lean) * SPINE, y: pelvis.y - Math.cos(lean) * SPINE };
-  const head = { x: chest.x + Math.sin(tilt) * NECK, y: chest.y - Math.cos(tilt) * NECK };
+  const neck = spec.neck ?? NECK;
+  const head = { x: chest.x + Math.sin(tilt) * neck, y: chest.y - Math.cos(tilt) * neck };
   const frontShoulder = { x: chest.x + SHOULDER_SPREAD, y: chest.y + 1 };
   const backShoulder = { x: chest.x - SHOULDER_SPREAD, y: chest.y + 1 };
   const fa = safeFold(spec.frontArm);
@@ -150,6 +158,7 @@ export function buildKey(spec: FighterSpec, trailColor: string, ms = 0): MoveKey
     ...(spec.trail ? { trail: trailFor(pose, spec.trail, trailColor) } : {}),
     ...(spec.prop ? { prop: spec.prop } : {}),
     ...(spec.shot && spec.trail ? { shot: spec.shot } : {}),
+    ...(spec.spin ? { spin: true } : {}),
   };
 }
 
@@ -161,6 +170,7 @@ export function keyToPlayerPose(key: MoveKey): SkeletonPose {
   if (key.trail) pose.bladeSlash = key.trail;
   // The flash only shows while the bullet streak does.
   if (key.shot && key.trail) pose.shot = key.shot;
+  if (key.spin) pose.spin = true;
   return pose;
 }
 

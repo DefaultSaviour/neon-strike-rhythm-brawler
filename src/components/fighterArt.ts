@@ -30,8 +30,10 @@ export interface FighterDrawOptions {
 
 type Ctx = CanvasRenderingContext2D;
 
-export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptions) {
+export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
   const { tier } = opts;
+  // The Prima Ballerina is drawn with long dancer's arms (see ballerinaArms)
+  const pose = opts.hero === 'ballerina' ? ballerinaArms(skeleton) : skeleton;
   const combo = opts.combo ?? tier.minCombo;
   const rnd = opts.random ?? Math.random;
 
@@ -42,6 +44,10 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
     else if (opts.hero === 'theOne') drawCodeRain(ctx, pose, opts.time);
     else if (opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'back');
     else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
+    // The Prima Ballerina's swan tutu is part of her outfit, drawn over the body (step 5b)
+    else if (opts.hero === 'ballerina') {
+      /* nothing behind her */
+    }
     else drawAngelWings(ctx, pose, opts.time);
   }
 
@@ -85,6 +91,9 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
     }
   }
 
+  // 4a. The Prima Ballerina's spin blur when she turns, behind the body
+  if (opts.hero === 'ballerina' && pose.spin) drawSpinBlur(ctx, pose);
+
   // 4b. The One's long coat tail, flaring out behind his legs
   if (opts.hero === 'theOne') drawCoatTail(ctx, pose, tier, opts.facing, opts.time);
 
@@ -120,6 +129,7 @@ export function drawFighter(ctx: Ctx, pose: SkeletonPose, opts: FighterDrawOptio
   if (pose.prop === 'gourd' || pose.prop === 'gourdSwing' || pose.prop === 'bench') drawDrunkenProps(ctx, pose, opts.facing);
   if (opts.hero === 'proWrestler') drawWrestlerOutfit(ctx, pose, tier, opts.facing);
   if (pose.prop === 'chair') drawSteelChair(ctx, pose, opts.facing);
+  if (opts.hero === 'ballerina') drawBallerinaOutfit(ctx, pose, tier, opts.facing, opts.time);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
@@ -990,6 +1000,219 @@ function drawSteelChair(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
   ctx.lineTo(l2.x, l2.y);
   ctx.stroke();
   ctx.restore();
+}
+
+/**
+ * The feathers of the Prima Ballerina's swan tutu (her top-level form): two
+ * layers fanned out round her hips, each feather's base and tip. They
+ * flutter gently with time.
+ */
+export function swanTutuFeathers(pose: SkeletonPose, time: number) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  // Along the spine (down) and across the hips
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const down = { x: sx / sl, y: sy / sl };
+  const across = { x: -down.y, y: down.x };
+  const centre = { x: p.x - down.x * 3, y: p.y - down.y * 3 };
+  const feathers: { base: Point2D; tip: Point2D; layer: number }[] = [];
+  for (const [layer, count, length] of [
+    [0, 13, 36],
+    [1, 11, 24],
+  ] as const) {
+    for (let i = 0; i < count; i++) {
+      // Spread from one side across to the other, sweeping slightly down
+      const u = (i / (count - 1)) * 2 - 1;
+      const flutter = Math.sin(time * 6 + i * 1.7 + layer) * 3;
+      const dirX = across.x * u * 1.0 + down.x * (0.35 + 0.25 * (1 - Math.abs(u)));
+      const dirY = across.y * u * 1.0 + down.y * (0.35 + 0.25 * (1 - Math.abs(u)));
+      const dl = Math.hypot(dirX, dirY) || 1;
+      const base = { x: centre.x + across.x * u * 5, y: centre.y + across.y * u * 5 };
+      feathers.push({
+        base,
+        tip: { x: base.x + (dirX / dl) * length + across.x * flutter, y: base.y + (dirY / dl) * length + across.y * flutter },
+        layer,
+      });
+    }
+  }
+  return feathers;
+}
+
+/** One feather: a long pointed leaf from base to tip, with a quill down the middle. */
+function drawFeather(ctx: Ctx, base: Point2D, tip: Point2D, width: number) {
+  const dx = tip.x - base.x;
+  const dy = tip.y - base.y;
+  const l = Math.hypot(dx, dy) || 1;
+  const n = { x: -dy / l, y: dx / l };
+  const mid = { x: base.x + dx * 0.45, y: base.y + dy * 0.45 };
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.quadraticCurveTo(mid.x + n.x * width, mid.y + n.y * width, tip.x, tip.y);
+  ctx.quadraticCurveTo(mid.x - n.x * width, mid.y - n.y * width, base.x, base.y);
+  ctx.fill();
+  ctx.stroke();
+}
+
+/**
+ * The Prima Ballerina: a hair bun and pointe shoes with crossed ribbons, and
+ * a pink tutu, which in her top-level form becomes a huge swan tutu of white
+ * feathers with a feather crown. She kicks up a puff of dust when she lands
+ * in a deep plié.
+ */
+function drawBallerinaOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1, time: number) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const h = pose.head;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  if (tier.ascended) {
+    // Swan tutu: two layers of white feathers fanned round her hips
+    const feathers = swanTutuFeathers(pose, time);
+    ctx.shadowColor = '#cfe6ff';
+    ctx.shadowBlur = 14;
+    for (const layer of [0, 1]) {
+      ctx.fillStyle = layer === 0 ? '#e9f1ff' : '#ffffff';
+      ctx.strokeStyle = layer === 0 ? '#a9c4ef' : '#d6e4fb';
+      ctx.lineWidth = 0.9;
+      for (const f of feathers) if (f.layer === layer) drawFeather(ctx, f.base, f.tip, layer === 0 ? 5 : 4);
+    }
+    // Feather crown on top of her head
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#a9c4ef';
+    for (const a of [-0.9, -0.45, 0, 0.45, 0.9]) {
+      const base = { x: h.x + Math.sin(a) * 8, y: h.y - Math.cos(a) * 8 };
+      drawFeather(ctx, base, { x: h.x + Math.sin(a) * 17, y: h.y - Math.cos(a) * 17 }, 2.2);
+    }
+  } else {
+    // Pink tutu: a short stiff disc of net round the hips
+    const sx = p.x - c.x;
+    const sy = p.y - c.y;
+    const angle = Math.atan2(sy, sx) - Math.PI / 2;
+    ctx.save();
+    ctx.translate(p.x - (sx / (Math.hypot(sx, sy) || 1)) * 3, p.y - (sy / (Math.hypot(sx, sy) || 1)) * 3);
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(255, 143, 209, 0.75)';
+    ctx.strokeStyle = '#ffc6e8';
+    ctx.shadowColor = '#ff8fd1';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 20, 5.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Pleats of net
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    for (let i = -3; i <= 3; i++) {
+      ctx.moveTo(i * 2, 0);
+      ctx.lineTo(i * 5.6, 5);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Hair in a neat bun at the back of the head
+  ctx.shadowBlur = 4;
+  ctx.shadowColor = tier.color;
+  ctx.fillStyle = '#2a1a14';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(h.x - facing * 0.5, h.y - 1, 9.6, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(h.x - facing * 8, h.y - 6, 4.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Pointe shoes: pink ribbons criss-crossed up the ankles
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#ff8fd1';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  for (const [knee, foot] of [
+    [pose.leftKnee, pose.leftFoot],
+    [pose.rightKnee, pose.rightFoot],
+  ] as const) {
+    const dx = knee.x - foot.x;
+    const dy = knee.y - foot.y;
+    const l = Math.hypot(dx, dy) || 1;
+    const u = { x: dx / l, y: dy / l };
+    const n = { x: -u.y, y: u.x };
+    for (const [a, b] of [
+      [2, 7],
+      [7, 2],
+    ]) {
+      ctx.moveTo(foot.x + u.x * a + n.x * 2.4, foot.y + u.y * a + n.y * 2.4);
+      ctx.lineTo(foot.x + u.x * b - n.x * 2.4, foot.y + u.y * b - n.y * 2.4);
+    }
+  }
+  ctx.stroke();
+
+  // A puff of dust as she lands in a deep plié, both feet down
+  if (p.y >= 22 && pose.leftFoot.y > 67 && pose.rightFoot.y > 67) {
+    ctx.fillStyle = 'rgba(230, 220, 240, 0.35)';
+    for (const foot of [pose.leftFoot, pose.rightFoot]) {
+      for (const [ox, oy, r] of [
+        [-5, -2, 3.5],
+        [0, -4, 4.5],
+        [5, -2, 3.5],
+      ]) {
+        ctx.beginPath();
+        ctx.arc(foot.x + ox, foot.y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+/** Spin blur: soft pink swoosh rings round her body while she turns. */
+function drawSpinBlur(ctx: Ctx, pose: SkeletonPose) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 143, 209, 0.55)';
+  ctx.shadowColor = '#ff8fd1';
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 2;
+  for (const [y, rx] of [
+    [pose.chest.y + 2, 22],
+    [pose.pelvis.y + 4, 26],
+  ]) {
+    ctx.beginPath();
+    ctx.ellipse(pose.pelvis.x, y, rx, 5, 0, Math.PI * 0.15, Math.PI * 1.1);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** How much longer the Prima Ballerina's arms are drawn than the standard skeleton's. */
+export const BALLERINA_ARM_SCALE = 1.3;
+
+/**
+ * The Prima Ballerina has long dancer's arms. The skeleton (and so every
+ * pose, blend and timing) keeps the standard arm length; only the drawing
+ * stretches each arm out from its shoulder. With standard arms, hands joined
+ * above her head sat right on top of it, as if she were holding her head;
+ * stretched, they meet well clear of it and the elbows loop out wide.
+ */
+export function ballerinaArms(pose: SkeletonPose): SkeletonPose {
+  const stretch = (shoulder: Point2D, p: Point2D) => ({
+    x: shoulder.x + (p.x - shoulder.x) * BALLERINA_ARM_SCALE,
+    y: shoulder.y + (p.y - shoulder.y) * BALLERINA_ARM_SCALE,
+  });
+  return {
+    ...pose,
+    leftElbow: stretch(pose.leftShoulder, pose.leftElbow),
+    leftHand: stretch(pose.leftShoulder, pose.leftHand),
+    rightElbow: stretch(pose.rightShoulder, pose.rightElbow),
+    rightHand: stretch(pose.rightShoulder, pose.rightHand),
+  };
 }
 
 /** Where Baba Yaga's gold coin halo sits and how wide it looks as it spins (1 = face on). */

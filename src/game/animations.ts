@@ -869,6 +869,7 @@ export function getOrientedPose(pose: SkeletonPose, direction: 'left' | 'right')
     scarf: pose.scarf ? pose.scarf.map(mirrorX) : undefined,
     prop: pose.prop,
     shot: pose.shot,
+    spin: pose.spin,
     bladeSlash: pose.bladeSlash
       ? {
           start: mirrorX(pose.bladeSlash.start),
@@ -911,6 +912,7 @@ export function lerpPose(a: SkeletonPose, b: SkeletonPose, t: number): SkeletonP
     scarf: lerpPts(a.scarf, b.scarf),
     prop: b.prop,
     shot: b.shot,
+    spin: b.spin,
     bladeSlash: b.bladeSlash,
   };
 }
