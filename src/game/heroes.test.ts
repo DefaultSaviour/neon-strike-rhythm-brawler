@@ -973,9 +973,12 @@ describe('The Bride', () => {
     expect(w.sequence!.filter((k) => k.spin && !k.hold).length).toBe(2);
   });
 
-  it('is the ad-only hero: no amount of playing unlocks her, one watched rewarded ad does', () => {
-    const played = { enemiesDefeated: 1e6, perfects: 1e6, bestCombo: 1e6, songsCleared: 1e6, playSeconds: 1e9, adUnlocks: 99, heroAds: 0 };
-    expect(isHeroUnlocked('bride', played)).toBe(false);
-    expect(isHeroUnlocked('bride', { ...played, heroAds: 1 })).toBe(true);
+  it('is earned by completing 3 songs, or straight away by watching one rewarded ad', () => {
+    const after = (songs: number, ads = 0) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: songs, playSeconds: 0, adUnlocks: 0, heroAds: ads });
+    expect(isHeroUnlocked('bride', after(2))).toBe(false);
+    expect(isHeroUnlocked('bride', after(3))).toBe(true);
+    expect(isHeroUnlocked('bride', after(0, 1))).toBe(true);
+    // Watching ads for enemy stances doesn't count toward her
+    expect(isHeroUnlocked('bride', { ...after(0), adUnlocks: 5 })).toBe(false);
   });
 });

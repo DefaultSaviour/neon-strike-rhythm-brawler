@@ -28,8 +28,8 @@ Launch (ads and revenue only start then).
 | English | Basic | Done |
 | No custom fullscreen button, no cross-promotion or external links | Basic | Done |
 | PEGI 12 | Basic | Fine: neon stick-figure fighting, enemies shatter into shards, no blood |
-| Original names and assets | Basic | Heroes are inspired-by with our own names and no quotes. **Song rights: the five Eargasm tracks must be ours or licensed for this use** |
-| New players land in gameplay with at most 1 click | Full | **Not yet**: title → New Game → song list → Play |
+| Original names and assets | Basic | Heroes are inspired-by with our own names and no quotes. **Songs: made with Suno, so they're only usable if made on a paid plan and downloaded from Suno (see below)** |
+| New players land in gameplay with at most 1 click | Full | Done: a brand-new player's New Game starts the easiest song (Eargasm 5) straight away |
 
 ## Ads
 
@@ -39,13 +39,11 @@ Launch (ads and revenue only start then).
 | No reward when an ad errors | Full | Done |
 | Ad buttons never sit there doing nothing (ad blocker, ads off in Basic Launch) | Basic + Full | Done: an ad blocker hides the buttons with a note; an "ads off" error hides them for the visit |
 | Players with an ad blocker can still play normally | Full | Done |
-| Rewarded ads offer an alternative way to get the reward | Full | Stances: yes (every 20 minutes of play). **The Bride: no, she is ad-only** |
+| Rewarded ads offer an alternative way to get the reward | Full | Done: stances open every 20 minutes of play; The Bride after 3 songs, or straight away with an ad |
 | No rewarded-ad button during gameplay | Full | Done: only on the title, Stances and Unlocks screens |
 
 ## Left to do
 
-1. Decide on The Bride: give her a play goal as well as the ad (the rules ask for an alternative to every rewarded ad), or keep her ad-only and accept the risk.
-2. Land new players in gameplay with one click (Full Launch).
-3. Confirm the song rights.
-4. Run the build through the QA tool on the CrazyGames Developer Portal, and try Safari.
-5. Submission form: description, controls, cover images and video, and the Progress Save toggle.
+1. Song rights (Suno, terms effective 3 September 2026): songs made on the **free** plan are for personal, non-commercial use only, and an ad-funded game is commercial. Songs made on **Pro or Premier** can be used commercially, but only after being downloaded from Suno. Subscribing later doesn't clearly cover songs made earlier on the free plan. Don't strip Suno's watermark or metadata from the files.
+2. Run the build through the QA tool on the CrazyGames Developer Portal, and try Safari.
+3. Submission form: description, controls, cover images and video, and the Progress Save toggle.

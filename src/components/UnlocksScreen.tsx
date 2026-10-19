@@ -19,8 +19,6 @@ interface UnlocksScreenProps {
   /** Watch a rewarded ad for an ad-only hero; present only when an ad can be shown here */
   onWatchAd?: (id: HeroId) => void;
   adBusy?: boolean;
-  /** Why ads can't be offered here, shown in place of the ad button */
-  adsOffNote?: string | null;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
   onClose: () => void;
@@ -54,7 +52,7 @@ const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked })
   return <canvas ref={ref} style={{ width: 120, height: 150 }} aria-hidden="true" />;
 };
 
-export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, onClose }) => {
+export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, notice, onClose }) => {
   const heroes = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
   const unlockedCount = heroes.filter((h) => isUnlocked(h.id)).length;
 
@@ -135,22 +133,6 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                       {chosen ? 'Selected' : 'Select'}
                     </button>
                   </>
-                ) : progress?.goal.ad ? (
-                  <div className="w-full flex flex-col gap-1 flex-1 justify-end">
-                    <div className="text-[11px] text-amber-300/90">{progress.goal.label}</div>
-                    {onWatchAd ? (
-                      <button
-                        type="button"
-                        onClick={() => onWatchAd(h.id)}
-                        disabled={adBusy}
-                        className="w-full py-1.5 rounded-md bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-black text-xs font-black tracking-wide cursor-pointer"
-                      >
-                        ▶ Watch ad
-                      </button>
-                    ) : (
-                      <div className="text-[10px] text-slate-500">{adsOffNote ?? "Ads aren't available here"}</div>
-                    )}
-                  </div>
                 ) : (
                   progress && (
                     <div className="w-full flex flex-col gap-1 flex-1 justify-end">
@@ -163,6 +145,17 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                           ? `${Math.floor(progress.current / 60)} / ${Math.round(progress.goal.target / 60)} min`
                           : `${progress.current.toLocaleString()} / ${progress.goal.target.toLocaleString()}`}
                       </div>
+                      {/* The ad hero can also be unlocked straight away (hidden when ads can't play here) */}
+                      {progress.goal.ad && onWatchAd && (
+                        <button
+                          type="button"
+                          onClick={() => onWatchAd(h.id)}
+                          disabled={adBusy}
+                          className="w-full mt-1 py-1.5 rounded-md bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-black text-xs font-black tracking-wide cursor-pointer"
+                        >
+                          or ▶ Watch ad to unlock now
+                        </button>
+                      )}
                     </div>
                   )
                 )}

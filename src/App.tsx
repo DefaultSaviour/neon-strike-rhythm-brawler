@@ -28,6 +28,10 @@ import { formatCountdown, secondsToNextStance } from './game/stanceUnlocks';
 import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
 import { getHero, HeroId, HEROES } from './game/heroes';
 
+/** The song a brand-new player starts on: the easiest of the soundtrack. */
+const DIFFICULTY_ORDER = ['Easy', 'Medium', 'Hard', 'Custom'];
+const FIRST_SONG = [...PRELOADED_TRACKS].sort((a, b) => DIFFICULTY_ORDER.indexOf(a.difficulty) - DIFFICULTY_ORDER.indexOf(b.difficulty))[0];
+
 export default function App() {
   const [gameStatus, setGameStatus] = useState<GameStatus>('MENU');
   const [customTracks, setCustomTracks] = useState<Track[]>([]);
@@ -292,10 +296,13 @@ export default function App() {
   }, [menuNotice]);
 
   const handleStartChoice = useCallback((choice: StartChoice) => {
-    if (choice === 'newGame') setShowTrackSelect(true);
+    // A brand-new player goes straight into a song with one click (CrazyGames asks for this):
+    // the easiest one. After that, New Game opens the song list.
+    if (choice === 'newGame' && engine.lifetimeStats.playSeconds === 0) handleStartGame(FIRST_SONG);
+    else if (choice === 'newGame') setShowTrackSelect(true);
     else if (choice === 'studio') setShowStudio(true);
     else setMenuScreen(choice);
-  }, []);
+  }, [engine, handleStartGame]);
   const closeMenuScreen = useCallback(() => setMenuScreen(null), []);
 
   const handleToggleOneButtonMode = useCallback(() => {
@@ -439,7 +446,6 @@ export default function App() {
           onSelect={(hero) => handleUpdateSettings({ hero })}
           onWatchAd={adAvailable ? handleWatchHeroAd : undefined}
           adBusy={adBusy}
-          adsOffNote={adsOffNote}
           notice={menuNotice}
           onClose={closeMenuScreen}
         />
