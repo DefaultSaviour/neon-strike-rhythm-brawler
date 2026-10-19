@@ -46,7 +46,9 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
     else if (opts.hero === 'stallion') drawSunriseSteps(ctx, pose, opts.time);
     else if (opts.hero === 'kid') drawCraneSpirit(ctx, pose, opts.time, opts.facing);
-    else if (opts.hero === 'spartan') drawShieldWall(ctx, pose, opts.time, opts.facing);
+    else if (opts.hero === 'spartan') {
+      /* his battle plate is drawn over the body (drawSpartanGear) */
+    }
     else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
     else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
@@ -59,7 +61,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   // 1b. The Bride's ponytail swings behind her head (tucked into the helmet in her top form)
   if (opts.hero === 'bride' && !tier.ascended) drawPonytail(ctx, pose, opts.facing, opts.time);
   // The Spartan's red cape hangs behind him
-  if (opts.hero === 'spartan') drawSpartanCape(ctx, pose, opts.facing, opts.time);
+  if (opts.hero === 'spartan') drawSpartanCape(ctx, pose, opts.facing, opts.time, tier.ascended ? 1.45 : 1);
 
   // The Stallion's side of beef hangs in front of him, behind his arms
   if (pose.prop === 'meat') drawSideOfBeef(ctx, pose, opts.facing);
@@ -145,7 +147,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'ballerina') drawBallerinaOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (opts.hero === 'stallion') drawStallionOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'kid') drawKidOutfit(ctx, pose, tier, opts.facing, opts.time);
-  if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing, tier.ascended);
   if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
   if (tier.ascended && opts.hero === 'bride') {
@@ -166,6 +168,8 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     drawSunglasses(ctx, pose, opts.facing);
   } else if (opts.hero === 'drunkenMaster') {
     drawSleepyEyes(ctx, pose, opts.facing);
+  } else if (opts.hero === 'spartan' && tier.ascended) {
+    // His closed battle helmet has its own glowing eye slits
   } else {
     ctx.fillStyle = tier.visorColor;
     ctx.shadowColor = tier.visorColor;
@@ -1655,78 +1659,17 @@ function drawDiscoSuit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 
   ctx.restore();
 }
 
-/** The Spartan's top-level form: a wall of shields behind him and arrows raining down. */
-export function spartanWall(pose: SkeletonPose, time: number) {
-  const shields = 7;
-  const radius = 15;
-  const arrows = Array.from({ length: 12 }, (_, i) => {
-    const fall = (time * 140 + i * 47) % 200; // each arrow falls, then starts again at the top
-    return { x: pose.pelvis.x - 100 + ((i * 53) % 200) + fall * 0.35, y: pose.head.y - 120 + fall };
-  });
-  return { shields, radius, y: pose.chest.y + 4, x: pose.pelvis.x, arrows };
-}
-
-function drawShieldWall(ctx: Ctx, pose: SkeletonPose, time: number, facing: 1 | -1) {
-  const w = spartanWall(pose, time);
-  ctx.save();
-  // The arrows, raining down at a slant
-  ctx.strokeStyle = 'rgba(255, 220, 170, 0.7)';
-  ctx.lineWidth = 1.4;
-  ctx.lineCap = 'round';
-  for (const a of w.arrows) {
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(a.x - 6, a.y - 17);
-    ctx.stroke();
-    ctx.fillStyle = '#ffd9a0';
-    ctx.beginPath();
-    ctx.moveTo(a.x + 1.5, a.y + 4);
-    ctx.lineTo(a.x - 2, a.y - 1);
-    ctx.lineTo(a.x + 2.5, a.y - 1.5);
-    ctx.fill();
-  }
-  // The shield wall: a row of bronze shields, overlapping, behind him
-  ctx.shadowColor = '#ffb347';
-  ctx.shadowBlur = 12;
-  for (let i = 0; i < w.shields; i++) {
-    const x = w.x + (i - (w.shields - 1) / 2) * w.radius * 1.55;
-    ctx.beginPath();
-    ctx.arc(x, w.y, w.radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(150, 92, 30, 0.55)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 190, 100, 0.85)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    drawLambda(ctx, x, w.y, w.radius * 0.55, 'rgba(255, 220, 170, 0.8)', facing);
-  }
-  ctx.restore();
-}
-
-/** The lambda painted on Spartan shields. */
-function drawLambda(ctx: Ctx, x: number, y: number, size: number, color: string, facing: 1 | -1) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x - size * 0.7 * facing, y + size * 0.8);
-  ctx.lineTo(x, y - size * 0.8);
-  ctx.lineTo(x + size * 0.7 * facing, y + size * 0.8);
-  ctx.stroke();
-  ctx.restore();
-}
-
 /** The Spartan's red cape: from his shoulders, flowing back and down behind him. */
-function drawSpartanCape(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number) {
+function drawSpartanCape(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number, size = 1) {
   const c = pose.chest;
   const back = -facing;
   const sway = Math.sin(time * 3) * 3;
-  const hemY = Math.max(pose.pelvis.y + 34, c.y + 50);
+  const hemY = Math.max(pose.pelvis.y + 34, c.y + 50 * size);
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.beginPath();
   ctx.moveTo(c.x + facing * 4, c.y - 2);
-  ctx.quadraticCurveTo(c.x + back * 22, c.y + 14, c.x + back * (30 + sway), hemY);
+  ctx.quadraticCurveTo(c.x + back * 22 * size, c.y + 14, c.x + back * (30 * size + sway), hemY);
   ctx.lineTo(c.x + back * (8 + sway * 0.5), hemY + 4);
   ctx.quadraticCurveTo(c.x + back * 4, c.y + 20, c.x - facing * 2, c.y);
   ctx.closePath();
@@ -1751,12 +1694,101 @@ export function spearTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
   return weaponAt(rear.hand, rear.elbow, SPEAR_FRONT).muzzle;
 }
 
+/** A bronze plate laid along one bone, from `a` to `b` (a greave or an arm guard). */
+function bronzeGuard(ctx: Ctx, a: Point2D, b: Point2D, width: number) {
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = width + 2.4;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#c9822e';
+  ctx.lineWidth = width;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 215, 150, 0.7)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+/** The Spartan's battle plate: a bronze muscle breastplate, shin greaves and forearm guards. */
+export function battlePlate(pose: SkeletonPose) {
+  const along = (a: Point2D, b: Point2D, from: number, to: number): [Point2D, Point2D] => [
+    { x: a.x + (b.x - a.x) * from, y: a.y + (b.y - a.y) * from },
+    { x: a.x + (b.x - a.x) * to, y: a.y + (b.y - a.y) * to },
+  ];
+  return {
+    greaves: [along(pose.leftKnee, pose.leftFoot, 0.05, 0.8), along(pose.rightKnee, pose.rightFoot, 0.05, 0.8)],
+    armGuards: [along(pose.leftElbow, pose.leftHand, 0.25, 0.85), along(pose.rightElbow, pose.rightHand, 0.25, 0.85)],
+  };
+}
+
+function drawBattlePlate(ctx: Ctx, pose: SkeletonPose) {
+  const plate = battlePlate(pose);
+  ctx.save();
+  ctx.shadowBlur = 0;
+  for (const [a, b] of plate.greaves) bronzeGuard(ctx, a, b, 6);
+  for (const [a, b] of plate.armGuards) bronzeGuard(ctx, a, b, 5);
+  // The breastplate over the torso, with the chest and stomach muscles hammered into it
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = '#c9822e';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.8;
+  ctx.shadowColor = '#ffb347';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 12, c.y + ny * 12 - 1);
+  ctx.lineTo(c.x - nx * 12, c.y - ny * 12 - 1);
+  ctx.lineTo(p.x - nx * 9 - sx * 0.05, p.y - ny * 9 - sy * 0.05);
+  ctx.lineTo(p.x + nx * 9 - sx * 0.05, p.y + ny * 9 - sy * 0.05);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(80, 40, 10, 0.75)';
+  ctx.lineWidth = 1.2;
+  const at = (t: number, side: number) => ({ x: c.x + sx * t + nx * side, y: c.y + sy * t + ny * side });
+  // Chest: two curves meeting in the middle
+  for (const side of [1, -1]) {
+    const a = at(0.12, 0);
+    const m = at(0.32, side * 6);
+    const e = at(0.2, side * 10);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.quadraticCurveTo(m.x, m.y, e.x, e.y);
+    ctx.stroke();
+  }
+  // Stomach: a line down the middle and two across
+  const top = at(0.3, 0);
+  const bottom = at(0.9, 0);
+  ctx.beginPath();
+  ctx.moveTo(top.x, top.y);
+  ctx.lineTo(bottom.x, bottom.y);
+  for (const t of [0.5, 0.7]) {
+    const l = at(t, -6);
+    const r = at(t, 6);
+    ctx.moveTo(l.x, l.y);
+    ctx.lineTo(r.x, r.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * The Spartan's gear over the body: a bronze helmet with a red crest, a
  * leather war skirt, the spear in his rear hand and the round bronze
- * shield on his lead arm.
+ * shield on his lead arm. In his top-level form (`plated`) he wears full
+ * battle plate: a bronze muscle breastplate, shin greaves, forearm guards
+ * and a closed helmet with glowing eye slits under a bigger crest.
  */
-function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1, plated = false) {
   const { lead, rear } = arms(pose, facing);
   ctx.save();
   ctx.lineJoin = 'round';
@@ -1772,6 +1804,7 @@ function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing
     ctx.lineTo(p.x + dx * 1.2, p.y + 11);
     ctx.stroke();
   }
+  if (plated) drawBattlePlate(ctx, pose);
   // The spear along the rear forearm: a dark shaft and a bronze leaf-shaped tip
   const spear = weaponAt(rear.hand, rear.elbow, SPEAR_FRONT);
   const butt = { x: rear.hand.x - spear.dir.x * SPEAR_BACK, y: rear.hand.y - spear.dir.y * SPEAR_BACK };
@@ -1801,6 +1834,7 @@ function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing
   ctx.fillStyle = '#c9822e';
   ctx.strokeStyle = '#05050c';
   ctx.lineWidth = 1.6;
+  ctx.shadowColor = '#ffb347';
   ctx.shadowBlur = 6;
   ctx.beginPath();
   ctx.arc(h.x, h.y, 10.5, Math.PI, Math.PI * 2);
@@ -1811,13 +1845,36 @@ function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  // The crest: taller and sweeping further back in his battle plate
+  const crest = plated ? 1.4 : 1;
   ctx.fillStyle = '#d6202f';
   ctx.shadowColor = '#ff2a2a';
+  ctx.shadowBlur = 6;
   ctx.beginPath();
   ctx.moveTo(h.x + facing * 9, h.y - 8);
-  ctx.quadraticCurveTo(h.x, h.y - 26, h.x - facing * 16, h.y - 4);
+  ctx.quadraticCurveTo(h.x, h.y - 26 * crest, h.x - facing * 16 * crest, h.y - 4);
   ctx.quadraticCurveTo(h.x - facing * 4, h.y - 14, h.x + facing * 9, h.y - 8);
   ctx.fill();
+  if (plated) {
+    // The closed helmet: bronze over the whole face, a T of dark slits, eyes glowing in the dark
+    ctx.fillStyle = '#b8742a';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1.6;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, 10.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#100a08';
+    ctx.fillRect(h.x + facing * 1 - (facing < 0 ? 9 : 0), h.y - 2.5, 9, 3);
+    ctx.fillRect(h.x + facing * 5 - 1.2, h.y - 1, 2.4, 9);
+    ctx.fillStyle = '#ff6a1a';
+    ctx.shadowColor = '#ff3b00';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(h.x + facing * 7, h.y - 1, 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
   // The shield on the lead forearm: a big bronze disc seen at an angle, its face to the enemy
   const fx = lead.hand.x - lead.elbow.x;
   const fy = lead.hand.y - lead.elbow.y;
