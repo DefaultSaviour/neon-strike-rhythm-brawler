@@ -3,6 +3,7 @@ import { AudioSettings, HitSoundMode } from '../types/game';
 import { ENEMY_MOTION_STYLES } from '../game/enemyMotion';
 import { HEROES } from '../game/heroes';
 import { LifetimeStats, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
+import { formatCountdown, isStanceUnlocked, nextStance, secondsToNextStance } from '../game/stanceUnlocks';
 
 /**
  * Quick in-game options, shared by the pause menu and the Settings tab.
@@ -140,6 +141,12 @@ export const GameOptions: React.FC<GameOptionsProps> = ({
     const lock = progress && !progress.done ? { label: progress.goal.label, current: progress.current, target: progress.goal.target } : undefined;
     return { id: h.id, label: h.label, description: h.description, lock };
   });
+  const stanceOptions = ENEMY_MOTION_STYLES.map((m) => {
+    if (!lifetimeStats || isStanceUnlocked(m.id, lifetimeStats)) return m;
+    const wait = nextStance(lifetimeStats) === m.id ? secondsToNextStance(lifetimeStats) : null;
+    return { ...m, lock: { label: wait !== null ? `Opens in ${formatCountdown(wait)} of play` : 'Keep playing', current: 0, target: 1 } };
+  });
+  const stanceValue = stanceOptions.find((o) => o.id === settings.enemyMotion && !('lock' in o && o.lock)) ? settings.enemyMotion : ENEMY_MOTION_STYLES[0].id;
   // A saved choice the player hasn't earned (yet) shows as the hero they'll actually play.
   const heroValue = heroOptions.find((o) => o.id === settings.hero && !o.lock) ? settings.hero : HEROES[0].id;
   return (
@@ -156,8 +163,8 @@ export const GameOptions: React.FC<GameOptionsProps> = ({
       {sections.includes('motion') && (
         <ChoiceGrid
           title="Enemy Movement"
-          options={ENEMY_MOTION_STYLES}
-          value={settings.enemyMotion}
+          options={stanceOptions}
+          value={stanceValue}
           onChange={(enemyMotion) => onUpdateSettings({ enemyMotion })}
         />
       )}

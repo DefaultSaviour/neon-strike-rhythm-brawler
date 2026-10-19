@@ -14,6 +14,7 @@ import {
 import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
 import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes';
 import { addRun, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
+import { isStanceUnlocked, nextStance } from './stanceUnlocks';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
@@ -25,7 +26,7 @@ import { comboDuration, comboFrame } from './combo';
 import { FLOOR_Y } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { recordRunProgress, RunProgress } from './runProgress';
-import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES } from './enemyMotion';
+import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, EnemyMotionStyle } from './enemyMotion';
 import { enemyPoseFor } from './customAnimation';
 import { getActiveAnimations } from './animationLibrary';
 
@@ -143,7 +144,7 @@ export class GameEngine {
     // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
     // stripped from the published build (import.meta.env.DEV is false there).
     if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
-      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9 };
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0 };
       this.devUnlockAll = true;
     }
     this.loadSettings();
@@ -167,6 +168,24 @@ export class GameEngine {
     return isHeroUnlocked(id, this.lifetimeStats);
   }
 
+  /** How the enemies move (from the settings). A stance not yet earned plays as the default one. */
+  public get enemyMotion(): EnemyMotionStyle {
+    return this.isStanceUnlocked(this.settings.enemyMotion) ? this.settings.enemyMotion : DEFAULT_ENEMY_MOTION;
+  }
+
+  public isStanceUnlocked(id: EnemyMotionStyle): boolean {
+    return isStanceUnlocked(id, this.lifetimeStats);
+  }
+
+  /** The player watched a rewarded ad: open the next enemy stance now. Returns the stance opened. */
+  public unlockStanceWithAd(): EnemyMotionStyle | null {
+    const stance = nextStance(this.lifetimeStats);
+    if (!stance) return null;
+    this.lifetimeStats = { ...this.lifetimeStats, adUnlocks: this.lifetimeStats.adUnlocks + 1 };
+    if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
+    return stance;
+  }
+
   /**
    * Add this song to the lifetime totals, once, however it ended (cleared,
    * died, or quit part way: the enemies you beat still count), and note any
@@ -182,6 +201,7 @@ export class GameEngine {
       perfects: s.perfectCount,
       maxCombo: s.maxCombo,
       cleared,
+      seconds: this.songTime,
     });
     this.newUnlocks = newlyUnlocked(
       HEROES.map((h) => h.id),

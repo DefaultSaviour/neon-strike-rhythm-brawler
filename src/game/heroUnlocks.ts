@@ -18,9 +18,13 @@ export interface LifetimeStats {
   bestCombo: number;
   /** Songs finished without dying */
   songsCleared: number;
+  /** Seconds spent playing songs (not menus): unlocks enemy stances, see stanceUnlocks */
+  playSeconds: number;
+  /** Enemy stances unlocked early by watching a rewarded ad */
+  adUnlocks: number;
 }
 
-export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0 };
+export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0 };
 
 export interface UnlockGoal {
   stat: keyof LifetimeStats;
@@ -61,6 +65,8 @@ export interface RunResult {
   perfects: number;
   maxCombo: number;
   cleared: boolean;
+  /** How long the song was played for */
+  seconds: number;
 }
 
 export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
@@ -69,6 +75,8 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     perfects: stats.perfects + run.perfects,
     bestCombo: Math.max(stats.bestCombo, run.maxCombo),
     songsCleared: stats.songsCleared + (run.cleared ? 1 : 0),
+    playSeconds: stats.playSeconds + Math.max(0, run.seconds),
+    adUnlocks: stats.adUnlocks,
   };
 }
 
@@ -91,6 +99,8 @@ export function loadStats(store: Pick<Storage, 'getItem'> | undefined): Lifetime
       perfects: num(parsed.perfects),
       bestCombo: num(parsed.bestCombo),
       songsCleared: num(parsed.songsCleared),
+      playSeconds: num(parsed.playSeconds),
+      adUnlocks: num(parsed.adUnlocks),
     };
   } catch {
     return { ...EMPTY_STATS };

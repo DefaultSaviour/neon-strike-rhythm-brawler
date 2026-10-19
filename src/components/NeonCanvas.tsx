@@ -677,7 +677,7 @@ function drawEnemyFigure(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: Ga
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    const pose = enemyPoseFor(engine.settings.enemyMotion, phase, band, tier, getActiveAnimations());
+    const pose = enemyPoseFor(engine.enemyMotion, phase, band, tier, getActiveAnimations());
     drawEnemyArt(ctx, pose, band, tier, { main: mainColor, accent }, phase, !!opts.flash);
 
     ctx.restore();

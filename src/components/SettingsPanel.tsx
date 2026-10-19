@@ -3,16 +3,16 @@ import { AudioSettings } from '../types/game';
 import { GameOptions } from './GameOptions';
 
 /**
- * Every setting in one place: how enemies move, hit sounds, volume, audio
- * latency, one-button mode, screen shake and scanlines. Heroes are chosen on
- * the Unlocks screen.
+ * Every setting in one place: hit sounds, volume, audio latency, one-button
+ * mode, screen shake and scanlines. Heroes are chosen on the Unlocks screen,
+ * enemy stances on the Stances screen.
  */
 export const SettingsPanel: React.FC<{
   settings: AudioSettings;
   onUpdateSettings: (settings: Partial<AudioSettings>) => void;
 }> = ({ settings, onUpdateSettings }) => (
   <div className="flex flex-col gap-6 max-w-lg mx-auto">
-    <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['motion', 'hitSound']} />
+    <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['hitSound']} />
 
     {/* Music Volume */}
     <div className="flex flex-col gap-2">

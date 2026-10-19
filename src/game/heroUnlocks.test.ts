@@ -58,14 +58,14 @@ describe('hero unlocks', () => {
 
 describe('lifetime totals', () => {
   it('add up across songs, keep the best combo, and count only cleared songs', () => {
-    let s = addRun(EMPTY_STATS, { enemiesDefeated: 90, perfects: 40, maxCombo: 30, cleared: false });
-    s = addRun(s, { enemiesDefeated: 80, perfects: 50, maxCombo: 22, cleared: true });
-    expect(s).toEqual({ enemiesDefeated: 170, perfects: 90, bestCombo: 30, songsCleared: 1 });
+    let s = addRun(EMPTY_STATS, { enemiesDefeated: 90, perfects: 40, maxCombo: 30, cleared: false, seconds: 61 });
+    s = addRun(s, { enemiesDefeated: 80, perfects: 50, maxCombo: 22, cleared: true, seconds: 190 });
+    expect(s).toEqual({ ...EMPTY_STATS, enemiesDefeated: 170, perfects: 90, bestCombo: 30, songsCleared: 1, playSeconds: 251 });
   });
 
   it('report the heroes a run has just unlocked, and only those', () => {
     const before = stats({ enemiesDefeated: 120 });
-    const after = addRun(before, { enemiesDefeated: 60, perfects: 0, maxCombo: 10, cleared: true });
+    const after = addRun(before, { enemiesDefeated: 60, perfects: 0, maxCombo: 10, cleared: true, seconds: 120 });
     expect(newlyUnlocked(ids, before, after)).toEqual(['dragon', 'theOne']);
     expect(newlyUnlocked(ids, after, after)).toEqual([]);
   });

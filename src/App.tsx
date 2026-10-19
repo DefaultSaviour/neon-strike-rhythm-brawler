@@ -13,6 +13,10 @@ import { GameOptions } from './components/GameOptions';
 import { StartChoice, StartScreen } from './components/StartScreen';
 import { UnlocksScreen } from './components/UnlocksScreen';
 import { OptionsScreen } from './components/OptionsScreen';
+import { StancesScreen } from './components/StancesScreen';
+import { initCrazyGames, showRewardedAd } from './platform/crazyGames';
+import { formatCountdown, secondsToNextStance } from './game/stanceUnlocks';
+import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
 import { HEROES } from './game/heroes';
 
 export default function App() {
@@ -33,7 +37,11 @@ export default function App() {
   const [showTrackSelect, setShowTrackSelect] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
   /** A screen opened from the title menu */
-  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'options' | null>(null);
+  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'stances' | 'options' | null>(null);
+  /** Rewarded ads can be shown here (CrazyGames, or its local test mode) */
+  const [adAvailable, setAdAvailable] = useState(false);
+  const [adBusy, setAdBusy] = useState(false);
+  const [menuNotice, setMenuNotice] = useState<string | null>(null);
   const [clearedOutcome, setClearedOutcome] = useState(false);
   const [deathReport, setDeathReport] = useState<DeathReport | null>(null);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>({
@@ -171,6 +179,35 @@ export default function App() {
     setAudioSettings({ ...engine.settings });
   };
 
+  useEffect(() => {
+    initCrazyGames().then(setAdAvailable);
+  }, []);
+
+  /** Watch a rewarded ad for the next enemy stance. The game is muted while it plays. */
+  const handleWatchAd = useCallback(async () => {
+    if (adBusy) return;
+    setAdBusy(true);
+    const ctx = audioEngine.getAudioContext();
+    const watched = await showRewardedAd(
+      () => void ctx.suspend(),
+      () => void ctx.resume()
+    );
+    setAdBusy(false);
+    if (!watched) {
+      setMenuNotice('The ad did not finish, so no unlock this time.');
+      return;
+    }
+    const stance = engine.unlockStanceWithAd();
+    const label = ENEMY_MOTION_STYLES.find((m) => m.id === stance)?.label;
+    setMenuNotice(label ? `New stance unlocked: ${label}!` : null);
+  }, [adBusy, engine]);
+
+  useEffect(() => {
+    if (!menuNotice) return;
+    const t = setTimeout(() => setMenuNotice(null), 3500);
+    return () => clearTimeout(t);
+  }, [menuNotice]);
+
   const handleStartChoice = useCallback((choice: StartChoice) => {
     if (choice === 'newGame') setShowTrackSelect(true);
     else if (choice === 'studio') setShowStudio(true);
@@ -287,6 +324,25 @@ export default function App() {
           unlockedHeroes={HEROES.filter((h) => engine.isHeroUnlocked(h.id)).length}
           totalHeroes={HEROES.length}
           oneButtonMode={audioSettings.oneButtonMode}
+          stanceCountdown={(() => {
+            const wait = secondsToNextStance(engine.lifetimeStats);
+            return wait === null ? null : formatCountdown(wait);
+          })()}
+          onWatchAd={adAvailable ? handleWatchAd : undefined}
+          adBusy={adBusy}
+          notice={menuNotice}
+        />
+      )}
+
+      {menuScreen === 'stances' && (
+        <StancesScreen
+          stats={engine.lifetimeStats}
+          selected={engine.enemyMotion}
+          isUnlocked={(id) => engine.isStanceUnlocked(id)}
+          onSelect={(enemyMotion) => handleUpdateSettings({ enemyMotion })}
+          onWatchAd={adAvailable ? handleWatchAd : undefined}
+          adBusy={adBusy}
+          onClose={closeMenuScreen}
         />
       )}
 

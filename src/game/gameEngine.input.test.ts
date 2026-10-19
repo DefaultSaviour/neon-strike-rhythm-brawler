@@ -204,3 +204,25 @@ describe('earning heroes', () => {
     expect(g.engine.hero.id).toBe('ballerina');
   });
 });
+
+describe('earning enemy stances', () => {
+  it('playing time counts toward stances, and a locked stance plays as the default', async () => {
+    const g = await play([[2, 'left']]);
+    g.engine.lifetimeStats = { ...EMPTY_STATS, playSeconds: 20 * 60 - 1 };
+    g.engine.settings.enemyMotion = 'sway';
+    expect(g.engine.enemyMotion).toBe('run');
+    g.advanceTo(3);
+    g.engine.stop();
+    expect(g.engine.lifetimeStats.playSeconds).toBeGreaterThanOrEqual(20 * 60);
+    expect(g.engine.enemyMotion).toBe('sway');
+  });
+
+  it('a watched ad opens the next stance straight away', async () => {
+    const g = await play([[2, 'left']]);
+    g.engine.lifetimeStats = { ...EMPTY_STATS };
+    expect(g.engine.isStanceUnlocked('sway')).toBe(false);
+    expect(g.engine.unlockStanceWithAd()).toBe('sway');
+    expect(g.engine.isStanceUnlocked('sway')).toBe(true);
+    expect(g.engine.isStanceUnlocked('dance')).toBe(false);
+  });
+});
