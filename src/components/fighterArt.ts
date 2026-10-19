@@ -46,7 +46,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
     else if (opts.hero === 'stallion') drawSunriseSteps(ctx, pose, opts.time);
     else if (opts.hero === 'kid') drawCraneSpirit(ctx, pose, opts.time, opts.facing);
-    else if (opts.hero === 'spartan') drawShieldWall(ctx, pose, opts.time, opts.facing);
+    else if (opts.hero === 'spartan') drawGoldenHalo(ctx, pose, opts.time);
     else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
     else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
@@ -145,7 +145,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'ballerina') drawBallerinaOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (opts.hero === 'stallion') drawStallionOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'kid') drawKidOutfit(ctx, pose, tier, opts.facing, opts.time);
-  if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing, tier.ascended);
   if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
   if (tier.ascended && opts.hero === 'bride') {
@@ -1655,63 +1655,47 @@ function drawDiscoSuit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 
   ctx.restore();
 }
 
-/** The Spartan's top-level form: a wall of shields behind him and arrows raining down. */
-export function spartanWall(pose: SkeletonPose, time: number) {
-  const shields = 7;
-  const radius = 15;
-  const arrows = Array.from({ length: 12 }, (_, i) => {
-    const fall = (time * 140 + i * 47) % 200; // each arrow falls, then starts again at the top
-    return { x: pose.pelvis.x - 100 + ((i * 53) % 200) + fall * 0.35, y: pose.head.y - 120 + fall };
-  });
-  return { shields, radius, y: pose.chest.y + 4, x: pose.pelvis.x, arrows };
+/** The Spartan's top-level form: where the halo of light flares behind his shoulders, and how bright it pulses (0..1). */
+export function spartanHalo(pose: SkeletonPose, time: number) {
+  return { x: pose.chest.x, y: pose.chest.y - 4, radius: 46, rays: 16, turn: time * 0.25, pulse: 0.5 + 0.5 * Math.sin(time * 3) };
 }
 
-function drawShieldWall(ctx: Ctx, pose: SkeletonPose, time: number, facing: 1 | -1) {
-  const w = spartanWall(pose, time);
+/**
+ * The Spartan's top-level form (with his golden armour, see drawSpartanGear):
+ * a ring of bronze-gold light flaring behind his shoulders, its rays turning
+ * slowly and pulsing.
+ */
+function drawGoldenHalo(ctx: Ctx, pose: SkeletonPose, time: number) {
+  const halo = spartanHalo(pose, time);
   ctx.save();
-  // The arrows, raining down at a slant
-  ctx.strokeStyle = 'rgba(255, 220, 170, 0.7)';
-  ctx.lineWidth = 1.4;
-  ctx.lineCap = 'round';
-  for (const a of w.arrows) {
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(a.x - 6, a.y - 17);
-    ctx.stroke();
-    ctx.fillStyle = '#ffd9a0';
-    ctx.beginPath();
-    ctx.moveTo(a.x + 1.5, a.y + 4);
-    ctx.lineTo(a.x - 2, a.y - 1);
-    ctx.lineTo(a.x + 2.5, a.y - 1.5);
-    ctx.fill();
-  }
-  // The shield wall: a row of bronze shields, overlapping, behind him
-  ctx.shadowColor = '#ffb347';
-  ctx.shadowBlur = 12;
-  for (let i = 0; i < w.shields; i++) {
-    const x = w.x + (i - (w.shields - 1) / 2) * w.radius * 1.55;
-    ctx.beginPath();
-    ctx.arc(x, w.y, w.radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(150, 92, 30, 0.55)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 190, 100, 0.85)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    drawLambda(ctx, x, w.y, w.radius * 0.55, 'rgba(255, 220, 170, 0.8)', facing);
-  }
-  ctx.restore();
-}
-
-/** The lambda painted on Spartan shields. */
-function drawLambda(ctx: Ctx, x: number, y: number, size: number, color: string, facing: 1 | -1) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
+  // Soft glow filling the ring
+  const g = ctx.createRadialGradient(halo.x, halo.y, halo.radius * 0.2, halo.x, halo.y, halo.radius * 1.4);
+  g.addColorStop(0, `rgba(255, 214, 110, ${0.35 + halo.pulse * 0.15})`);
+  g.addColorStop(1, 'rgba(255, 170, 40, 0)');
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.moveTo(x - size * 0.7 * facing, y + size * 0.8);
-  ctx.lineTo(x, y - size * 0.8);
-  ctx.lineTo(x + size * 0.7 * facing, y + size * 0.8);
+  ctx.arc(halo.x, halo.y, halo.radius * 1.4, 0, Math.PI * 2);
+  ctx.fill();
+  // Rays fanning out from the ring
+  ctx.strokeStyle = 'rgba(255, 210, 110, 0.55)';
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#ffc23a';
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let i = 0; i < halo.rays; i++) {
+    const a = halo.turn + (i / halo.rays) * Math.PI * 2;
+    const long = i % 2 === 0 ? 26 : 14;
+    ctx.moveTo(halo.x + Math.cos(a) * (halo.radius + 4), halo.y + Math.sin(a) * (halo.radius + 4));
+    ctx.lineTo(halo.x + Math.cos(a) * (halo.radius + 4 + long), halo.y + Math.sin(a) * (halo.radius + 4 + long));
+  }
+  ctx.stroke();
+  // The ring itself
+  ctx.strokeStyle = '#ffd34d';
+  ctx.lineWidth = 3.5;
+  ctx.shadowBlur = 18 + halo.pulse * 10;
+  ctx.beginPath();
+  ctx.arc(halo.x, halo.y, halo.radius, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 }
@@ -1754,9 +1738,10 @@ export function spearTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
 /**
  * The Spartan's gear over the body: a bronze helmet with a red crest, a
  * leather war skirt, the spear in his rear hand and the round bronze
- * shield on his lead arm.
+ * shield on his lead arm. In his top-level form (`golden`) the helmet,
+ * crest and shield turn gleaming gold.
  */
-function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1, golden = false) {
   const { lead, rear } = arms(pose, facing);
   ctx.save();
   ctx.lineJoin = 'round';
@@ -1798,10 +1783,11 @@ function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing
   ctx.fill();
   // Bronze helmet: a dome over the head, cheek guard down the face, a tall red crest front to back
   const h = pose.head;
-  ctx.fillStyle = '#c9822e';
+  ctx.fillStyle = golden ? '#ffd34d' : '#c9822e';
   ctx.strokeStyle = '#05050c';
   ctx.lineWidth = 1.6;
-  ctx.shadowBlur = 6;
+  ctx.shadowColor = golden ? '#ffe9a0' : '#ffb347';
+  ctx.shadowBlur = golden ? 16 : 6;
   ctx.beginPath();
   ctx.arc(h.x, h.y, 10.5, Math.PI, Math.PI * 2);
   ctx.lineTo(h.x + facing * 10.5, h.y + 7);
@@ -1811,8 +1797,10 @@ function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#d6202f';
-  ctx.shadowColor = '#ff2a2a';
+  // The crest: red, or blazing gold in his top form
+  ctx.fillStyle = golden ? '#ffb000' : '#d6202f';
+  ctx.shadowColor = golden ? '#ffd34d' : '#ff2a2a';
+  ctx.shadowBlur = golden ? 18 : 6;
   ctx.beginPath();
   ctx.moveTo(h.x + facing * 9, h.y - 8);
   ctx.quadraticCurveTo(h.x, h.y - 26, h.x - facing * 16, h.y - 4);
@@ -1826,14 +1814,14 @@ function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing
   ctx.rotate(Math.atan2(fy, fx));
   ctx.beginPath();
   ctx.ellipse(0, 0, SHIELD_R * 0.45, SHIELD_R, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#b8742a';
+  ctx.fillStyle = golden ? '#f2c230' : '#b8742a';
   ctx.strokeStyle = '#05050c';
   ctx.lineWidth = 3;
-  ctx.shadowColor = tier.color;
-  ctx.shadowBlur = 10;
+  ctx.shadowColor = golden ? '#ffe9a0' : tier.color;
+  ctx.shadowBlur = golden ? 18 : 10;
   ctx.stroke();
   ctx.fill();
-  ctx.strokeStyle = '#ffcf7a';
+  ctx.strokeStyle = golden ? '#fff4c8' : '#ffcf7a';
   ctx.lineWidth = 1.6;
   ctx.stroke();
   ctx.restore();

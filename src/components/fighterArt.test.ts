@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanHalo, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -170,7 +170,7 @@ describe("The Kid's crane (top-level form)", () => {
   });
 });
 
-describe("The Spartan's gear and shield wall", () => {
+describe("The Spartan's gear and golden halo", () => {
   const sp = getHero('spartan');
 
   it('every spear hit lands at the tip of his spear', () => {
@@ -184,10 +184,12 @@ describe("The Spartan's gear and shield wall", () => {
     }
   });
 
-  it('a wall of shields behind him, wider than he is, with arrows falling', () => {
-    const w = spartanWall(sp.idlePose, 0);
-    expect(w.shields * w.radius * 1.55).toBeGreaterThan(80);
-    expect(spartanWall(sp.idlePose, 0.5).arrows[0].y).toBeGreaterThan(w.arrows[0].y);
+  it('a halo of golden light flaring behind his shoulders, wider than he is, turning and pulsing', () => {
+    const h = spartanHalo(sp.idlePose, 0);
+    expect(Math.abs(h.x - sp.idlePose.chest.x)).toBeLessThan(1);
+    expect(h.radius * 2).toBeGreaterThan(80);
+    expect(spartanHalo(sp.idlePose, 1).turn).not.toBe(h.turn);
+    expect(spartanHalo(sp.idlePose, 0.4).pulse).not.toBeCloseTo(h.pulse, 2);
   });
 });
 
