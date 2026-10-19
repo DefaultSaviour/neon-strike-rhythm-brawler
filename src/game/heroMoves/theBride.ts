@@ -60,13 +60,26 @@ function twoHanded(k: Key): Key {
   return { ...k, backArm: lower(options[0]) >= lower(options[1]) ? options[0] : options[1] };
 }
 
+/**
+ * How far every pose is moved back from the enemy: the katana adds a long
+ * reach, so she stands further back than the bare-handed heroes. Her hips
+ * stay within 12 of the centre (they run from -12 to -2).
+ */
+const STAND_BACK = 12;
+
+/** Move a whole pose back, planted feet included (limbs given as angles move with the hips). */
+function standBack(k: Key): Key {
+  const shift = <T,>(leg: T): T => (leg && typeof leg === 'object' && 'x' in (leg as object) ? ({ ...(leg as object), x: (leg as unknown as { x: number }).x - STAND_BACK } as T) : leg);
+  return { ...k, pelvis: { ...k.pelvis, x: k.pelvis.x - STAND_BACK }, frontLeg: shift(k.frontLeg), backLeg: shift(k.backLeg) };
+}
+
 let nextId = 1101;
 function combo(tier: AttackMove['tier'], name: string, description: string, keys: Key[]): AttackMove {
-  return comboMove(nextId++, tier, name, description, withHolds(keys.map(twoHanded).map((k) => buildKey(k, TRAIL, k.ms ?? 0))));
+  return comboMove(nextId++, tier, name, description, withHolds(keys.map(standBack).map(twoHanded).map((k) => buildKey(k, TRAIL, k.ms ?? 0))));
 }
 
 /** The guard: long stance, both hands on the hilt, the blade angled up at them. */
-export const BRIDE_IDLE: SkeletonPose = buildFighterPose(twoHanded({ ...stance, lean: 6, frontArm: hiltFront, backArm: hiltBack }), TRAIL);
+export const BRIDE_IDLE: SkeletonPose = buildFighterPose(twoHanded(standBack({ ...stance, lean: 6, frontArm: hiltFront, backArm: hiltBack })), TRAIL);
 
 /** Back on guard. */
 const guard = (ms: number, extra: Partial<Key> = {}): Key => ({ ms, ...stance, lean: 6, frontArm: hiltFront, backArm: hiltBack, ...extra });
