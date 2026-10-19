@@ -51,6 +51,7 @@ export function blendPose(a: SkeletonPose, b: SkeletonPose, t: number): Skeleton
     scarf: mixList(a.scarf, b.scarf),
     prop: b.prop ?? a.prop,
     shot: b.shot,
+    spin: b.spin,
     bladeSlash: b.bladeSlash ?? a.bladeSlash,
   };
 }

@@ -71,6 +71,7 @@ export function comboFrame(
   const last = keyPose(keys.length - 1);
   delete last.bladeSlash;
   delete last.shot;
+  delete last.spin;
   const t = Math.min(1, e / COMBO_RECOVER_SEC);
   const eased = easeInOutCubic(t);
   return { pose: blendPose(last, rest, eased), lungeX: lunge * (1 - eased), active: false };

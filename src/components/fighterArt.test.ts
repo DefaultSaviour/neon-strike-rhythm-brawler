@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath } from './fighterArt';
+import { championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, swanTutuFeathers } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -97,5 +97,24 @@ describe("the Pro Wrestler's championship belt (top-level form)", () => {
   it('bobs gently over time', () => {
     const ys = [0, 0.3, 0.6, 0.9].map((t) => championBelt(pose, t).y);
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(2);
+  });
+});
+
+describe("the Prima Ballerina's swan tutu (top-level form)", () => {
+  const pose = getHero('ballerina').idlePose;
+
+  it('fans two layers of feathers out round her hips, much wider than her body', () => {
+    const feathers = swanTutuFeathers(pose, 0);
+    expect(feathers.filter((f) => f.layer === 0).length).toBeGreaterThanOrEqual(10);
+    expect(feathers.filter((f) => f.layer === 1).length).toBeGreaterThanOrEqual(8);
+    for (const f of feathers) expect(Math.abs(f.base.y - pose.pelvis.y)).toBeLessThan(8);
+    const xs = feathers.map((f) => f.tip.x - pose.pelvis.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(55);
+  });
+
+  it('the feathers flutter over time', () => {
+    const a = swanTutuFeathers(pose, 0);
+    const b = swanTutuFeathers(pose, 0.25);
+    expect(a.some((f, i) => Math.hypot(f.tip.x - b[i].tip.x, f.tip.y - b[i].tip.y) > 1)).toBe(true);
   });
 });
