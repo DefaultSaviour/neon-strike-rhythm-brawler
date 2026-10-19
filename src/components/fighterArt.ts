@@ -48,7 +48,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'kid') drawCraneSpirit(ctx, pose, opts.time, opts.facing);
     else if (opts.hero === 'spartan') drawShieldWall(ctx, pose, opts.time, opts.facing);
     else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
-    else if (opts.hero === 'bride') drawMoonlitSnow(ctx, pose, opts.time, 'back');
+    else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -150,7 +150,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
   if (tier.ascended && opts.hero === 'bride') {
     drawBrideHelmet(ctx, pose, opts.facing);
-    drawMoonlitSnow(ctx, pose, opts.time, 'front');
+    drawBlossomStorm(ctx, pose, opts.time, 'front');
   }
   if (pose.prop === 'ropeOver' || pose.prop === 'ropeUnder') drawSkippingRope(ctx, pose);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
@@ -1317,57 +1317,35 @@ export function katanaTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
 }
 
 /**
- * The Bride's top-level form: the quiet before the last duel. A giant pale
- * full moon hangs behind her and snow drifts down around her; some flakes
- * fall in front of her.
+ * The Bride's top-level form: a storm of cherry blossom petals whirling
+ * round her in a wide ring. Petals behind her are drawn first, the ones
+ * passing in front after her body.
  */
-export function moonlitSnow(pose: SkeletonPose, time: number) {
-  const moon = { x: pose.chest.x - 10, y: pose.head.y - 20, radius: 58 };
-  const count = 40;
-  const flakes = Array.from({ length: count }, (_, i) => {
-    const fall = (time * 22 + i * 29) % 190; // each flake drifts down, then starts again at the top
-    const x = pose.pelvis.x - 110 + ((i * 47) % 220) + Math.sin(time * 1.3 + i) * 6;
-    return { x, y: pose.head.y - 110 + fall, size: 1 + (i % 3) * 0.6, front: i % 4 === 0 };
+export function blossomStorm(pose: SkeletonPose, time: number) {
+  // Kept sparse and slow so it reads as a calm drift, not clutter
+  const count = 14;
+  return Array.from({ length: count }, (_, i) => {
+    const a = time * 0.7 + (i / count) * Math.PI * 2;
+    const ring = 56 + (i % 2) * 12;
+    const rise = ((i * 37) % 80) - 55 + Math.sin(time * 1.2 + i) * 4;
+    return { x: pose.chest.x + Math.cos(a) * ring, y: pose.chest.y + rise, front: Math.sin(a) > 0.6, spin: time * 1.5 + i };
   });
-  return { moon, flakes };
 }
 
-function drawMoonlitSnow(ctx: Ctx, pose: SkeletonPose, time: number, layer: 'back' | 'front') {
-  const { moon, flakes } = moonlitSnow(pose, time);
+function drawBlossomStorm(ctx: Ctx, pose: SkeletonPose, time: number, layer: 'back' | 'front') {
   ctx.save();
-  if (layer === 'back') {
-    // The moon: pale and huge, a soft cold glow, a few faint grey seas
-    const g = ctx.createRadialGradient(moon.x - 12, moon.y - 12, moon.radius * 0.1, moon.x, moon.y, moon.radius);
-    g.addColorStop(0, 'rgba(248, 250, 255, 0.85)');
-    g.addColorStop(1, 'rgba(200, 214, 240, 0.6)');
-    ctx.fillStyle = g;
-    ctx.shadowColor = '#dfe8ff';
-    ctx.shadowBlur = 40;
-    ctx.beginPath();
-    ctx.arc(moon.x, moon.y, moon.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(150, 165, 195, 0.35)';
-    for (const [dx, dy, r] of [
-      [-18, -10, 12],
-      [14, 8, 9],
-      [-4, 22, 7],
-      [22, -20, 6],
-    ]) {
-      ctx.beginPath();
-      ctx.arc(moon.x + dx, moon.y + dy, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  // Snow
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = '#ffffff';
+  ctx.shadowColor = '#ff9fcf';
   ctx.shadowBlur = 4;
-  for (const f of flakes) {
-    if (f.front !== (layer === 'front')) continue;
+  for (const p of blossomStorm(pose, time)) {
+    if (p.front !== (layer === 'front')) continue;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.spin);
+    ctx.fillStyle = layer === 'front' ? 'rgba(255, 194, 224, 0.85)' : 'rgba(255, 170, 210, 0.5)';
     ctx.beginPath();
-    ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 4, 2.2, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
   ctx.restore();
 }

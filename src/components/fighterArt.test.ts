@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, katanaTip, moonlitSnow, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, spartanWall, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -208,7 +208,7 @@ describe("The Disco King's disco fever (top-level form)", () => {
   });
 });
 
-describe("The Bride's katana and moonlit snow", () => {
+describe("The Bride's katana and blossom storm", () => {
   const br = getHero('bride');
 
   it('every sword hit lands at the tip of her blade', () => {
@@ -220,12 +220,14 @@ describe("The Bride's katana and moonlit snow", () => {
     }
   });
 
-  it('a giant full moon behind her, bigger than she is, and snow drifting down', () => {
-    const { moon, flakes } = moonlitSnow(br.idlePose, 0);
-    expect(moon.radius * 2).toBeGreaterThan(100);
-    expect(moon.y).toBeLessThan(br.idlePose.chest.y);
-    expect(flakes.length).toBeGreaterThanOrEqual(30);
-    expect(flakes.some((f) => f.front)).toBe(true);
-    expect(moonlitSnow(br.idlePose, 0.5).flakes[0].y).toBeGreaterThan(flakes[0].y);
+  it('a storm of petals whirling round her, some behind and some in front', () => {
+    const petals = blossomStorm(br.idlePose, 0);
+    expect(petals.length).toBeGreaterThanOrEqual(10);
+    expect(petals.length).toBeLessThanOrEqual(16); // sparse: a calm drift, not clutter
+    expect(petals.some((p) => p.front)).toBe(true);
+    expect(petals.some((p) => !p.front)).toBe(true);
+    const xs = petals.map((p) => p.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(90);
+    expect(blossomStorm(br.idlePose, 0.5)[0].x).not.toBeCloseTo(petals[0].x, 1);
   });
 });

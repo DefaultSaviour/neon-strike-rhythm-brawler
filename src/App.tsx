@@ -17,7 +17,7 @@ import { StancesScreen } from './components/StancesScreen';
 import { initCrazyGames, showRewardedAd } from './platform/crazyGames';
 import { formatCountdown, secondsToNextStance } from './game/stanceUnlocks';
 import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
-import { HEROES } from './game/heroes';
+import { getHero, HeroId, HEROES } from './game/heroes';
 
 export default function App() {
   const [gameStatus, setGameStatus] = useState<GameStatus>('MENU');
@@ -202,6 +202,29 @@ export default function App() {
     setMenuNotice(label ? `New stance unlocked: ${label}!` : null);
   }, [adBusy, engine]);
 
+  /** Watch a rewarded ad to unlock an ad-only hero (The Bride), then play as her. */
+  const handleWatchHeroAd = useCallback(
+    async (hero: HeroId) => {
+      if (adBusy) return;
+      setAdBusy(true);
+      const ctx = audioEngine.getAudioContext();
+      const watched = await showRewardedAd(
+        () => void ctx.suspend(),
+        () => void ctx.resume()
+      );
+      setAdBusy(false);
+      if (!watched) {
+        setMenuNotice('The ad did not finish, so no unlock this time.');
+        return;
+      }
+      if (engine.unlockHeroWithAd(hero)) {
+        handleUpdateSettings({ hero });
+        setMenuNotice(`New hero unlocked: ${getHero(hero).label}!`);
+      }
+    },
+    [adBusy, engine, handleUpdateSettings]
+  );
+
   useEffect(() => {
     if (!menuNotice) return;
     const t = setTimeout(() => setMenuNotice(null), 3500);
@@ -352,6 +375,8 @@ export default function App() {
           selectedHero={engine.hero.id}
           isUnlocked={(id) => engine.isHeroUnlocked(id)}
           onSelect={(hero) => handleUpdateSettings({ hero })}
+          onWatchAd={adAvailable ? handleWatchHeroAd : undefined}
+          adBusy={adBusy}
           onClose={closeMenuScreen}
         />
       )}

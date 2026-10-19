@@ -13,7 +13,7 @@ import {
 } from '../types/game';
 import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
 import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes';
-import { addRun, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
+import { addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
 import { isStanceUnlocked, nextStance } from './stanceUnlocks';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
@@ -144,7 +144,7 @@ export class GameEngine {
     // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
     // stripped from the published build (import.meta.env.DEV is false there).
     if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
-      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0 };
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9 };
       this.devUnlockAll = true;
     }
     this.loadSettings();
@@ -184,6 +184,14 @@ export class GameEngine {
     this.lifetimeStats = { ...this.lifetimeStats, adUnlocks: this.lifetimeStats.adUnlocks + 1 };
     if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
     return stance;
+  }
+
+  /** The player watched a rewarded ad for an ad-only hero: unlock them. Returns false if there was nothing to unlock. */
+  public unlockHeroWithAd(id: HeroId): boolean {
+    if (!HERO_UNLOCKS[id]?.ad || this.isHeroUnlocked(id)) return false;
+    this.lifetimeStats = { ...this.lifetimeStats, heroAds: this.lifetimeStats.heroAds + 1 };
+    if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
+    return true;
   }
 
   /**
