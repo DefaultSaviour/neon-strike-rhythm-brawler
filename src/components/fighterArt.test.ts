@@ -100,7 +100,7 @@ describe("the Pro Wrestler's championship belt (top-level form)", () => {
   });
 });
 
-describe("the Prima Ballerina's swan tutu (top-level form)", () => {
+describe("the White Swan's swan tutu (top-level form)", () => {
   const pose = getHero('ballerina').idlePose;
 
   it('fans two layers of feathers out round her hips, much wider than her body', () => {
@@ -119,7 +119,7 @@ describe("the Prima Ballerina's swan tutu (top-level form)", () => {
   });
 });
 
-describe("the Prima Ballerina's long arms", () => {
+describe("the White Swan's long arms", () => {
   const pose = getHero('ballerina').idlePose;
   const drawn = ballerinaArms(pose);
   const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);

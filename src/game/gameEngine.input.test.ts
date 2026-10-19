@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '../audio/audioEngine';
 import { CROWD_POP_SEC, GameEngine, SLAM_SHAKE } from './gameEngine';
-import { getHero } from './heroes';
+import { DEFAULT_HERO, getHero } from './heroes';
+import { EMPTY_STATS } from './heroUnlocks';
 import { BeatNote, TimingJudgementType, Track } from '../types/game';
 import type { DeathReport } from './timing';
 
@@ -170,5 +171,58 @@ describe('slams', () => {
     const g = await hitWith(slam, 'none');
     expect(g.engine.crowdPop).toBe(0);
     expect(g.engine.screenShake).toBe(0);
+  });
+});
+
+describe('earning heroes', () => {
+  const notes: Array<[number, 'left' | 'right']> = Array.from({ length: 6 }, (_, i) => [2 + i * 0.5, 'left']);
+
+  it('quitting part way still counts the enemies beaten, once', async () => {
+    const g = await play(notes);
+    g.engine.lifetimeStats = { ...EMPTY_STATS };
+    for (const [t, lane] of notes.slice(0, 4)) g.press(t, lane);
+    g.engine.stop();
+    g.engine.stop();
+    expect(g.engine.lifetimeStats).toMatchObject({ enemiesDefeated: 4, perfects: 4, bestCombo: 4, songsCleared: 0 });
+  });
+
+  it('reports a hero the song just unlocked', async () => {
+    const g = await play(notes);
+    g.engine.lifetimeStats = { ...EMPTY_STATS, enemiesDefeated: 148 };
+    for (const [t, lane] of notes.slice(0, 3)) g.press(t, lane);
+    g.engine.stop();
+    expect(g.engine.newUnlocks).toEqual(['dragon']);
+    expect(g.engine.isHeroUnlocked('dragon')).toBe(true);
+  });
+
+  it('a hero not yet earned plays as the default hero', async () => {
+    const g = await play(notes);
+    g.engine.lifetimeStats = { ...EMPTY_STATS };
+    g.engine.settings.hero = 'ballerina';
+    expect(g.engine.hero.id).toBe(DEFAULT_HERO);
+    g.engine.lifetimeStats = { ...EMPTY_STATS, perfects: 200 };
+    expect(g.engine.hero.id).toBe('ballerina');
+  });
+});
+
+describe('earning enemy stances', () => {
+  it('playing time counts toward stances, and a locked stance plays as the default', async () => {
+    const g = await play([[2, 'left']]);
+    g.engine.lifetimeStats = { ...EMPTY_STATS, playSeconds: 20 * 60 - 1 };
+    g.engine.settings.enemyMotion = 'sway';
+    expect(g.engine.enemyMotion).toBe('run');
+    g.advanceTo(3);
+    g.engine.stop();
+    expect(g.engine.lifetimeStats.playSeconds).toBeGreaterThanOrEqual(20 * 60);
+    expect(g.engine.enemyMotion).toBe('sway');
+  });
+
+  it('a watched ad opens the next stance straight away', async () => {
+    const g = await play([[2, 'left']]);
+    g.engine.lifetimeStats = { ...EMPTY_STATS };
+    expect(g.engine.isStanceUnlocked('sway')).toBe(false);
+    expect(g.engine.unlockStanceWithAd()).toBe('sway');
+    expect(g.engine.isStanceUnlocked('sway')).toBe(true);
+    expect(g.engine.isStanceUnlocked('dance')).toBe(false);
   });
 });

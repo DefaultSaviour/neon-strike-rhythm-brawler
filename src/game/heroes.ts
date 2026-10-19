@@ -71,8 +71,8 @@ export const HEROES: HeroDefinition[] = [
   },
   {
     id: 'ballerina',
-    label: 'The Prima Ballerina',
-    description: 'Ballet as a weapon: whipping fouettés, flying leaps and kicks to the ceiling',
+    label: 'The White Swan',
+    description: 'Ballet as a weapon: kicks to the ceiling, and a swan tutu for her finishers',
     idlePose: PRIMA_BALLERINA_IDLE,
     moves: PRIMA_BALLERINA_MOVES,
   },

@@ -3,7 +3,7 @@ import { FLOOR } from '../enemyMotion';
 import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, headOf, LimbAngles, withHolds } from './poseBuilder';
 
 /**
- * THE PRIMA BALLERINA: ballet as a weapon, in the spirit of the boy from
+ * THE WHITE SWAN (id 'ballerina', file name kept so saved settings still match): ballet as a weapon, in the spirit of the boy from
  * the mining town who trains his way to the ballet school. Every move is a
  * real ballet step (battement, fouetté, grand jeté) turned into a strike:
  * straight-legged kicks, whipping turns and flying leaps. Physical only: no

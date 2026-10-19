@@ -2,7 +2,8 @@ import React, { useEffect } from 'react';
 import { GameScoreState, Track, HighScoreRecord } from '../types/game';
 import type { DeathReport } from '../game/timing';
 import type { RunProgress } from '../game/runProgress';
-import type { HeroId } from '../game/heroes';
+import { getHero, HeroId } from '../game/heroes';
+import { HERO_UNLOCKS } from '../game/heroUnlocks';
 import { RunProgressBar } from './RunProgressBar';
 import { RotateCcw, Music, Trophy, Flame, Target } from 'lucide-react';
 
@@ -26,6 +27,10 @@ interface GameOverModalProps {
   runProgress?: RunProgress | null;
   /** The hero you played (the progress-bar runner is drawn as them) */
   heroId?: HeroId;
+  /** Heroes this run just unlocked */
+  newUnlocks?: HeroId[];
+  /** Switch to a hero (from the "play as them" button) */
+  onPickHero?: (id: HeroId) => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -42,7 +47,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   deathReport = null,
   runProgress = null,
   heroId,
+  newUnlocks = [],
+  onPickHero,
 }) => {
+  const [pickedHero, setPickedHero] = React.useState<HeroId | null>(null);
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
   // Freeze the suggestion when the screen opens: once applied, the setting
   // changes, and recomputing from the same hits would count the error twice.
@@ -137,6 +145,34 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <RunProgressBar run={runProgress} heroId={heroId} />
             </div>
           )}
+          {newUnlocks.map((id) => {
+            const hero = getHero(id);
+            return (
+              <div
+                key={id}
+                className="mt-3 w-full self-stretch px-3 py-2.5 rounded-lg bg-amber-400/10 border border-amber-400/60 shadow-[0_0_24px_rgba(255,194,58,0.25)] flex items-center gap-3 text-left"
+              >
+                <div className="flex-1">
+                  <div className="text-[10px] font-black tracking-[0.2em] text-amber-300 uppercase">New hero unlocked</div>
+                  <div className="text-sm font-bold text-white">{hero.label}</div>
+                  <div className="text-[11px] text-slate-400">{HERO_UNLOCKS[id]?.label}: done!</div>
+                </div>
+                {onPickHero && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onPickHero(id);
+                      setPickedHero(id);
+                    }}
+                    disabled={pickedHero === id}
+                    className="px-3 py-1.5 rounded-md text-xs font-bold bg-amber-400 text-slate-900 hover:bg-amber-300 disabled:bg-emerald-400 disabled:cursor-default cursor-pointer"
+                  >
+                    {pickedHero === id ? 'Selected' : 'Play as them'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Grade Badge */}

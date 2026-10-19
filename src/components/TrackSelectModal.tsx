@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { Track, HighScoreRecord, AudioSettings } from '../types/game';
-import { GameOptions } from './GameOptions';
 import { PRELOADED_TRACKS, audioEngine } from '../audio/audioEngine';
 import { Play, Upload, Award, Sliders, Volume2, Sparkles, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 
@@ -29,7 +28,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
   onUpdateSettings,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<'tracks' | 'custom' | 'settings'>('tracks');
+  const [activeTab, setActiveTab] = useState<'tracks' | 'custom'>('tracks');
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -70,7 +69,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-300">
               NEON STRIKE
             </div>
-            <div className="text-xs text-slate-400">Rhythm Combat Library & Settings</div>
+            <div className="text-xs text-slate-400">Choose a song</div>
           </div>
 
           {/* Tab selector */}
@@ -95,17 +94,6 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
             >
               <Upload className="w-3.5 h-3.5" />
               <span>Import Audio</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`px-3 py-1.5 rounded font-medium transition-colors cursor-pointer flex items-center gap-1 ${
-                activeTab === 'settings'
-                  ? 'bg-amber-400 text-black font-bold shadow-[0_0_10px_rgba(255,230,0,0.4)]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Calibrate</span>
             </button>
           </div>
         </div>
@@ -321,147 +309,6 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
             </div>
           )}
 
-          {activeTab === 'settings' && (
-            <div className="flex flex-col gap-6 max-w-lg mx-auto">
-              <GameOptions settings={settings} onUpdateSettings={onUpdateSettings} sections={['hero', 'motion', 'hitSound']} />
-
-              {/* Music Volume */}
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-between text-xs text-slate-300">
-                  <span className="font-semibold">Music Volume</span>
-                  <span className="font-mono">{Math.round(settings.volume * 100)}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={settings.volume}
-                  onChange={(e) => onUpdateSettings({ volume: parseFloat(e.target.value) })}
-                  className="w-full accent-cyan-400 cursor-pointer"
-                />
-              </div>
-
-              {/* SFX Volume */}
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-between text-xs text-slate-300">
-                  <span className="font-semibold">Sound FX Volume</span>
-                  <span className="font-mono">{Math.round(settings.sfxVolume * 100)}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={settings.sfxVolume}
-                  onChange={(e) => onUpdateSettings({ sfxVolume: parseFloat(e.target.value) })}
-                  className="w-full accent-pink-500 cursor-pointer"
-                />
-              </div>
-
-              {/* Latency Calibration */}
-              <div className="flex flex-col gap-2 p-4 rounded-lg bg-slate-900/60 border border-slate-800">
-                <div className="flex justify-between text-xs text-slate-300">
-                  <span className="font-semibold">Audio Latency Calibration</span>
-                  <span className="font-mono text-cyan-400 font-bold">
-                    {settings.latencyOffsetMs > 0 ? `+${settings.latencyOffsetMs}` : settings.latencyOffsetMs} ms
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="-300"
-                  max="300"
-                  step="5"
-                  value={settings.latencyOffsetMs}
-                  onChange={(e) => onUpdateSettings({ latencyOffsetMs: parseInt(e.target.value, 10) })}
-                  className="w-full accent-cyan-400 cursor-pointer"
-                />
-                <div className="text-[11px] text-slate-500">
-                  If hits keep showing LATE, raise this; if they show EARLY, lower it. Bluetooth headphones usually need +150 ms or more. Tip: after a song, the results screen suggests a value for you.
-                </div>
-              </div>
-
-              {/* One-Button Combat Mode Toggle */}
-              <div className="flex items-center justify-between p-3.5 rounded-lg bg-slate-900/60 border border-amber-500/30">
-                <div className="flex flex-col pr-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-100 text-xs">One-Button Mode</span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase border ${
-                        settings.oneButtonMode
-                          ? 'bg-amber-950 border-amber-500/60 text-amber-300'
-                          : 'bg-slate-800 border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      {settings.oneButtonMode ? 'ON (1-Button)' : 'OFF (2-Button)'}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-400 mt-1 leading-snug">
-                    Strike with a single input ([SPACE], screen tap, or any key). Auto-detects and targets the nearest incoming enemy in either lane.
-                  </span>
-                </div>
-                <button
-                  onClick={() => onUpdateSettings({ oneButtonMode: !settings.oneButtonMode })}
-                  className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer shrink-0 ${
-                    settings.oneButtonMode ? 'bg-amber-400 shadow-[0_0_10px_rgba(255,230,0,0.5)]' : 'bg-slate-700'
-                  }`}
-                >
-                  <div
-                    className={`w-4 h-4 rounded-full bg-black transition-transform ${
-                      settings.oneButtonMode ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Screen Shake Control */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900/60 border border-slate-800">
-                <div className="flex flex-col">
-                  <span className="font-semibold text-slate-200 text-xs">Screen Shake</span>
-                  <span className="text-[11px] text-slate-500">
-                    Controls impact vibration (Turn Off for complete stability)
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-mono">
-                  {(['none', 'subtle', 'normal'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => onUpdateSettings({ screenShake: mode })}
-                      className={`px-2.5 py-1 rounded capitalize transition-colors cursor-pointer ${
-                        (settings.screenShake || 'subtle') === mode
-                          ? 'bg-cyan-500 text-black font-bold shadow-[0_0_8px_rgba(0,243,255,0.4)]'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {mode === 'none' ? 'Off' : mode === 'subtle' ? 'Subtle' : 'Standard'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Scanlines CRT Toggle */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900/60 border border-slate-800">
-                <div className="flex flex-col">
-                  <span className="font-semibold text-slate-200 text-xs">Retro CRT Scanlines</span>
-                  <span className="text-[11px] text-slate-500">
-                    Classic arcade monitor scanline & vignette overlay
-                  </span>
-                </div>
-                <button
-                  onClick={() => onUpdateSettings({ scanlines: !settings.scanlines })}
-                  className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                    settings.scanlines ? 'bg-cyan-500' : 'bg-slate-700'
-                  }`}
-                >
-                  <div
-                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                      settings.scanlines ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
@@ -470,12 +317,22 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
             Selected: <span className="text-slate-300">{currentTrack?.title}</span>
           </div>
 
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all cursor-pointer"
-          >
-            Start Combat
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm cursor-pointer"
+            >
+              Back
+            </button>
+            {onPlayTrack && currentTrack && (
+              <button
+                onClick={() => onPlayTrack(currentTrack)}
+                className="px-6 py-2.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all cursor-pointer"
+              >
+                Play
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
