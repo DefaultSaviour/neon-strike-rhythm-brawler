@@ -44,12 +44,16 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'theOne') drawCodeRain(ctx, pose, opts.time);
     else if (opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'back');
     else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
+    else if (opts.hero === 'stallion') drawSunriseSteps(ctx, pose, opts.time);
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
     }
     else drawAngelWings(ctx, pose, opts.time);
   }
+
+  // 1b. The Stallion's side of beef hangs in front of him, behind his arms
+  if (pose.prop === 'meat') drawSideOfBeef(ctx, pose, opts.facing);
 
   // 2. Overdrive lightning crackling from the chest to the hands
   if (tier.lightning) {
@@ -130,6 +134,8 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'proWrestler') drawWrestlerOutfit(ctx, pose, tier, opts.facing);
   if (pose.prop === 'chair') drawSteelChair(ctx, pose, opts.facing);
   if (opts.hero === 'ballerina') drawBallerinaOutfit(ctx, pose, tier, opts.facing, opts.time);
+  if (opts.hero === 'stallion') drawStallionOutfit(ctx, pose, tier, opts.facing);
+  if (pose.prop === 'ropeOver' || pose.prop === 'ropeUnder') drawSkippingRope(ctx, pose);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
   if (pose.prop === 'nunchaku') drawNunchaku(ctx, pose);
@@ -962,6 +968,75 @@ function drawWrestlerOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, fac
 }
 
 /** A folding steel chair, folded flat, gripped in both hands and swung seat-first. */
+/** A frozen side of beef hanging from a hook in front of him; it swings away when punched. */
+function drawSideOfBeef(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
+  const hit = !!pose.bladeSlash;
+  const top = { x: pose.pelvis.x + facing * 40, y: pose.head.y - 34 };
+  ctx.save();
+  ctx.translate(top.x, top.y);
+  ctx.rotate(hit ? facing * -0.22 : 0);
+  // The chain up out of view
+  ctx.strokeStyle = '#8a90a6';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -30);
+  ctx.lineTo(0, 6);
+  ctx.stroke();
+  // The slab: a long rounded wedge of red meat with a white fat edge
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-9, 6);
+  ctx.quadraticCurveTo(-16, 40, -11, 82);
+  ctx.quadraticCurveTo(0, 92, 11, 82);
+  ctx.quadraticCurveTo(16, 40, 9, 6);
+  ctx.closePath();
+  ctx.fillStyle = '#b8323a';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fill();
+  ctx.strokeStyle = '#ffd9d4';
+  ctx.shadowColor = '#ff4a3d';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  // Marbling: a few curved streaks of fat
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#f4c6c0';
+  ctx.lineWidth = 1.2;
+  for (const y of [24, 44, 64]) {
+    ctx.beginPath();
+    ctx.moveTo(-8, y);
+    ctx.quadraticCurveTo(0, y + 6, 8, y - 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A skipping rope held in both hands, its loop swung up over the head or down under the feet. */
+function drawSkippingRope(ctx: Ctx, pose: SkeletonPose) {
+  const a = pose.leftHand;
+  const b = pose.rightHand;
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const apexY = pose.prop === 'ropeOver' ? pose.head.y - 28 : Math.max(pose.leftFoot.y, pose.rightFoot.y) + 5;
+  // A quadratic curve through the apex: its control point sits twice as far out
+  const control = { x: mid.x, y: 2 * apexY - mid.y };
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.quadraticCurveTo(control.x, control.y, b.x, b.y);
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.strokeStyle = '#ffe9e6';
+  ctx.shadowColor = '#ff4a3d';
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawSteelChair(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
   const { lead, rear } = arms(pose, facing);
   const dx = lead.hand.x - rear.hand.x;
@@ -1213,6 +1288,138 @@ export function ballerinaArms(pose: SkeletonPose): SkeletonPose {
     rightElbow: stretch(pose.rightShoulder, pose.rightElbow),
     rightHand: stretch(pose.rightShoulder, pose.rightHand),
   };
+}
+
+/** Where The Stallion's sunrise sits (his top-level form): a big low sun behind his shoulders. */
+export function stallionSun(pose: SkeletonPose, time: number) {
+  return { x: pose.chest.x, y: pose.chest.y + 6, radius: 52, rays: 14, turn: time * 0.15 };
+}
+
+/**
+ * The Stallion's top-level form: he stands at the top of the long stone
+ * steps at dawn, a huge golden sun rising behind him, its rays turning
+ * slowly. The steps fall away behind his feet.
+ */
+function drawSunriseSteps(ctx: Ctx, pose: SkeletonPose, time: number) {
+  const sun = stallionSun(pose, time);
+  ctx.save();
+  // Rays
+  ctx.strokeStyle = 'rgba(255, 200, 90, 0.35)';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#ffb000';
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  for (let i = 0; i < sun.rays; i++) {
+    const a = sun.turn + (i / sun.rays) * Math.PI * 2;
+    ctx.moveTo(sun.x + Math.cos(a) * (sun.radius + 8), sun.y + Math.sin(a) * (sun.radius + 8));
+    ctx.lineTo(sun.x + Math.cos(a) * (sun.radius + 30), sun.y + Math.sin(a) * (sun.radius + 30));
+  }
+  ctx.stroke();
+  // The sun itself: warm at the rim, pale gold in the middle
+  const g = ctx.createRadialGradient(sun.x, sun.y, sun.radius * 0.2, sun.x, sun.y, sun.radius);
+  g.addColorStop(0, 'rgba(255, 244, 200, 0.75)');
+  g.addColorStop(1, 'rgba(255, 150, 40, 0.55)');
+  ctx.fillStyle = g;
+  ctx.shadowBlur = 30;
+  ctx.beginPath();
+  ctx.arc(sun.x, sun.y, sun.radius, 0, Math.PI * 2);
+  ctx.fill();
+  // The steps, falling away below and behind him
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(20, 16, 30, 0.85)';
+  ctx.strokeStyle = 'rgba(255, 200, 90, 0.55)';
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 4; i++) {
+    const w = 60 + i * 26;
+    const y = 68 + i * 7;
+    ctx.beginPath();
+    ctx.rect(pose.pelvis.x - w / 2, y, w, 7);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * The Stallion: grey sweats with a hood bunched at the neck, a black knit
+ * beanie, and big red boxing gloves on both hands.
+ */
+function drawStallionOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // Grey sweatshirt over the torso
+  ctx.fillStyle = '#5d6170';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 11, c.y + ny * 11);
+  ctx.lineTo(c.x - nx * 11, c.y - ny * 11);
+  ctx.lineTo(p.x - nx * 8, p.y - ny * 8);
+  ctx.lineTo(p.x + nx * 8, p.y + ny * 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Sweat-darkened patch down the chest, and the hood bunched round the neck
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(30, 32, 44, 0.55)';
+  ctx.beginPath();
+  ctx.ellipse(c.x + sx * 0.35, c.y + sy * 0.35, 4.5, 8, Math.atan2(sy, sx) - Math.PI / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#8a8fa0';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(c.x, c.y - 1, 6, Math.PI * 0.95, Math.PI * 2.05);
+  ctx.stroke();
+  // Black knit beanie
+  const h = pose.head;
+  ctx.fillStyle = '#121218';
+  ctx.strokeStyle = tier.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.arc(h.x - facing * 0.5, h.y - 1, 10, Math.PI * 1.02, Math.PI * 1.98);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#26262f';
+  ctx.fillRect(h.x - 10.5, h.y - 3.2, 21, 3.4);
+  // Big red boxing gloves, with a white cuff
+  for (const [hand, elbow] of [
+    [pose.leftHand, pose.leftElbow],
+    [pose.rightHand, pose.rightElbow],
+  ] as const) {
+    const dx = hand.x - elbow.x;
+    const dy = hand.y - elbow.y;
+    const l = Math.hypot(dx, dy) || 1;
+    const glove = { x: hand.x + (dx / l) * 2, y: hand.y + (dy / l) * 2 };
+    ctx.fillStyle = '#e8eaf2';
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(hand.x - (dx / l) * 4, hand.y - (dy / l) * 4, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#d6202f';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = '#ff4a3d';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(glove.x, glove.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** Where Baba Yaga's gold coin halo sits and how wide it looks as it spins (1 = face on). */

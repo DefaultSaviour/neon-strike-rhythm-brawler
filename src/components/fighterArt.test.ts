@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
-import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, dragonSpiritPath, stallionSun, swanTutuFeathers } from './fighterArt';
 
 describe("the Little Dragon's dragon spirit (top-level form)", () => {
   const pose = getHero('dragon').idlePose;
@@ -134,5 +134,20 @@ describe("the White Swan's long arms", () => {
     expect(drawn.leftHand.y).toBeLessThan(pose.head.y - 9 - 6);
     expect(drawn.rightHand.y).toBeLessThan(pose.head.y - 9 - 6);
     expect(d(drawn.leftHand, drawn.rightHand)).toBeLessThan(4);
+  });
+});
+
+describe("The Stallion's sunrise (top-level form)", () => {
+  const pose = getHero('stallion').idlePose;
+
+  it('a big sun rising behind his shoulders, wider than he is', () => {
+    const sun = stallionSun(pose, 0);
+    expect(Math.abs(sun.x - pose.chest.x)).toBeLessThan(1);
+    expect(sun.radius * 2).toBeGreaterThan(80);
+    expect(sun.rays).toBeGreaterThanOrEqual(10);
+  });
+
+  it('its rays turn slowly', () => {
+    expect(stallionSun(pose, 2).turn).not.toBe(stallionSun(pose, 0).turn);
   });
 });

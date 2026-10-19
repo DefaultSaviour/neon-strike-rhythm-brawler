@@ -134,3 +134,26 @@ Rules from the player:
 5. **Prima Ballerina.** Pure animation, no new tech.
 
 The **Neon Striker** can also be upgraded to combos at any point: wrap each of its 24 moves in a short follow-up sequence.
+
+---
+
+# Round two: pop-culture icons
+
+All five round-one heroes are built (the Prima Ballerina became **The White Swan**). The second
+round follows the same rule: **instantly recognisable icons, with our own names**, and no direct
+quotes or trademarked names. Each hero is built the round-one way from the start: one clear idea
+per move in a few big poses, every hit held for a beat (`withHolds`), and hips within 12 units of
+the centre.
+
+Heroes are earned by playing (see `src/game/heroUnlocks.ts`). **One of these five will be the
+ad-only hero**, unlocked by a rewarded ad. Which one is decided once they're all built.
+
+| Hero | Inspired by | Look | Fighting style | Top-level form |
+|---|---|---|---|---|
+| **The Stallion** | Rocky | Grey sweats, black beanie, red gloves | Jab, cross, hooks, body shots, uppercuts, a haymaker finisher | On the steps with arms raised, a golden sunrise behind |
+| **The Kid** | The Karate Kid | White gi, headband | "Wax on / wax off" blocks into strikes, front kicks, crane-kick finisher | A giant white crane spreading its wings behind him |
+| **The Spartan** | 300 | Bronze helmet, red cape, round shield | Shield bashes, spear thrusts, the kick into the pit | A wall of shields with arrows raining down |
+| **The Disco King** | Saturday Night Fever | White suit, wide collar | Disco spins, the point to the sky, hip-swing kicks | A giant spinning disco ball and a light-up floor |
+| **The Bride** | Kill Bill | Bright yellow jumpsuit with a black stripe, long blonde ponytail (kept clearly apart from the Little Dragon) | Katana slashes, quick draws, a whirlwind finisher | A storm of cherry blossoms |
+
+Build order: The Stallion first, then the others one at a time, each play-tested before the next.
