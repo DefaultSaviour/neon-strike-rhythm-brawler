@@ -243,6 +243,9 @@ class AudioEngine {
   private urlBufferCache: Map<string, AudioBuffer> = new Map();
   private compressor: DynamicsCompressorNode | null = null;
   private paused: boolean = false;
+  /** The last stage before the speakers: silences everything when the platform (CrazyGames) says to mute. */
+  private platformGain: GainNode | null = null;
+  private platformMuted = false;
   public bassMeter: number = 0;
   public trebleMeter: number = 0;
 
@@ -278,7 +281,10 @@ class AudioEngine {
       this.musicGain.connect(this.analyser);
       this.analyser.connect(this.compressor);
       this.sfxGain.connect(this.compressor);
-      this.compressor.connect(this.ctx.destination);
+      this.platformGain = this.ctx.createGain();
+      this.platformGain.gain.setValueAtTime(this.platformMuted ? 0 : 1, this.ctx.currentTime);
+      this.compressor.connect(this.platformGain);
+      this.platformGain.connect(this.ctx.destination);
     }
 
     if (this.ctx.state === 'suspended' && !this.paused) {
@@ -301,6 +307,16 @@ class AudioEngine {
     if (!this.ctx || !this.paused) return;
     this.paused = false;
     await this.ctx.resume();
+  }
+
+  /**
+   * Mute everything because the platform says so (CrazyGames' muteAudio
+   * setting). This sits after the game's own volume settings, so turning the
+   * game's volume up can't bring the sound back while the platform mutes it.
+   */
+  public setPlatformMuted(muted: boolean) {
+    this.platformMuted = muted;
+    if (this.ctx && this.platformGain) this.platformGain.gain.setValueAtTime(muted ? 0 : 1, this.ctx.currentTime);
   }
 
   public isPaused(): boolean {
@@ -1349,7 +1365,7 @@ export const PRELOADED_TRACKS: Track[] = [
     description:
       'Hard-thumping 150 BPM techno anthem! Heavy 4-on-the-floor kick drops with dynamic evolving basslines.',
     notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
-    audioUrl: '/audio/Eargasm.mp3',
+    audioUrl: 'audio/Eargasm.mp3',
   },
   {
     id: 'track_eargasm_2',
@@ -1361,7 +1377,7 @@ export const PRELOADED_TRACKS: Track[] = [
     description:
       'Extended 220s techno powerhouse with relentless sub-bass pressure, rolling groove changes, and surging leads.',
     notes: [],
-    audioUrl: '/audio/Eargasm2.mp3',
+    audioUrl: 'audio/Eargasm2.mp3',
   },
   {
     id: 'track_eargasm_3',
@@ -1373,7 +1389,7 @@ export const PRELOADED_TRACKS: Track[] = [
     description:
       'Driving peak-time energy packed with syncopated bassline runs and razor-sharp high percussive accents.',
     notes: [],
-    audioUrl: '/audio/Eargasm3.mp3',
+    audioUrl: 'audio/Eargasm3.mp3',
   },
   {
     id: 'track_eargasm_4',
@@ -1385,7 +1401,7 @@ export const PRELOADED_TRACKS: Track[] = [
     description:
       'Blistering 200 BPM high-speed techno overdrive! Fast-paced rhythm streams test reflexes and combo mastery.',
     notes: [],
-    audioUrl: '/audio/Eargasm4.mp3',
+    audioUrl: 'audio/Eargasm4.mp3',
   },
   {
     id: 'track_eargasm_5',
@@ -1397,7 +1413,7 @@ export const PRELOADED_TRACKS: Track[] = [
     description:
       'Hypnotic 104 BPM deep techno groove with deep resonant sub kicks and spacious atmospheric sweeps.',
     notes: [],
-    audioUrl: '/audio/Eargasm5.mp3',
+    audioUrl: 'audio/Eargasm5.mp3',
   },
 ];
 

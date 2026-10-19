@@ -14,7 +14,16 @@ import { StartChoice, StartScreen } from './components/StartScreen';
 import { UnlocksScreen } from './components/UnlocksScreen';
 import { OptionsScreen } from './components/OptionsScreen';
 import { StancesScreen } from './components/StancesScreen';
-import { initCrazyGames, showRewardedAd } from './platform/crazyGames';
+import {
+  followMuteSetting,
+  hasAdblock,
+  initCrazyGames,
+  loadingStart,
+  loadingStop,
+  RewardedResult,
+  setGameplayActive,
+  showRewardedAd,
+} from './platform/crazyGames';
 import { formatCountdown, secondsToNextStance } from './game/stanceUnlocks';
 import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
 import { getHero, HeroId, HEROES } from './game/heroes';
@@ -41,6 +50,10 @@ export default function App() {
   /** Rewarded ads can be shown here (CrazyGames, or its local test mode) */
   const [adAvailable, setAdAvailable] = useState(false);
   const [adBusy, setAdBusy] = useState(false);
+  /** Why rewarded ads can't be offered here (shown where the ad buttons would be), or null */
+  const [adsOffNote, setAdsOffNote] = useState<string | null>(null);
+  /** A song is being loaded (decoded and charted) before it starts */
+  const [songLoading, setSongLoading] = useState(false);
   const [menuNotice, setMenuNotice] = useState<string | null>(null);
   const [clearedOutcome, setClearedOutcome] = useState(false);
   const [deathReport, setDeathReport] = useState<DeathReport | null>(null);
@@ -137,7 +150,12 @@ export default function App() {
     setSelectedTrack(trackToPlay);
     setGameStatus('PLAYING');
     setShowTrackSelect(false);
-    engine.startSong(trackToPlay);
+    setSongLoading(true);
+    loadingStart();
+    engine.startSong(trackToPlay).finally(() => {
+      loadingStop();
+      setSongLoading(false);
+    });
   }, [selectedTrack, engine]);
 
   // Restart current track
@@ -179,50 +197,92 @@ export default function App() {
     setAudioSettings({ ...engine.settings });
   };
 
+  // Start the CrazyGames SDK: then load progress from where it lives there, follow its mute
+  // setting, and only offer rewarded ads when they can actually play (not with an ad blocker).
   useEffect(() => {
-    initCrazyGames().then(setAdAvailable);
+    initCrazyGames().then(async (live) => {
+      engine.reloadProgress();
+      setAudioSettings({ ...engine.settings });
+      refreshHighScores();
+      followMuteSetting((muted) => audioEngine.setPlatformMuted(muted));
+      if (live && (await hasAdblock())) {
+        setAdsOffNote('Ad blocker on: turn it off to unlock by watching an ad.');
+        return;
+      }
+      setAdAvailable(live);
+    });
+  }, [engine]);
+
+  // Tell CrazyGames when the player is actually in gameplay (in a song, not paused or loading).
+  useEffect(() => {
+    setGameplayActive(gameStatus === 'PLAYING' && !songLoading);
+  }, [gameStatus, songLoading]);
+
+  // iOS stops the game's audio when the app is interrupted (a call, switching apps), and
+  // only lets it start again from a tap: resume it on the next tap, if a song is playing.
+  const gameStatusRef = useRef(gameStatus);
+  gameStatusRef.current = gameStatus;
+  useEffect(() => {
+    const wake = () => {
+      const ctx = audioEngine.getAudioContext();
+      if (gameStatusRef.current === 'PLAYING' && !audioEngine.isPaused() && ctx.state !== 'running') void ctx.resume();
+    };
+    document.addEventListener('touchend', wake);
+    document.addEventListener('click', wake);
+    return () => {
+      document.removeEventListener('touchend', wake);
+      document.removeEventListener('click', wake);
+    };
   }, []);
 
-  /** Watch a rewarded ad for the next enemy stance. The game is muted while it plays. */
-  const handleWatchAd = useCallback(async () => {
-    if (adBusy) return;
-    setAdBusy(true);
-    const ctx = audioEngine.getAudioContext();
-    const watched = await showRewardedAd(
-      () => void ctx.suspend(),
-      () => void ctx.resume()
-    );
-    setAdBusy(false);
-    if (!watched) {
-      setMenuNotice('The ad did not finish, so no unlock this time.');
-      return;
-    }
-    const stance = engine.unlockStanceWithAd();
-    const label = ENEMY_MOTION_STYLES.find((m) => m.id === stance)?.label;
-    setMenuNotice(label ? `New stance unlocked: ${label}!` : null);
-  }, [adBusy, engine]);
-
-  /** Watch a rewarded ad to unlock an ad-only hero (The Bride), then play as her. */
-  const handleWatchHeroAd = useCallback(
-    async (hero: HeroId) => {
+  /**
+   * Play a rewarded ad (the game is muted while it plays) and hand out the
+   * reward only if it was watched to the end. If ads can't play here at all,
+   * stop offering them and say why.
+   */
+  const watchRewardedAd = useCallback(
+    async (reward: () => void) => {
       if (adBusy) return;
       setAdBusy(true);
       const ctx = audioEngine.getAudioContext();
-      const watched = await showRewardedAd(
+      const result: RewardedResult = await showRewardedAd(
         () => void ctx.suspend(),
         () => void ctx.resume()
       );
       setAdBusy(false);
-      if (!watched) {
+      if (result === 'watched') {
+        reward();
+      } else if (result === 'unavailable') {
+        setAdAvailable(false);
+        setAdsOffNote('Ads aren\'t available right now, so ad unlocks are off.');
+        setMenuNotice('Ads aren\'t available right now, so no unlock this time.');
+      } else {
         setMenuNotice('The ad did not finish, so no unlock this time.');
-        return;
-      }
-      if (engine.unlockHeroWithAd(hero)) {
-        handleUpdateSettings({ hero });
-        setMenuNotice(`New hero unlocked: ${getHero(hero).label}!`);
       }
     },
-    [adBusy, engine, handleUpdateSettings]
+    [adBusy]
+  );
+
+  /** Watch a rewarded ad for the next enemy stance. */
+  const handleWatchAd = useCallback(() => {
+    void watchRewardedAd(() => {
+      const stance = engine.unlockStanceWithAd();
+      const label = ENEMY_MOTION_STYLES.find((m) => m.id === stance)?.label;
+      setMenuNotice(label ? `New stance unlocked: ${label}!` : null);
+    });
+  }, [watchRewardedAd, engine]);
+
+  /** Watch a rewarded ad to unlock an ad-only hero (The Bride), then play as her. */
+  const handleWatchHeroAd = useCallback(
+    (hero: HeroId) => {
+      void watchRewardedAd(() => {
+        if (engine.unlockHeroWithAd(hero)) {
+          handleUpdateSettings({ hero });
+          setMenuNotice(`New hero unlocked: ${getHero(hero).label}!`);
+        }
+      });
+    },
+    [watchRewardedAd, engine, handleUpdateSettings]
   );
 
   useEffect(() => {
@@ -365,6 +425,8 @@ export default function App() {
           onSelect={(enemyMotion) => handleUpdateSettings({ enemyMotion })}
           onWatchAd={adAvailable ? handleWatchAd : undefined}
           adBusy={adBusy}
+          adsOffNote={adsOffNote}
+          notice={menuNotice}
           onClose={closeMenuScreen}
         />
       )}
@@ -377,6 +439,8 @@ export default function App() {
           onSelect={(hero) => handleUpdateSettings({ hero })}
           onWatchAd={adAvailable ? handleWatchHeroAd : undefined}
           adBusy={adBusy}
+          adsOffNote={adsOffNote}
+          notice={menuNotice}
           onClose={closeMenuScreen}
         />
       )}

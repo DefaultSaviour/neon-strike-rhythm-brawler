@@ -19,6 +19,10 @@ interface UnlocksScreenProps {
   /** Watch a rewarded ad for an ad-only hero; present only when an ad can be shown here */
   onWatchAd?: (id: HeroId) => void;
   adBusy?: boolean;
+  /** Why ads can't be offered here, shown in place of the ad button */
+  adsOffNote?: string | null;
+  /** A message after watching an ad (unlocked, or why not) */
+  notice?: string | null;
   onClose: () => void;
 }
 
@@ -50,7 +54,7 @@ const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked })
   return <canvas ref={ref} style={{ width: 120, height: 150 }} aria-hidden="true" />;
 };
 
-export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, onClose }) => {
+export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, onClose }) => {
   const heroes = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
   const unlockedCount = heroes.filter((h) => isUnlocked(h.id)).length;
 
@@ -91,6 +95,11 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
           </div>
         </div>
 
+        {notice && (
+          <div role="status" className="px-6 py-2 text-sm font-bold text-amber-200 bg-amber-500/10 border-b border-amber-400/30">
+            {notice}
+          </div>
+        )}
         <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {heroes.map((h) => {
             const unlocked = isUnlocked(h.id);
@@ -139,7 +148,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                         ▶ Watch ad
                       </button>
                     ) : (
-                      <div className="text-[10px] text-slate-500">Ads aren't available here</div>
+                      <div className="text-[10px] text-slate-500">{adsOffNote ?? "Ads aren't available here"}</div>
                     )}
                   </div>
                 ) : (
