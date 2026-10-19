@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '../audio/audioEngine';
-import { GameEngine } from './gameEngine';
+import { CROWD_POP_SEC, GameEngine, SLAM_SHAKE } from './gameEngine';
+import { getHero } from './heroes';
 import { BeatNote, TimingJudgementType, Track } from '../types/game';
 import type { DeathReport } from './timing';
 
@@ -135,5 +136,39 @@ describe('when an enemy gets through, the game says why', () => {
     g.advanceTo(3.3);
     vi.runAllTimers();
     expect(g.death()?.reason).toBe("You didn't press for it.");
+  });
+});
+
+describe('slams', () => {
+  const pw = getHero('proWrestler');
+  const slam = pw.moves.find((m) => m.name === 'Powerbomb')!;
+  const chop = pw.moves.find((m) => m.name === 'Chop')!;
+  /** Hit once on time, with the hero's move list cut down to one move. */
+  const hitWith = async (move: typeof slam, screenShake: 'none' | 'subtle' | 'normal') => {
+    const g = await play([[2, 'left']]);
+    g.engine.settings.screenShake = screenShake;
+    vi.spyOn(g.engine, 'hero', 'get').mockReturnValue({ ...pw, moves: [move] });
+    g.press(2, 'left');
+    return g;
+  };
+
+  it('a slam shakes the screen harder than an ordinary hit and pops the crowd', async () => {
+    const plain = await hitWith(chop, 'normal');
+    const big = await hitWith(slam, 'normal');
+    expect(plain.engine.crowdPop).toBe(0);
+    expect(big.engine.crowdPop).toBe(1);
+    expect(big.engine.screenShake).toBeCloseTo(plain.engine.screenShake * SLAM_SHAKE, 6);
+  });
+
+  it('the crowd pop fades out quickly', async () => {
+    const g = await hitWith(slam, 'normal');
+    g.advanceTo(2 + CROWD_POP_SEC + 0.05);
+    expect(g.engine.crowdPop).toBe(0);
+  });
+
+  it('with screen shake turned off there is no flash either', async () => {
+    const g = await hitWith(slam, 'none');
+    expect(g.engine.crowdPop).toBe(0);
+    expect(g.engine.screenShake).toBe(0);
   });
 });

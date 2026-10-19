@@ -115,6 +115,10 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
 
       ctx.restore();
 
+      if (engine.crowdPop > 0) {
+        drawCrowdPop(ctx, width, height, engine.crowdPop);
+      }
+
       if (scanlines) {
         drawScanlines(ctx, width, height);
       }
@@ -843,6 +847,24 @@ function drawJudgements(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.restore();
   }
 
+  ctx.restore();
+}
+
+/** The crowd pops after a slam: a brief white glow round the edges of the screen. */
+function drawCrowdPop(ctx: CanvasRenderingContext2D, width: number, height: number, amount: number) {
+  const g = ctx.createRadialGradient(
+    width / 2,
+    height / 2,
+    Math.min(width, height) * 0.4,
+    width / 2,
+    height / 2,
+    Math.max(width, height) * 0.75
+  );
+  g.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  g.addColorStop(1, `rgba(255, 255, 255, ${(0.4 * amount).toFixed(3)})`);
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
   ctx.restore();
 }
 

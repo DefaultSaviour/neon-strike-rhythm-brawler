@@ -37,6 +37,11 @@ export interface GameEngineCallbacks {
 
 /** How far the fighter lunges toward the enemy on a strike (world units) */
 const LUNGE_DISTANCE = 16;
+/** How much harder a slam shakes the screen than an ordinary hit. */
+export const SLAM_SHAKE = 1.8;
+/** How long the crowd-pop flash at the screen edges lasts after a slam (seconds). */
+export const CROWD_POP_SEC = 0.3;
+
 /** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
 const HIT_STOP: Record<TimingJudgementType, number> = { PERFECT: 0.06, GOOD: 0.04, OK: 0.025, MISS: 0 };
 
@@ -59,6 +64,8 @@ export class GameEngine {
   public playerOffsetX: number = 0;
 
   public screenShake: number = 0;
+  /** 1 right after a slam lands, fading to 0: the crowd-pop flash at the screen edges */
+  public crowdPop: number = 0;
   /** Brief camera nudge toward the side that was hit, plus a tiny zoom punch */
   public cameraKick = { x: 0, zoom: 0 };
   public hitLineOffset: number = 78; // Strike distance from center (world units)
@@ -184,6 +191,7 @@ export class GameEngine {
     this.playerOffsetX = 0;
     this.currentPose = { ...IDLE_POSE };
     this.screenShake = 0;
+    this.crowdPop = 0;
     this.cameraKick = { x: 0, zoom: 0 };
     this.hitStopRemaining = 0;
     this.songTime = 0;
@@ -376,6 +384,12 @@ export class GameEngine {
     }
 
     const currentMove = getMoveForCombo(this.scoreState.combo, this.currentMoveIndex, this.hero.moves);
+    // Slams hit the mat harder: a bigger shake and a pop from the crowd. Both follow
+    // the shake setting, so players who turn shake off get no flash either.
+    if (currentMove.slam && shakeAmount > 0) {
+      this.screenShake *= SLAM_SHAKE;
+      this.crowdPop = 1;
+    }
     if (currentMove.sequence) {
       this.startStrike(lane, getOrientedPose(currentMove.pose, lane), comboDuration(currentMove.sequence), LUNGE_DISTANCE, currentMove.sequence);
     } else {
@@ -627,6 +641,9 @@ export class GameEngine {
 
     if (this.screenShake > 0) {
       this.screenShake = Math.max(0, this.screenShake - deltaTimeSec * 18);
+    }
+    if (this.crowdPop > 0) {
+      this.crowdPop = Math.max(0, this.crowdPop - deltaTimeSec / CROWD_POP_SEC);
     }
     const kickDecay = Math.exp(-deltaTimeSec * 14);
     this.cameraKick.x *= kickDecay;
