@@ -776,3 +776,68 @@ describe('The Kid', () => {
     expect(isHeroUnlocked('kid', after(1800))).toBe(true);
   });
 });
+
+describe('The Spartan', () => {
+  const sp = getHero('spartan');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(sp.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => sp.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(sp.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [sp.idlePose, ...sp.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of sp.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of sp.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of sp.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('stands braced behind his shield, spear cocked over his shoulder', () => {
+    const idle = sp.idlePose;
+    expect(idle.leftHand.x).toBeGreaterThan(idle.chest.x + 10);
+    expect(idle.rightHand.y).toBeLessThan(idle.chest.y);
+  });
+
+  it('has the kick into the pit as a slam finisher', () => {
+    const pit = sp.moves.find((m) => m.name === 'Into the Pit')!;
+    expect(pit.tier).toBe(5);
+    expect(pit.slam).toBe(true);
+    expect(pit.sequence![0].pose.frontFoot.y).toBeLessThan(40);
+  });
+
+  it('is earned by defeating 300 enemies', () => {
+    const after = (n: number) => ({ enemiesDefeated: n, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0 });
+    expect(isHeroUnlocked('spartan', after(299))).toBe(false);
+    expect(isHeroUnlocked('spartan', after(300))).toBe(true);
+  });
+});

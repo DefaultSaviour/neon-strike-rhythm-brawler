@@ -46,6 +46,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else if (opts.hero === 'proWrestler') drawChampionSpotlight(ctx, pose, opts.time);
     else if (opts.hero === 'stallion') drawSunriseSteps(ctx, pose, opts.time);
     else if (opts.hero === 'kid') drawCraneSpirit(ctx, pose, opts.time, opts.facing);
+    else if (opts.hero === 'spartan') drawShieldWall(ctx, pose, opts.time, opts.facing);
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -53,7 +54,10 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     else drawAngelWings(ctx, pose, opts.time);
   }
 
-  // 1b. The Stallion's side of beef hangs in front of him, behind his arms
+  // 1b. The Spartan's red cape hangs behind him
+  if (opts.hero === 'spartan') drawSpartanCape(ctx, pose, opts.facing, opts.time);
+
+  // The Stallion's side of beef hangs in front of him, behind his arms
   if (pose.prop === 'meat') drawSideOfBeef(ctx, pose, opts.facing);
 
   // 2. Overdrive lightning crackling from the chest to the hands
@@ -137,6 +141,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'ballerina') drawBallerinaOutfit(ctx, pose, tier, opts.facing, opts.time);
   if (opts.hero === 'stallion') drawStallionOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'kid') drawKidOutfit(ctx, pose, tier, opts.facing, opts.time);
+  if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing);
   if (pose.prop === 'ropeOver' || pose.prop === 'ropeUnder') drawSkippingRope(ctx, pose);
   // ...and the front half of the Drunken Master's dizzy halo, passing in front of his head
   if (tier.ascended && opts.hero === 'drunkenMaster') drawDizzyHalo(ctx, pose, opts.time, combo, 'front');
@@ -1290,6 +1295,190 @@ export function ballerinaArms(pose: SkeletonPose): SkeletonPose {
     rightElbow: stretch(pose.rightShoulder, pose.rightElbow),
     rightHand: stretch(pose.rightShoulder, pose.rightHand),
   };
+}
+
+/** The Spartan's top-level form: a wall of shields behind him and arrows raining down. */
+export function spartanWall(pose: SkeletonPose, time: number) {
+  const shields = 7;
+  const radius = 15;
+  const arrows = Array.from({ length: 12 }, (_, i) => {
+    const fall = (time * 140 + i * 47) % 200; // each arrow falls, then starts again at the top
+    return { x: pose.pelvis.x - 100 + ((i * 53) % 200) + fall * 0.35, y: pose.head.y - 120 + fall };
+  });
+  return { shields, radius, y: pose.chest.y + 4, x: pose.pelvis.x, arrows };
+}
+
+function drawShieldWall(ctx: Ctx, pose: SkeletonPose, time: number, facing: 1 | -1) {
+  const w = spartanWall(pose, time);
+  ctx.save();
+  // The arrows, raining down at a slant
+  ctx.strokeStyle = 'rgba(255, 220, 170, 0.7)';
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = 'round';
+  for (const a of w.arrows) {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(a.x - 6, a.y - 17);
+    ctx.stroke();
+    ctx.fillStyle = '#ffd9a0';
+    ctx.beginPath();
+    ctx.moveTo(a.x + 1.5, a.y + 4);
+    ctx.lineTo(a.x - 2, a.y - 1);
+    ctx.lineTo(a.x + 2.5, a.y - 1.5);
+    ctx.fill();
+  }
+  // The shield wall: a row of bronze shields, overlapping, behind him
+  ctx.shadowColor = '#ffb347';
+  ctx.shadowBlur = 12;
+  for (let i = 0; i < w.shields; i++) {
+    const x = w.x + (i - (w.shields - 1) / 2) * w.radius * 1.55;
+    ctx.beginPath();
+    ctx.arc(x, w.y, w.radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(150, 92, 30, 0.55)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 190, 100, 0.85)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawLambda(ctx, x, w.y, w.radius * 0.55, 'rgba(255, 220, 170, 0.8)', facing);
+  }
+  ctx.restore();
+}
+
+/** The lambda painted on Spartan shields. */
+function drawLambda(ctx: Ctx, x: number, y: number, size: number, color: string, facing: 1 | -1) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - size * 0.7 * facing, y + size * 0.8);
+  ctx.lineTo(x, y - size * 0.8);
+  ctx.lineTo(x + size * 0.7 * facing, y + size * 0.8);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The Spartan's red cape: from his shoulders, flowing back and down behind him. */
+function drawSpartanCape(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number) {
+  const c = pose.chest;
+  const back = -facing;
+  const sway = Math.sin(time * 3) * 3;
+  const hemY = Math.max(pose.pelvis.y + 34, c.y + 50);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(c.x + facing * 4, c.y - 2);
+  ctx.quadraticCurveTo(c.x + back * 22, c.y + 14, c.x + back * (30 + sway), hemY);
+  ctx.lineTo(c.x + back * (8 + sway * 0.5), hemY + 4);
+  ctx.quadraticCurveTo(c.x + back * 4, c.y + 20, c.x - facing * 2, c.y);
+  ctx.closePath();
+  ctx.fillStyle = '#b3121f';
+  ctx.strokeStyle = '#ff4a3d';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#ff2a2a';
+  ctx.shadowBlur = 8;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The spear's length behind and in front of his hand, and the shield's size. */
+const SPEAR_BACK = 30;
+const SPEAR_FRONT = 34;
+const SHIELD_R = 16;
+
+/** Where his spear's tip is (it lies along his rear forearm). */
+export function spearTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
+  const { rear } = arms(pose, facing);
+  return weaponAt(rear.hand, rear.elbow, SPEAR_FRONT).muzzle;
+}
+
+/**
+ * The Spartan's gear over the body: a bronze helmet with a red crest, a
+ * leather war skirt, the spear in his rear hand and the round bronze
+ * shield on his lead arm.
+ */
+function drawSpartanGear(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const { lead, rear } = arms(pose, facing);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // War skirt: leather strips hanging from the waist
+  const p = pose.pelvis;
+  ctx.strokeStyle = '#6b4220';
+  ctx.lineWidth = 3;
+  ctx.shadowBlur = 0;
+  for (const dx of [-7, -3.5, 0, 3.5, 7]) {
+    ctx.beginPath();
+    ctx.moveTo(p.x + dx, p.y - 2);
+    ctx.lineTo(p.x + dx * 1.2, p.y + 11);
+    ctx.stroke();
+  }
+  // The spear along the rear forearm: a dark shaft and a bronze leaf-shaped tip
+  const spear = weaponAt(rear.hand, rear.elbow, SPEAR_FRONT);
+  const butt = { x: rear.hand.x - spear.dir.x * SPEAR_BACK, y: rear.hand.y - spear.dir.y * SPEAR_BACK };
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(butt.x, butt.y);
+  ctx.lineTo(spear.muzzle.x, spear.muzzle.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#8a5a2b';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  const n = { x: -spear.dir.y, y: spear.dir.x };
+  const t = spear.muzzle;
+  ctx.fillStyle = '#ffcf7a';
+  ctx.shadowColor = '#ffb347';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(t.x + spear.dir.x * 9, t.y + spear.dir.y * 9);
+  ctx.lineTo(t.x + n.x * 3, t.y + n.y * 3);
+  ctx.lineTo(t.x - spear.dir.x * 3, t.y - spear.dir.y * 3);
+  ctx.lineTo(t.x - n.x * 3, t.y - n.y * 3);
+  ctx.closePath();
+  ctx.fill();
+  // Bronze helmet: a dome over the head, cheek guard down the face, a tall red crest front to back
+  const h = pose.head;
+  ctx.fillStyle = '#c9822e';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.6;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 10.5, Math.PI, Math.PI * 2);
+  ctx.lineTo(h.x + facing * 10.5, h.y + 7);
+  ctx.lineTo(h.x + facing * 4, h.y + 9);
+  ctx.lineTo(h.x + facing * 3, h.y + 1);
+  ctx.lineTo(h.x - facing * 10.5, h.y + 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#d6202f';
+  ctx.shadowColor = '#ff2a2a';
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 9, h.y - 8);
+  ctx.quadraticCurveTo(h.x, h.y - 26, h.x - facing * 16, h.y - 4);
+  ctx.quadraticCurveTo(h.x - facing * 4, h.y - 14, h.x + facing * 9, h.y - 8);
+  ctx.fill();
+  // The shield on the lead forearm: a big bronze disc seen at an angle, its face to the enemy
+  const fx = lead.hand.x - lead.elbow.x;
+  const fy = lead.hand.y - lead.elbow.y;
+  const centre = { x: lead.elbow.x + fx * 0.65, y: lead.elbow.y + fy * 0.65 };
+  ctx.translate(centre.x, centre.y);
+  ctx.rotate(Math.atan2(fy, fx));
+  ctx.beginPath();
+  ctx.ellipse(0, 0, SHIELD_R * 0.45, SHIELD_R, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#b8742a';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = tier.color;
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.fill();
+  ctx.strokeStyle = '#ffcf7a';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** The Kid's crane (his top-level form): where it sits, how wide its wings reach, and how far they are raised (0..1). */
