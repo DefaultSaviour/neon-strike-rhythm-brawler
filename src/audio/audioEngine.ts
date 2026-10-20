@@ -801,6 +801,30 @@ class AudioEngine {
     }
   }
 
+  /** A bright rising arpeggio for the unlock popup: four notes, then a sparkle on top. */
+  public playUnlockFanfare() {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+    const ctx = this.ctx;
+    const start = ctx.currentTime + 0.02;
+    const notes = [523.25, 659.25, 783.99, 1046.5, 1567.98]; // C5 E5 G5 C6, then G6
+    notes.forEach((freq, i) => {
+      const t = start + i * 0.085;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = i === notes.length - 1 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      const peak = i === notes.length - 1 ? 0.08 : 0.12;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + (i >= notes.length - 2 ? 0.6 : 0.22));
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(t);
+      osc.stop(t + 0.65);
+    });
+  }
+
   public playSwingSound() {
     this.initContext();
     if (!this.ctx || !this.sfxGain) return;

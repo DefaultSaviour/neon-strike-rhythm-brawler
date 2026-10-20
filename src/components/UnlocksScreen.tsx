@@ -32,7 +32,7 @@ interface UnlocksScreenProps {
 }
 
 /** A hero drawn in their fighting stance (dark and grey when still locked). */
-const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked }) => {
+export const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked }) => {
   const ref = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const canvas = ref.current;
