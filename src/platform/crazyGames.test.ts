@@ -22,6 +22,7 @@ function fakeSdk(environment: 'crazygames' | 'local' | 'disabled', adError?: str
       gameplayStop: () => calls.push('gameplayStop'),
       loadingStart: () => calls.push('loadingStart'),
       loadingStop: () => calls.push('loadingStop'),
+      happytime: () => calls.push('happytime'),
       settings: { muteAudio: true },
       addSettingsChangeListener: () => calls.push('listen'),
     },
@@ -92,6 +93,28 @@ describe('the CrazyGames wrapper', () => {
     expect(await (await wrapper()).showRewardedAd(() => {}, () => {})).toBe('unavailable');
     fakeSdk('crazygames', 'adsDisabledBasicLaunch');
     expect(await (await wrapper()).showRewardedAd(() => {}, () => {})).toBe('unavailable');
+  });
+
+  it('a midgame ad resolves true only when one played; skipped or unavailable ones just carry on', async () => {
+    fakeSdk('crazygames');
+    expect(await (await wrapper()).showMidgameAd(() => {}, () => {})).toBe(true);
+    fakeSdk('crazygames', 'adCooldown');
+    expect(await (await wrapper()).showMidgameAd(() => {}, () => {})).toBe(false);
+    fakeSdk('crazygames', 'adblock');
+    expect(await (await wrapper()).showMidgameAd(() => {}, () => {})).toBe(false);
+  });
+
+  it('celebrates on the CrazyGames site (happytime) only where the SDK is live', async () => {
+    const live = fakeSdk('crazygames');
+    const cg = await wrapper();
+    await cg.initCrazyGames();
+    cg.happytime();
+    expect(live.calls).toContain('happytime');
+    const off = fakeSdk('disabled');
+    const other = await wrapper();
+    await other.initCrazyGames();
+    other.happytime();
+    expect(off.calls).not.toContain('happytime');
   });
 
   it('detects an ad blocker', async () => {
