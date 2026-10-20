@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { NewTag } from './NewBadge';
 import { HeroId, HEROES } from '../game/heroes';
-import { LifetimeStats, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
+import { LifetimeStats, progressText, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
 import { fighterTier } from '../game/fighterTier';
 import { drawFighter } from './fighterArt';
 
@@ -152,9 +152,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                         <div className="h-full bg-amber-400/80" style={{ width: `${(progress.current / progress.goal.target) * 100}%` }} />
                       </div>
                       <div className="text-[10px] font-mono text-slate-500">
-                        {progress.goal.stat === 'playSeconds'
-                          ? `${Math.floor(progress.current / 60)} / ${Math.round(progress.goal.target / 60)} min`
-                          : `${progress.current.toLocaleString()} / ${progress.goal.target.toLocaleString()}`}
+                        {progressText(progress.goal, progress.current)}
                       </div>
                       {/* The ad hero can also be unlocked straight away (hidden when ads can't play here) */}
                       {progress.goal.ad && onWatchAd && (

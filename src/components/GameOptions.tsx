@@ -2,7 +2,7 @@ import React from 'react';
 import { AudioSettings, HitSoundMode } from '../types/game';
 import { ENEMY_MOTION_STYLES } from '../game/enemyMotion';
 import { HEROES } from '../game/heroes';
-import { LifetimeStats, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
+import { LifetimeStats, progressText, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
 import { formatCountdown, isStanceUnlocked, nextStance, secondsToNextStance } from '../game/stanceUnlocks';
 
 /**
@@ -32,6 +32,8 @@ interface Lock {
   label: string;
   current: number;
   target: number;
+  /** How far along, in words (defaults to "current / target") */
+  text?: string;
 }
 
 function ChoiceGrid<T extends string>({
@@ -68,7 +70,7 @@ function ChoiceGrid<T extends string>({
                 <span className="block h-full bg-cyan-500/70" style={{ width: `${(o.lock.current / o.lock.target) * 100}%` }} />
               </span>
               <span className="text-[10px] font-mono text-slate-500">
-                {o.lock.current.toLocaleString()} / {o.lock.target.toLocaleString()}
+                {o.lock.text ?? `${o.lock.current.toLocaleString()} / ${o.lock.target.toLocaleString()}`}
               </span>
             </button>
           ) : (
@@ -138,7 +140,7 @@ export const GameOptions: React.FC<GameOptionsProps> = ({
   const ordered = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
   const heroOptions = ordered.map((h) => {
     const progress = lifetimeStats ? unlockProgress(h.id, lifetimeStats) : null;
-    const lock = progress && !progress.done ? { label: progress.goal.label, current: progress.current, target: progress.goal.target } : undefined;
+    const lock = progress && !progress.done ? { label: progress.goal.label, current: progress.current, target: progress.goal.target, text: progressText(progress.goal, progress.current) } : undefined;
     return { id: h.id, label: h.label, description: h.description, lock };
   });
   const stanceOptions = ENEMY_MOTION_STYLES.map((m) => {

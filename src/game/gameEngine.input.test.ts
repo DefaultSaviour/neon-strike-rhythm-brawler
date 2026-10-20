@@ -184,11 +184,13 @@ describe('earning heroes', () => {
     g.engine.stop();
     g.engine.stop();
     expect(g.engine.lifetimeStats).toMatchObject({ enemiesDefeated: 4, perfects: 4, bestCombo: 4, songsCleared: 0 });
+    // A song you quit isn't finished: it can't count for accuracy or a no-miss song
+    expect(g.engine.lifetimeStats).toMatchObject({ bestClearAccuracy: 0, flawlessClears: 0 });
   });
 
   it('reports a hero the song just unlocked', async () => {
     const g = await play(notes);
-    g.engine.lifetimeStats = { ...EMPTY_STATS, enemiesDefeated: 148 };
+    g.engine.lifetimeStats = { ...EMPTY_STATS, enemiesDefeated: 330 };
     for (const [t, lane] of notes.slice(0, 3)) g.press(t, lane);
     g.engine.stop();
     expect(g.engine.newUnlocks).toEqual(['dragon']);
@@ -200,7 +202,7 @@ describe('earning heroes', () => {
     g.engine.lifetimeStats = { ...EMPTY_STATS };
     g.engine.settings.hero = 'ballerina';
     expect(g.engine.hero.id).toBe(DEFAULT_HERO);
-    g.engine.lifetimeStats = { ...EMPTY_STATS, perfects: 200 };
+    g.engine.lifetimeStats = { ...EMPTY_STATS, flawlessClears: 1 };
     expect(g.engine.hero.id).toBe('ballerina');
   });
 });

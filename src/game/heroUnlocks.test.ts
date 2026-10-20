@@ -9,8 +9,10 @@ import {
   LifetimeStats,
   loadStats,
   newlyUnlocked,
+  progressText,
   saveStats,
   unlockProgress,
+  accuracyPercent,
 } from './heroUnlocks';
 
 const ids = HEROES.map((h) => h.id);
@@ -26,10 +28,10 @@ describe('hero unlocks', () => {
     expect(ids.filter((id) => isHeroUnlocked(id, EMPTY_STATS))).toEqual([DEFAULT_HERO]);
   });
 
-  it('every other hero has a goal, and the goals mix kinds (playing, finishing, combos, perfects, time trained)', () => {
+  it('every other hero has a goal, and the goals mix kinds (playing, finishing, combos, perfects, OK hits, time, accuracy, no misses)', () => {
     for (const id of ids) if (id !== DEFAULT_HERO) expect(HERO_UNLOCKS[id], id).toBeDefined();
     const kinds = new Set(Object.values(HERO_UNLOCKS).map((g) => g!.stat));
-    expect(kinds).toEqual(new Set(['enemiesDefeated', 'songsCleared', 'bestCombo', 'perfects', 'playSeconds']));
+    expect(kinds).toEqual(new Set(['enemiesDefeated', 'songsCleared', 'bestCombo', 'perfects', 'playSeconds', 'okHits', 'bestClearAccuracy', 'flawlessClears']));
   });
 
   it('lists every hero once in the unlock path, the free hero first', () => {
@@ -37,35 +39,89 @@ describe('hero unlocks', () => {
     expect(UNLOCK_ORDER[0]).toBe(DEFAULT_HERO);
   });
 
-  it('uses the goals the player asked for', () => {
-    expect(HERO_UNLOCKS.dragon).toMatchObject({ stat: 'enemiesDefeated', target: 150 });
-    expect(HERO_UNLOCKS.theOne).toMatchObject({ stat: 'songsCleared', target: 1 });
-    expect(HERO_UNLOCKS.ballerina).toMatchObject({ stat: 'perfects', target: 200 });
+  it('uses the goals the player set, hero by hero (2026-10-20)', () => {
+    const goals = Object.fromEntries(Object.entries(HERO_UNLOCKS).map(([id, g]) => [id, [g!.stat, g!.target]]));
+    expect(goals).toEqual({
+      theOne: ['songsCleared', 1],
+      dragon: ['enemiesDefeated', 333],
+      sawFace: ['perfects', 666],
+      stallion: ['songsCleared', 5],
+      proWrestler: ['okHits', 200],
+      bride: ['songsCleared', 8],
+      kid: ['playSeconds', 1800],
+      discoKing: ['perfects', 2500],
+      drunkenMaster: ['bestCombo', 200],
+      spartan: ['bestCombo', 300],
+      babaYaga: ['bestClearAccuracy', 98],
+      ballerina: ['flawlessClears', 1],
+    });
+    expect(HERO_UNLOCKS.bride!.ad).toBe(true);
+    expect(Object.values(HERO_UNLOCKS).filter((g) => g!.ad)).toHaveLength(1);
+  });
+
+  it('one good song no longer unlocks a crowd of heroes: just The One and The Little Dragon', () => {
+    // About what one decent clear of a ~500-enemy song earns
+    const oneSong = addRun(EMPTY_STATS, { enemiesDefeated: 480, perfects: 330, oks: 30, misses: 12, accuracy: 88, maxCombo: 140, cleared: true, seconds: 190, score: 250000 });
+    expect(newlyUnlocked(ids, EMPTY_STATS, oneSong)).toEqual(['dragon', 'theOne']);
   });
 
   it('unlocks exactly when the goal is reached', () => {
-    expect(isHeroUnlocked('dragon', stats({ enemiesDefeated: 149 }))).toBe(false);
-    expect(isHeroUnlocked('dragon', stats({ enemiesDefeated: 150 }))).toBe(true);
+    expect(isHeroUnlocked('dragon', stats({ enemiesDefeated: 332 }))).toBe(false);
+    expect(isHeroUnlocked('dragon', stats({ enemiesDefeated: 333 }))).toBe(true);
     expect(isHeroUnlocked('theOne', stats({ songsCleared: 1 }))).toBe(true);
+    expect(isHeroUnlocked('proWrestler', stats({ okHits: 199 }))).toBe(false);
+    expect(isHeroUnlocked('proWrestler', stats({ okHits: 200 }))).toBe(true);
+    expect(isHeroUnlocked('drunkenMaster', stats({ bestCombo: 200 }))).toBe(true);
+    expect(isHeroUnlocked('babaYaga', stats({ bestClearAccuracy: 97 }))).toBe(false);
+    expect(isHeroUnlocked('babaYaga', stats({ bestClearAccuracy: 98 }))).toBe(true);
+    expect(isHeroUnlocked('ballerina', stats({ flawlessClears: 0 }))).toBe(false);
+    expect(isHeroUnlocked('ballerina', stats({ flawlessClears: 1 }))).toBe(true);
   });
 
   it('shows progress toward a locked hero, capped at the goal', () => {
     expect(unlockProgress('dragon', stats({ enemiesDefeated: 40 }))).toMatchObject({ current: 40, done: false });
-    expect(unlockProgress('dragon', stats({ enemiesDefeated: 900 }))).toMatchObject({ current: 150, done: true });
+    expect(unlockProgress('dragon', stats({ enemiesDefeated: 900 }))).toMatchObject({ current: 333, done: true });
     expect(unlockProgress(DEFAULT_HERO, EMPTY_STATS)).toBeNull();
+  });
+
+  it('words the progress to suit each goal', () => {
+    expect(progressText(HERO_UNLOCKS.dragon!, 40)).toBe('40 / 333');
+    expect(progressText(HERO_UNLOCKS.discoKing!, 1200)).toBe('1,200 / 2,500');
+    expect(progressText(HERO_UNLOCKS.kid!, 125)).toBe('2 / 30 min');
+    expect(progressText(HERO_UNLOCKS.babaYaga!, 91)).toBe('Best 91% / 98%');
+    expect(progressText(HERO_UNLOCKS.ballerina!, 0)).toBe('Not yet');
+  });
+
+  it('the unlock path runs from the play goals to the skill goals, flawless last', () => {
+    expect(UNLOCK_ORDER.slice(-4)).toEqual(['drunkenMaster', 'spartan', 'babaYaga', 'ballerina']);
   });
 });
 
 describe('lifetime totals', () => {
-  it('add up across songs (score included), keep the best combo, and count only cleared songs', () => {
-    let s = addRun(EMPTY_STATS, { enemiesDefeated: 90, perfects: 40, maxCombo: 30, cleared: false, seconds: 61, score: 12000 });
-    s = addRun(s, { enemiesDefeated: 80, perfects: 50, maxCombo: 22, cleared: true, seconds: 190, score: 30500 });
-    expect(s).toEqual({ ...EMPTY_STATS, enemiesDefeated: 170, perfects: 90, bestCombo: 30, songsCleared: 1, playSeconds: 251, totalScore: 42500 });
+  it('add up across songs (score and OK hits included), keep the best combo, and count only cleared songs', () => {
+    let s = addRun(EMPTY_STATS, { enemiesDefeated: 90, perfects: 40, oks: 9, misses: 5, accuracy: 99, maxCombo: 30, cleared: false, seconds: 61, score: 12000 });
+    s = addRun(s, { enemiesDefeated: 80, perfects: 50, oks: 4, misses: 2, accuracy: 85, maxCombo: 22, cleared: true, seconds: 190, score: 30500 });
+    expect(s).toEqual({ ...EMPTY_STATS, enemiesDefeated: 170, perfects: 90, okHits: 13, bestCombo: 30, songsCleared: 1, playSeconds: 251, totalScore: 42500, bestClearAccuracy: 85 });
+  });
+
+  it('only finished songs count for accuracy and for no-miss songs', () => {
+    const died = addRun(EMPTY_STATS, { enemiesDefeated: 40, perfects: 40, oks: 0, misses: 0, accuracy: 100, maxCombo: 40, cleared: false, seconds: 30, score: 0 });
+    expect(died).toMatchObject({ bestClearAccuracy: 0, flawlessClears: 0 });
+    const flawless = addRun(died, { enemiesDefeated: 400, perfects: 380, oks: 2, misses: 0, accuracy: 98, maxCombo: 400, cleared: true, seconds: 190, score: 0 });
+    expect(flawless).toMatchObject({ bestClearAccuracy: 98, flawlessClears: 1 });
+    const sloppier = addRun(flawless, { enemiesDefeated: 400, perfects: 200, oks: 50, misses: 3, accuracy: 80, maxCombo: 90, cleared: true, seconds: 190, score: 0 });
+    expect(sloppier).toMatchObject({ bestClearAccuracy: 98, flawlessClears: 1 });
+  });
+
+  it('accuracy weighs PERFECT 100, GOOD 70, OK 40 and a miss 0', () => {
+    expect(accuracyPercent({ perfect: 10, good: 0, ok: 0, miss: 0 })).toBe(100);
+    expect(accuracyPercent({ perfect: 1, good: 1, ok: 1, miss: 1 })).toBe(53);
+    expect(accuracyPercent({ perfect: 0, good: 0, ok: 0, miss: 0 })).toBe(0);
   });
 
   it('report the heroes a run has just unlocked, and only those', () => {
-    const before = stats({ enemiesDefeated: 120 });
-    const after = addRun(before, { enemiesDefeated: 60, perfects: 0, maxCombo: 10, cleared: true, seconds: 120, score: 0 });
+    const before = stats({ enemiesDefeated: 300 });
+    const after = addRun(before, { enemiesDefeated: 60, perfects: 0, oks: 0, misses: 3, accuracy: 70, maxCombo: 10, cleared: true, seconds: 120, score: 0 });
     expect(newlyUnlocked(ids, before, after)).toEqual(['dragon', 'theOne']);
     expect(newlyUnlocked(ids, after, after)).toEqual([]);
   });
@@ -79,6 +135,11 @@ describe('lifetime totals', () => {
     expect(loadStats(store)).toEqual(EMPTY_STATS);
     store.data['neon_strike_lifetime_v1'] = JSON.stringify({ perfects: -5, bestCombo: 'lots' });
     expect(loadStats(store)).toEqual(EMPTY_STATS);
+    // Saves from before the new goals have no OK hits, accuracy or no-miss songs yet: zeros
+    store.data['neon_strike_lifetime_v1'] = JSON.stringify({ enemiesDefeated: 50 });
+    expect(loadStats(store)).toEqual(stats({ enemiesDefeated: 50 }));
+    store.data['neon_strike_lifetime_v1'] = JSON.stringify({ bestClearAccuracy: 250 });
+    expect(loadStats(store).bestClearAccuracy).toBe(100);
     expect(loadStats(undefined)).toEqual(EMPTY_STATS);
   });
 });
