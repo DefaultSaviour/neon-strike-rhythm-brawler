@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { NewTag } from './NewBadge';
 import { HeroId, HEROES } from '../game/heroes';
 import { LifetimeStats, progressText, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
@@ -30,6 +30,33 @@ interface UnlocksScreenProps {
   tabs?: React.ReactNode;
   onClose: () => void;
 }
+
+/**
+ * One line of text that always stays on one line: it shrinks just enough
+ * to fit a narrow card (a phone), so short lines keep the full size.
+ */
+const FitLine: React.FC<{ text: string; title?: string; className?: string; max?: number }> = ({ text, title, className = '', max = 11 }) => {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.fontSize = `${max}px`;
+      // A little slack, so an italic last letter isn't clipped
+      const ratio = (el.clientWidth - 3) / Math.max(1, el.scrollWidth);
+      if (ratio < 1) el.style.fontSize = `${Math.max(8, Math.floor(max * ratio * 10) / 10)}px`;
+    };
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [text, max]);
+  return (
+    <div ref={ref} title={title} className={`w-full whitespace-nowrap overflow-hidden ${className}`}>
+      {text}
+    </div>
+  );
+};
 
 /** A hero drawn in their fighting stance (dark and grey when still locked). */
 export const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked }) => {
@@ -107,7 +134,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
             {notice}
           </div>
         )}
-        <div className="flex-1 min-h-0 content-start p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex-1 min-h-0 content-start p-3 sm:p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {heroes.map((h) => {
             const unlocked = isUnlocked(h.id);
             const progress = unlockProgress(h.id, stats);
@@ -116,7 +143,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
               <div
                 key={h.id}
                 onClick={() => unlocked && onSeen?.(h.id)}
-                className={`relative rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
+                className={`relative rounded-xl border p-2 sm:p-3 flex flex-col items-center text-center gap-2 ${
                   chosen
                     ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_18px_rgba(0,243,255,0.25)]'
                     : unlocked
@@ -132,7 +159,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                 </div>
                 {unlocked ? (
                   <>
-                    <div className="text-[11px] text-slate-400 leading-snug flex-1">{h.description}</div>
+                    <FitLine text={h.tagline} title={h.description} className="flex-1 italic text-slate-400" />
                     <button
                       type="button"
                       onClick={() => onSelect(h.id)}

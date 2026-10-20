@@ -28,6 +28,8 @@ export interface HeroDefinition {
   id: HeroId;
   /** Shown in the options menu */
   label: string;
+  /** One short line under the hero on their card and unlock popup (a joke or a promise, never a film quote) */
+  tagline: string;
   description: string;
   /** Fighting stance between attacks (facing right) */
   idlePose: SkeletonPose;
@@ -38,6 +40,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'striker',
     label: 'Neon Striker',
+    tagline: 'The original, still unbeaten',
     description: 'The original cyber fighter: blades, flips and a flowing scarf',
     idlePose: IDLE_POSE,
     moves: ATTACK_MOVES,
@@ -45,6 +48,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'dragon',
     label: 'The Little Dragon',
+    tagline: 'Small dragon, lightning feet',
     description: 'Lightning kung fu: one-inch punches, flying kicks and nunchaku',
     idlePose: LITTLE_DRAGON_IDLE,
     moves: LITTLE_DRAGON_MOVES,
@@ -52,6 +56,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'babaYaga',
     label: 'Baba Yaga',
+    tagline: 'Never, ever touch his dog',
     description: 'Gun-fu assassin: point-blank shots, judo throws and a shotgun',
     idlePose: BABA_YAGA_IDLE,
     moves: BABA_YAGA_MOVES,
@@ -59,6 +64,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'theOne',
     label: 'The One',
+    tagline: 'Dodges bullets. Literally.',
     description: 'Bullet-time kung fu: impossible dodges, and he floats while he kicks',
     idlePose: THE_ONE_IDLE,
     moves: THE_ONE_MOVES,
@@ -66,6 +72,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'drunkenMaster',
     label: 'Drunken Master',
+    tagline: 'One more for the road',
     description: 'Drunken boxing: he staggers, stumbles and swigs, and every wild swing lands',
     idlePose: DRUNKEN_MASTER_IDLE,
     moves: DRUNKEN_MASTER_MOVES,
@@ -73,6 +80,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'proWrestler',
     label: 'The Pro Wrestler',
+    tagline: 'Never without his chair',
     description: 'Championship wrestling: chops, a steel chair and earth-shaking slams',
     idlePose: PRO_WRESTLER_IDLE,
     moves: PRO_WRESTLER_MOVES,
@@ -80,6 +88,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'ballerina',
     label: 'The White Swan',
+    tagline: 'Grace that breaks bones',
     description: 'Ballet as a weapon: kicks to the ceiling, and a swan tutu for her finishers',
     idlePose: PRIMA_BALLERINA_IDLE,
     moves: PRIMA_BALLERINA_MOVES,
@@ -87,6 +96,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'stallion',
     label: 'The Stallion',
+    tagline: 'Hits like a side of beef',
     description: 'Heavyweight boxing: jabs, hooks, body shots and a haymaker that ends it',
     idlePose: STALLION_IDLE,
     moves: STALLION_MOVES,
@@ -94,6 +104,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'kid',
     label: 'The Kid',
+    tagline: 'Every chore was training',
     description: 'Karate: crisp punches and kicks, chores that turn into blocks, and the crane kick',
     idlePose: THE_KID_IDLE,
     moves: THE_KID_MOVES,
@@ -101,6 +112,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'spartan',
     label: 'The Spartan',
+    tagline: 'Shield up, spear ready',
     description: 'Shield and spear: thrusts over the shield, shield bashes, and the kick into the pit',
     idlePose: SPARTAN_IDLE,
     moves: SPARTAN_MOVES,
@@ -108,6 +120,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'discoKing',
     label: 'The Disco King',
+    tagline: 'Fights like he dances',
     description: 'Fights like he dances: the point to the sky, hip-swing kicks, spins and knee slides',
     idlePose: DISCO_KING_IDLE,
     moves: DISCO_KING_MOVES,
@@ -115,6 +128,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'bride',
     label: 'The Bride',
+    tagline: 'The Bride deserves her revenge',
     description: 'A katana and a list: quick draws, clean cuts and thrusts, and a whirlwind finisher',
     idlePose: BRIDE_IDLE,
     moves: BRIDE_MOVES,
@@ -122,6 +136,7 @@ export const HEROES: HeroDefinition[] = [
   {
     id: 'sawFace',
     label: 'Saw Face',
+    tagline: 'Hear that engine? Run.',
     description: 'A roaring chainsaw and a stitched mask: thrusts, chops, lumbering spins, and the chainsaw dance',
     idlePose: SAW_FACE_IDLE,
     moves: SAW_FACE_MOVES,

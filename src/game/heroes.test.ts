@@ -33,6 +33,14 @@ describe('heroes', () => {
     }
   });
 
+  it('every hero has a short one-line tagline for their card', () => {
+    for (const h of HEROES) {
+      expect(h.tagline.length, h.id).toBeGreaterThan(0);
+      expect(h.tagline.length, h.id).toBeLessThanOrEqual(30);
+    }
+    expect(getHero('bride').tagline).toBe('The Bride deserves her revenge');
+  });
+
   it('move ids are unique across all heroes', () => {
     const ids = HEROES.flatMap((h) => h.moves.map((m) => m.id));
     expect(new Set(ids).size).toBe(ids.length);
