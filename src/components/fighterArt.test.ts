@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
+import { getOrientedPose } from '../game/animations';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, HERO_BUILDS, meatHooks, sawBarTip, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, flyingArmOf, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -301,5 +302,105 @@ describe('hero builds', () => {
     calls.length = 0;
     applyHeroBuild(ctx, 'bride', 1, true);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("The Scarecrow's pole and brain", () => {
+  const sc = getHero('scarecrow');
+
+  it('every pole hit lands at the end of the pole', () => {
+    for (const m of sc.moves) {
+      for (const k of m.sequence!) {
+        // The vault kick lands with his feet, not the pole
+        if (!k.trail || k.prop !== 'pole' || m.name === 'Pole Vault Kick') continue;
+        expect(dist(poleEnds(keyToPlayerPose(k), 1).tip, k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+  });
+
+  it('his flying arm comes right off: fist at the end of the hit, torn end well away from his shoulder, both ways round', () => {
+    const fist = sc.moves.find((m) => m.name === 'Flying Fist')!;
+    const pose = keyToPlayerPose(fist.sequence![0]);
+    for (const facing of [1, -1] as const) {
+      const p = facing > 0 ? pose : getOrientedPose(pose, 'left');
+      const fly = flyingArmOf(p, facing)!;
+      expect(fly).not.toBeNull();
+      expect(dist(fly.hand, p.bladeSlash!.end)).toBeLessThan(1e-6);
+      expect(dist(fly.shoulder, fly.stump)).toBeGreaterThan(30);
+      // The arm keeps its shape in the air
+      expect(dist(fly.shoulder, fly.elbow)).toBeCloseTo(dist(fly.stump, facing > 0 ? p.rightElbow : p.leftElbow), 3);
+    }
+    // ...and is back on when there's no hit showing
+    expect(flyingArmOf({ ...pose, bladeSlash: undefined }, 1)).toBeNull();
+    expect(flyingArmOf(sc.idlePose, 1)).toBeNull();
+  });
+
+  it('his brain glows in the top of his head, with sparks of genius round it, both ways round', () => {
+    for (const facing of [1, -1] as const) {
+      const { brain, sparks } = scarecrowBrain(sc.idlePose, 0, facing);
+      expect(brain.y).toBeLessThan(sc.idlePose.head.y);
+      expect(Math.abs(brain.x - sc.idlePose.head.x)).toBeLessThan(3);
+      expect(sparks.length).toBeGreaterThanOrEqual(3);
+      expect(sparks.length).toBeLessThanOrEqual(5); // sparse
+    }
+    expect(scarecrowBrain(sc.idlePose, 0.4, 1).sparks[0].x).not.toBeCloseTo(scarecrowBrain(sc.idlePose, 0, 1).sparks[0].x, 1);
+  });
+});
+
+describe("The Lion's top-level form", () => {
+  it('he grows much bigger and jacked: broad shoulders and thick limbs, only in his top form', () => {
+    expect(HERO_BUILDS.lion!.topScale!).toBeGreaterThanOrEqual(1.2);
+    expect(HERO_BUILDS.lion!.scale).toBe(1);
+    const normal = bodyBulk('lion', false);
+    const jacked = bodyBulk('lion', true);
+    expect(jacked.shoulderHalf).toBeGreaterThan(normal.shoulderHalf * 1.3);
+    expect(jacked.limbScale).toBeGreaterThan(1.3);
+    expect(bodyBulk('bride', true)).toEqual(normal);
+  });
+
+  it('the build scales him up from the feet in his top form, and leaves him alone otherwise', () => {
+    const calls: string[] = [];
+    const ctx = { translate: (x: number, y: number) => calls.push(`t ${x} ${y}`), scale: (x: number) => calls.push(`s ${x}`) } as unknown as CanvasRenderingContext2D;
+    applyHeroBuild(ctx, 'lion', 1, true, false);
+    expect(calls).toEqual([]);
+    applyHeroBuild(ctx, 'lion', 1, true, true);
+    expect(calls).toEqual(['t 0 68', `s ${HERO_BUILDS.lion!.topScale}`, 't 0 -68']);
+  });
+});
+
+describe("The Tin Man's axe and heart, and The Lion's mane", () => {
+  it('every axe hit lands at the axe head', () => {
+    const tm = getHero('tinMan');
+    let axeHits = 0;
+    for (const m of tm.moves) {
+      for (const k of m.sequence!) {
+        if (!k.trail) continue;
+        const p = keyToPlayerPose(k);
+        if (Math.abs(dist(k.trail.end, p.leftHand) - 30) > 3) continue; // a punch, kick or headbutt
+        axeHits++;
+        expect(dist(axeHead(p, 1), k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+    expect(axeHits).toBeGreaterThan(10);
+  });
+
+  it('his heart sits in his chest and beats', () => {
+    const pose = getHero('tinMan').idlePose;
+    const a = tinHeart(pose, 0);
+    // In his chest, just below the chest core
+    expect(a.y).toBeGreaterThan(pose.chest.y);
+    expect(dist(a, pose.chest)).toBeLessThan(16);
+    expect(tinHeart(pose, 0.25).size).not.toBeCloseTo(a.size, 2);
+  });
+
+  it("the Lion's mane rings his head; with his courage it's a bigger, flickering mane of fire", () => {
+    const pose = getHero('lion').idlePose;
+    const calm = lionMane(pose, 0, false);
+    const fire = lionMane(pose, 0, true);
+    expect(calm.length).toBeGreaterThanOrEqual(10);
+    const avg = (m: { length: number }[]) => m.reduce((s, t) => s + t.length, 0) / m.length;
+    expect(avg(fire)).toBeGreaterThan(avg(calm));
+    expect(lionMane(pose, 0.2, true)[0].length).not.toBeCloseTo(fire[0].length, 2);
+    expect(lionMane(pose, 0.2, false)[0].length).toBeCloseTo(calm[0].length, 6);
   });
 });

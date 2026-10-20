@@ -2,6 +2,7 @@ import { Point2D, SkeletonPose } from '../types/game';
 import { FighterTier } from '../game/fighterTier';
 import type { HeroId } from '../game/heroes';
 import { BodyJoints, bodyFill, drawNeonBody, neonHead, neonLimb } from './neonBody';
+import { LIMB_WIDTH } from '../game/bodyProportions';
 
 /**
  * Draws the player's fighter: the hero's top-level form (god tier), lightning (overdrive),
@@ -38,28 +39,39 @@ type Ctx = CanvasRenderingContext2D;
  * Heroes drawn bigger than the skeleton, or stood further back in a song.
  * Saw Face is a huge man, and his chainsaw reaches a long way, so in a
  * song he stands further back from the middle (like The Bride does in her poses).
+ * `topScale` is the size in the top-level form: the Lion, with his courage
+ * at last, grows into a much bigger, muscle-bound king.
  */
-export const HERO_BUILDS: Partial<Record<HeroId, { scale: number; standBack: number }>> = {
+export const HERO_BUILDS: Partial<Record<HeroId, { scale: number; standBack: number; topScale?: number }>> = {
   sawFace: { scale: 1.18, standBack: 20 },
+  lion: { scale: 1, standBack: 0, topScale: 1.28 },
 };
+
+/** How chunky the body is drawn: broad shoulders and thick limbs for the Lion in his top-level form. */
+export function bodyBulk(hero: HeroId | undefined, ascended: boolean) {
+  if (hero === 'lion' && ascended) return { shoulderHalf: 18, waistHalf: 7, limbScale: 1.5 };
+  return { shoulderHalf: 12, waistHalf: 6.5, limbScale: 1 };
+}
 
 /**
  * Size (and in a song, place) the hero by their build: scaled up from the
  * feet, then moved back away from the enemy. Callers that draw a hero's hit
  * effects themselves apply the same transform, so the slash stays on the weapon.
  */
-export function applyHeroBuild(ctx: Ctx, hero: HeroId | undefined, facing: 1 | -1, inGame = false) {
+export function applyHeroBuild(ctx: Ctx, hero: HeroId | undefined, facing: 1 | -1, inGame = false, ascended = false) {
   const build = hero ? HERO_BUILDS[hero] : undefined;
   if (!build) return;
-  if (inGame) ctx.translate(-facing * build.standBack, 0);
+  const scale = ascended && build.topScale ? build.topScale : build.scale;
+  if (inGame && build.standBack) ctx.translate(-facing * build.standBack, 0);
+  if (scale === 1) return;
   ctx.translate(0, 68);
-  ctx.scale(build.scale, build.scale);
+  ctx.scale(scale, scale);
   ctx.translate(0, -68);
 }
 
 export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
   ctx.save();
-  if (!opts.noBuild) applyHeroBuild(ctx, opts.hero, opts.facing, opts.inGame);
+  if (!opts.noBuild) applyHeroBuild(ctx, opts.hero, opts.facing, opts.inGame, opts.tier.ascended);
   drawFighterBody(ctx, skeleton, opts);
   ctx.restore();
 }
@@ -87,6 +99,9 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
     else if (opts.hero === 'sawFace') {
       /* his meat hooks are part of the stage, drawn behind everything (NeonCanvas) */
+    }
+    else if (opts.hero === 'scarecrow' || opts.hero === 'tinMan' || opts.hero === 'lion') {
+      /* the brain, the heart and the fire mane are drawn with their outfits */
     }
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
@@ -150,6 +165,10 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   if (opts.hero === 'theOne') drawCoatTail(ctx, pose, tier, opts.facing, opts.time);
 
   // 5. Solid neon body. The left limbs lead in every attack pose, so they're in front.
+  // The Scarecrow's flying arm is left off the body (drawn out in the air, below).
+  const fly = opts.hero === 'scarecrow' ? flyingArmOf(pose, opts.facing) : null;
+  const nearGone = fly?.left === true;
+  const farGone = fly?.left === false;
   drawNeonBody(
     ctx,
     {
@@ -157,11 +176,11 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
       chest: pose.chest,
       pelvis: pose.pelvis,
       nearShoulder: pose.leftShoulder,
-      nearElbow: pose.leftElbow,
-      nearHand: pose.leftHand,
+      nearElbow: nearGone ? pose.leftShoulder : pose.leftElbow,
+      nearHand: nearGone ? pose.leftShoulder : pose.leftHand,
       farShoulder: pose.rightShoulder,
-      farElbow: pose.rightElbow,
-      farHand: pose.rightHand,
+      farElbow: farGone ? pose.rightShoulder : pose.rightElbow,
+      farHand: farGone ? pose.rightShoulder : pose.rightHand,
       nearHip: pose.leftHip,
       nearKnee: pose.leftKnee,
       nearFoot: pose.leftFoot,
@@ -169,7 +188,7 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
       farKnee: pose.rightKnee,
       farFoot: pose.rightFoot,
     },
-    { color: tier.color, glow: tier.glow, shoulderHalf: 12, waistHalf: 6.5, limbScale: 1 }
+    { color: tier.color, glow: tier.glow, ...bodyBulk(opts.hero, tier.ascended) }
   );
   neonHead(ctx, pose.head, 9, { color: tier.color, glow: tier.glow });
 
@@ -188,6 +207,14 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'sawFace') drawSawFaceOutfit(ctx, pose, opts.facing, opts.time);
+  if (fly) drawFlyingArm(ctx, fly, tier);
+  if (opts.hero === 'scarecrow') {
+    // His cuff straw goes with the flying arm
+    const dressed = fly ? (fly.left ? { ...pose, leftElbow: fly.elbow, leftHand: fly.hand } : { ...pose, rightElbow: fly.elbow, rightHand: fly.hand }) : pose;
+    drawScarecrowOutfit(ctx, dressed, opts.facing, opts.time, tier.ascended);
+  }
+  if (opts.hero === 'tinMan') drawTinManOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
+  if (opts.hero === 'lion') drawLionOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
   if (tier.ascended && opts.hero === 'bride') {
     drawBrideHelmet(ctx, pose, opts.facing);
     drawBlossomStorm(ctx, pose, opts.time, 'front');
@@ -208,8 +235,8 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     drawSleepyEyes(ctx, pose, opts.facing);
   } else if (opts.hero === 'spartan' && tier.ascended) {
     // His closed battle helmet has its own glowing eye slits
-  } else if (opts.hero === 'sawFace') {
-    // He looks out through the eye hole in his mask
+  } else if (opts.hero === 'sawFace' || opts.hero === 'scarecrow' || opts.hero === 'tinMan' || opts.hero === 'lion') {
+    // Their faces are drawn with their outfits (a mask, a sack, tin, a lion's face)
   } else {
     ctx.fillStyle = tier.visorColor;
     ctx.shadowColor = tier.visorColor;
@@ -1842,6 +1869,738 @@ function drawSawFaceOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: n
   ctx.moveTo(back.x, back.y);
   ctx.lineTo(rear.hand.x, rear.hand.y);
   ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The Scarecrow's flying arm: on his big hits an arm comes right off and
+ * flies into them fist first, trailing straw, then snaps back on as the hit
+ * fades. The arm keeps its shape, moved out along the hit so its fist lands
+ * at the end of the trail. Facing left mirrors the pose, which swaps the sides.
+ */
+export function flyingArmOf(pose: SkeletonPose, facing: 1 | -1) {
+  if (!pose.flyingArm || !pose.bladeSlash) return null;
+  const left = (pose.flyingArm === 'front') === facing > 0;
+  const shoulder = left ? pose.leftShoulder : pose.rightShoulder;
+  const elbow = left ? pose.leftElbow : pose.rightElbow;
+  const hand = left ? pose.leftHand : pose.rightHand;
+  const dx = pose.bladeSlash.end.x - hand.x;
+  const dy = pose.bladeSlash.end.y - hand.y;
+  const move = (q: Point2D) => ({ x: q.x + dx, y: q.y + dy });
+  return { left, stump: shoulder, shoulder: move(shoulder), elbow: move(elbow), hand: move(hand) };
+}
+
+/**
+ * The Scarecrow's flying arm drawn again over his hit effect (callers draw
+ * it after the slash), so the fist flying in isn't hidden under the slash.
+ */
+export function drawFlyingArmOverHit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const fly = flyingArmOf(pose, facing);
+  if (fly) drawFlyingArm(ctx, fly, tier);
+}
+
+/** The flying arm itself: the neon arm out in the air, straw bursting from its torn end and from his empty shoulder. */
+function drawFlyingArm(ctx: Ctx, fly: NonNullable<ReturnType<typeof flyingArmOf>>, tier: FighterTier) {
+  neonLimb(ctx, fly.shoulder, fly.elbow, LIMB_WIDTH.upperArm, tier.color, bodyFill(tier.color), tier.glow);
+  neonLimb(ctx, fly.elbow, fly.hand, LIMB_WIDTH.forearm, tier.color, bodyFill(tier.color), tier.glow);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#f2c94c';
+  ctx.shadowColor = '#f2c94c';
+  ctx.shadowBlur = 5;
+  ctx.lineWidth = 1.4;
+  const back = Math.atan2(fly.stump.y - fly.shoulder.y, fly.stump.x - fly.shoulder.x);
+  // The cuff straw at the fist, and the torn end
+  const fist = Math.atan2(fly.hand.y - fly.elbow.y, fly.hand.x - fly.elbow.x);
+  strawTuft(ctx, fly.hand, fist, 5, 6);
+  strawTuft(ctx, fly.shoulder, back, 6, 7);
+  strawTuft(ctx, fly.stump, back + Math.PI, 5, 6);
+  // A trail of loose straw between them
+  ctx.beginPath();
+  for (let i = 1; i < 5; i++) {
+    const t = i / 5;
+    const x = fly.stump.x + (fly.shoulder.x - fly.stump.x) * t;
+    const y = fly.stump.y + (fly.shoulder.y - fly.stump.y) * t + (i % 2 ? -2.5 : 2.5);
+    ctx.moveTo(x - Math.cos(back + 0.5) * 2.5, y - Math.sin(back + 0.5) * 2.5);
+    ctx.lineTo(x + Math.cos(back + 0.5) * 2.5, y + Math.sin(back + 0.5) * 2.5);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** How far The Scarecrow's pole reaches past his lead hand (matches his pole hits, see scarecrow.ts), and back past it. */
+const POLE_FRONT = 44;
+const POLE_BACK = 30;
+
+/** The two ends of The Scarecrow's pole: it lies along his lead forearm. */
+export function poleEnds(pose: SkeletonPose, facing: 1 | -1) {
+  const { lead } = arms(pose, facing);
+  const { dir, muzzle } = weaponAt(lead.hand, lead.elbow, POLE_FRONT);
+  return { tip: muzzle, back: { x: lead.hand.x - dir.x * POLE_BACK, y: lead.hand.y - dir.y * POLE_BACK } };
+}
+
+/**
+ * The Scarecrow's top-level form: he gets a brain. It sits glowing in the
+ * open top of his sack head, his hat lifted off it like a lid, with a few
+ * sparks of genius crackling round it.
+ */
+export function scarecrowBrain(pose: SkeletonPose, time: number, facing: 1 | -1) {
+  const h = pose.head;
+  const brain = { x: h.x - facing * 0.5, y: h.y - 11, r: 7.5, glow: 0.7 + Math.sin(time * 5) * 0.3 };
+  const sparks = Array.from({ length: 4 }, (_, i) => {
+    const a = time * 2.2 + (i / 4) * Math.PI * 2;
+    const r = 14 + Math.sin(time * 7 + i * 2) * 2.5;
+    return { x: brain.x + Math.cos(a) * r, y: brain.y - 3 + Math.sin(a) * r * 0.7, size: 2 + ((i + Math.floor(time * 6)) % 2) };
+  });
+  return { brain, sparks };
+}
+
+/** A tuft of straw sticking out at `at`, fanning round the direction `dir` (radians). */
+function strawTuft(ctx: Ctx, at: Point2D, dir: number, count = 5, length = 6) {
+  ctx.beginPath();
+  for (let i = 0; i < count; i++) {
+    const a = dir + (i - (count - 1) / 2) * 0.32;
+    const l = length * (0.75 + ((i * 37) % 10) / 30);
+    ctx.moveTo(at.x, at.y);
+    ctx.lineTo(at.x + Math.cos(a) * l, at.y + Math.sin(a) * l);
+  }
+  ctx.stroke();
+}
+
+/** Straw bursting out of whatever he just hit, at the end of the hit's trail (drawn with the hit effect). */
+export function drawStrawBurst(ctx: Ctx, pose: SkeletonPose) {
+  const end = pose.bladeSlash?.end;
+  if (!end) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#f2c94c';
+  ctx.shadowColor = '#f2c94c';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.3;
+    const r0 = 4 + (i % 3) * 2;
+    const r1 = r0 + 7 + ((i * 5) % 4);
+    ctx.moveTo(end.x + Math.cos(a) * r0, end.y + Math.sin(a) * r0);
+    ctx.lineTo(end.x + Math.cos(a + 0.25) * r1, end.y + Math.sin(a + 0.25) * r1);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** His floppy pointed hat: a wide brim, and a cone that slumps over backwards. */
+function drawScarecrowHat(ctx: Ctx, at: Point2D, facing: 1 | -1) {
+  const back = -facing;
+  ctx.fillStyle = '#5a4527';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(at.x - 8, at.y);
+  ctx.quadraticCurveTo(at.x + back * 2, at.y - 20, at.x + back * 10, at.y - 18);
+  ctx.quadraticCurveTo(at.x + back * 15, at.y - 16, at.x + back * 13, at.y - 11);
+  ctx.quadraticCurveTo(at.x + back * 6, at.y - 12, at.x + 8, at.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(at.x, at.y, 14, 3.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // A straw band round it
+  ctx.strokeStyle = '#d9b44a';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(at.x - 7.5, at.y - 2);
+  ctx.lineTo(at.x + 7.5, at.y - 2);
+  ctx.stroke();
+}
+
+/**
+ * The Scarecrow: a burlap sack head with a stitched smile and button-dark
+ * eyes, a floppy pointed hat, a patched blue shirt with a rope belt, straw
+ * poking out at his collar, cuffs and boots, and (when he has it) the
+ * wooden pole. In his top-level form the hat lifts off and his new brain
+ * glows in the top of his head.
+ */
+function drawScarecrowOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number, brainy: boolean) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const down = { x: sx / sl, y: sy / sl };
+  const nx = -down.y;
+  const ny = down.x;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // The pole, behind his hands
+  if (pose.prop === 'pole') {
+    const { tip, back } = poleEnds(pose, facing);
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 5.5;
+    ctx.beginPath();
+    ctx.moveTo(back.x, back.y);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+    ctx.strokeStyle = '#a0703a';
+    ctx.shadowColor = '#c9925a';
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = 3.2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // Patched blue shirt over the torso
+  ctx.fillStyle = '#4f72a8';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#6f94cc';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 9.5, c.y + ny * 9.5);
+  ctx.lineTo(c.x - nx * 9.5, c.y - ny * 9.5);
+  ctx.lineTo(p.x - nx * 7.5, p.y - ny * 7.5);
+  ctx.lineTo(p.x + nx * 7.5, p.y + ny * 7.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // A red patch, stitched on
+  const patch = { x: c.x + down.x * 13 + nx * 2.5 * facing, y: c.y + down.y * 13 + ny * 2.5 * facing };
+  ctx.fillStyle = '#c0504d';
+  ctx.beginPath();
+  ctx.moveTo(patch.x - 3.5, patch.y - 3.5);
+  ctx.lineTo(patch.x + 3.5, patch.y - 3);
+  ctx.lineTo(patch.x + 3, patch.y + 3.5);
+  ctx.lineTo(patch.x - 3.5, patch.y + 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#f2e6c8';
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([1.2, 1.2]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Rope belt
+  ctx.strokeStyle = '#b58a4a';
+  ctx.lineWidth = 2.2;
+  const belt = { x: p.x - down.x * 4, y: p.y - down.y * 4 };
+  ctx.beginPath();
+  ctx.moveTo(belt.x + nx * 8, belt.y + ny * 8);
+  ctx.lineTo(belt.x - nx * 8, belt.y - ny * 8);
+  ctx.stroke();
+
+  // Straw at the cuffs, the boots and the collar
+  ctx.strokeStyle = '#f2c94c';
+  ctx.shadowColor = '#f2c94c';
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 1.3;
+  for (const [joint, end] of [
+    [pose.leftElbow, pose.leftHand],
+    [pose.rightElbow, pose.rightHand],
+    [pose.leftKnee, pose.leftFoot],
+    [pose.rightKnee, pose.rightFoot],
+  ] as const) {
+    strawTuft(ctx, end, Math.atan2(end.y - joint.y, end.x - joint.x), 5, 6);
+  }
+  const neck = { x: c.x - down.x * 3, y: c.y - down.y * 3 };
+  strawTuft(ctx, { x: neck.x + nx * 5, y: neck.y + ny * 5 }, Math.atan2(-down.y + ny * 0.8, -down.x + nx * 0.8), 3, 5);
+  strawTuft(ctx, { x: neck.x - nx * 5, y: neck.y - ny * 5 }, Math.atan2(-down.y - ny * 0.8, -down.x - nx * 0.8), 3, 5);
+  ctx.shadowBlur = 0;
+
+  // The sack head: burlap, a stitched smile and two dark triangle eyes
+  const h = pose.head;
+  ctx.fillStyle = '#d4b483';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#d4b483';
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 9.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#1a1208';
+  for (const ex of [2.5, 7]) {
+    const e = { x: h.x + facing * ex, y: h.y - 2 };
+    ctx.beginPath();
+    ctx.moveTo(e.x - 1.8, e.y - 1.2);
+    ctx.lineTo(e.x + 1.8, e.y - 1.2);
+    ctx.lineTo(e.x, e.y + 1.8);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#3a2410';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 0.5, h.y + 3.5);
+  ctx.quadraticCurveTo(h.x + facing * 5, h.y + 7.5, h.x + facing * 9, h.y + 3);
+  for (let i = 0; i < 4; i++) {
+    const t = 0.15 + i * 0.23;
+    const sxp = h.x + facing * (0.5 + t * 8.5);
+    const syp = h.y + 3.5 + Math.sin(t * Math.PI) * 3.3;
+    ctx.moveTo(sxp, syp - 1.4);
+    ctx.lineTo(sxp, syp + 1.4);
+  }
+  ctx.stroke();
+
+  const hatAt = { x: h.x - facing * 0.5, y: h.y - 7.5 };
+  if (brainy) {
+    const { brain, sparks } = scarecrowBrain(pose, time, facing);
+    // The brain, pink and glowing, with its folds
+    ctx.save();
+    ctx.fillStyle = '#ff9fd0';
+    ctx.strokeStyle = '#7a2350';
+    ctx.lineWidth = 1;
+    ctx.shadowColor = '#ff6fbf';
+    ctx.shadowBlur = 10 + brain.glow * 10;
+    ctx.beginPath();
+    ctx.ellipse(brain.x, brain.y, brain.r, brain.r * 0.72, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(brain.x, brain.y - brain.r * 0.7);
+    ctx.lineTo(brain.x, brain.y + brain.r * 0.6);
+    for (const [ox, oy] of [
+      [-4.5, -1.5],
+      [-3, 2],
+      [3.5, -2],
+      [4, 2],
+    ]) {
+      ctx.moveTo(brain.x + ox - 1.6, brain.y + oy);
+      ctx.quadraticCurveTo(brain.x + ox, brain.y + oy - 2, brain.x + ox + 1.6, brain.y + oy);
+    }
+    ctx.stroke();
+    // Sparks of genius
+    ctx.fillStyle = '#fff3a8';
+    ctx.shadowColor = '#ffe14f';
+    ctx.shadowBlur = 8;
+    for (const s of sparks) {
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y - s.size * 1.6);
+      ctx.lineTo(s.x + s.size * 0.5, s.y);
+      ctx.lineTo(s.x, s.y + s.size * 1.6);
+      ctx.lineTo(s.x - s.size * 0.5, s.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    // The hat lifted right off, tipped back like an opened lid
+    ctx.save();
+    ctx.translate(hatAt.x - facing * 5, hatAt.y - 17);
+    ctx.rotate(-facing * 0.35);
+    drawScarecrowHat(ctx, { x: 0, y: 0 }, facing);
+    ctx.restore();
+  } else {
+    drawScarecrowHat(ctx, hatAt, facing);
+  }
+  ctx.restore();
+}
+
+/** How far The Tin Man's axe head is past his hand (matches his axe hits, see tinMan.ts). */
+const AXE_HEAD = 30;
+
+/** Where The Tin Man's axe head is: at the end of the handle, along his lead forearm. */
+export function axeHead(pose: SkeletonPose, facing: 1 | -1): Point2D {
+  const { lead } = arms(pose, facing);
+  return weaponAt(lead.hand, lead.elbow, AXE_HEAD).muzzle;
+}
+
+/** The Tin Man's top-level form: his new heart, glowing red in his chest and beating like a clock ticks. */
+export function tinHeart(pose: SkeletonPose, time: number) {
+  const beat = Math.abs(Math.sin(time * 6));
+  // Below the chest core, so the core's glow doesn't cover it
+  return { x: pose.chest.x, y: pose.chest.y + 13, size: 7.5 * (1 + beat * 0.18), glow: 0.5 + beat * 0.5 };
+}
+
+function heartPath(ctx: Ctx, x: number, y: number, s: number) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + s * 0.9);
+  ctx.bezierCurveTo(x - s * 1.4, y + s * 0.1, x - s * 0.9, y - s * 0.95, x, y - s * 0.35);
+  ctx.bezierCurveTo(x + s * 0.9, y - s * 0.95, x + s * 1.4, y + s * 0.1, x, y + s * 0.9);
+  ctx.closePath();
+}
+
+/** A rivet: a little tin dot with a dark rim. */
+function rivet(ctx: Ctx, at: Point2D, r = 1.5) {
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+/**
+ * The Tin Man: a tin face with a riveted jaw, a funnel for a hat, a tin
+ * chest plate, rivets at his elbows and knees, the axe in his lead hand,
+ * and (when he oils himself) an oil can in his rear hand. In his top-level
+ * form his new heart glows in his chest.
+ */
+function drawTinManOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number, hearty: boolean) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const tin = '#cfd8e2';
+
+  // Tin chest plate with rivets in the corners
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 6;
+  const corners = [
+    { x: c.x + nx * 9, y: c.y + ny * 9 },
+    { x: c.x - nx * 9, y: c.y - ny * 9 },
+    { x: p.x - nx * 7, y: p.y - ny * 7 },
+    { x: p.x + nx * 7, y: p.y + ny * 7 },
+  ];
+  ctx.beginPath();
+  corners.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#8b97a5';
+  ctx.lineWidth = 0.7;
+  for (const q of corners) rivet(ctx, { x: q.x + (c.x - q.x) * 0.18 + (p.x - c.x) * 0.06, y: q.y + (c.y - q.y) * 0.18 + (p.y - c.y) * 0.06 }, 1.2);
+  // Rivets at the elbows and knees
+  for (const j of [pose.leftElbow, pose.rightElbow, pose.leftKnee, pose.rightKnee]) rivet(ctx, j, 2);
+
+  // His new heart (top-level form), glowing through the chest plate
+  if (hearty) {
+    const h = tinHeart(pose, time);
+    ctx.save();
+    ctx.fillStyle = '#ff2d55';
+    ctx.shadowColor = '#ff2d55';
+    ctx.shadowBlur = 10 + h.glow * 14;
+    heartPath(ctx, h.x, h.y, h.size);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // The axe: a wooden handle along his lead forearm, a tin head on the end
+  const arm = arms(pose, facing).lead;
+  const { dir: d } = weaponAt(arm.hand, arm.elbow, AXE_HEAD);
+  const n = { x: -d.y * facing, y: d.x * facing };
+  const along = (t: number, side = 0) => ({ x: arm.hand.x + d.x * t + n.x * side, y: arm.hand.y + d.y * t + n.y * side });
+  const butt = along(-7);
+  const top = along(AXE_HEAD + 2);
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4.6;
+  ctx.beginPath();
+  ctx.moveTo(butt.x, butt.y);
+  ctx.lineTo(top.x, top.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#8a5a2b';
+  ctx.lineWidth = 2.6;
+  ctx.stroke();
+  const blade = [along(AXE_HEAD - 9, -1), along(AXE_HEAD + 1, -1), along(AXE_HEAD + 4, 10), along(AXE_HEAD - 12, 10)];
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.3;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(blade[0].x, blade[0].y);
+  ctx.lineTo(blade[1].x, blade[1].y);
+  const edgeMid = along(AXE_HEAD - 4, 13);
+  ctx.lineTo(blade[2].x, blade[2].y);
+  ctx.quadraticCurveTo(edgeMid.x, edgeMid.y, blade[3].x, blade[3].y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // The oil can, in his rear hand, spout up at his jaw
+  if (pose.prop === 'oilcan') {
+    const rear = arms(pose, facing).rear;
+    const to = { x: pose.head.x - rear.hand.x, y: pose.head.y + 6 - rear.hand.y };
+    const tl = Math.hypot(to.x, to.y) || 1;
+    const u = { x: to.x / tl, y: to.y / tl };
+    ctx.fillStyle = '#d9a441';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.ellipse(rear.hand.x - u.x * 2, rear.hand.y - u.y * 2, 4.2, 3.4, Math.atan2(u.y, u.x), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#b07f28';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(rear.hand.x + u.x * 2, rear.hand.y + u.y * 2);
+    ctx.lineTo(rear.hand.x + u.x * 9, rear.hand.y + u.y * 9);
+    ctx.stroke();
+  }
+
+  // The tin face: dark eyes, a little cone nose and a riveted hinged jaw
+  const h = pose.head;
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 9.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#10141c';
+  for (const ex of [2.5, 6.8]) {
+    ctx.beginPath();
+    ctx.arc(h.x + facing * ex, h.y - 1.5, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#9aa6b4';
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 6, h.y + 0.5);
+  ctx.lineTo(h.x + facing * 11, h.y + 2);
+  ctx.lineTo(h.x + facing * 6, h.y + 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#5d6876';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(h.x - facing * 3, h.y + 4.5);
+  ctx.lineTo(h.x + facing * 8.5, h.y + 4.5);
+  ctx.stroke();
+  ctx.fillStyle = '#8b97a5';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 0.6;
+  rivet(ctx, { x: h.x - facing * 4, y: h.y + 4.5 }, 1.1);
+
+  // The funnel for a hat: wide over his head, narrowing to a spout
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(h.x - 9, h.y - 6);
+  ctx.lineTo(h.x + 9, h.y - 6);
+  ctx.lineTo(h.x + 2, h.y - 18);
+  ctx.lineTo(h.x + 1.6, h.y - 26);
+  ctx.lineTo(h.x - 1.6, h.y - 26);
+  ctx.lineTo(h.x - 2, h.y - 18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The Lion's mane: shaggy tufts all round his head. In his top-level form
+ * (his courage) they're a blazing mane of fire, flickering and much bigger.
+ */
+export function lionMane(pose: SkeletonPose, time: number, blazing: boolean) {
+  const count = blazing ? 14 : 18;
+  return Array.from({ length: count }, (_, i) => {
+    const a = (i / count) * Math.PI * 2;
+    const flicker = blazing ? Math.sin(time * 9 + i * 1.7) * 3.5 + Math.sin(time * 13 + i) * 2.5 : 0;
+    const length = (blazing ? 23 : 17) + (i % 2 ? -2.5 : 2) * (blazing ? 1 : 0.6) + flicker;
+    return { a, length };
+  });
+}
+
+/**
+ * The Lion: a big mane round a lion's face (a muzzle, a dark nose,
+ * whiskers), tawny fur over his body, clawed paws, and a long tail with a
+ * tuft swishing behind him. In his top-level form his mane is fire.
+ */
+function drawLionOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number, blazing: boolean) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  const back = -facing;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // The tail, swishing out behind him
+  const swish = Math.sin(time * 4) * 6;
+  const tailEnd = { x: p.x + back * 30, y: p.y - 14 + swish };
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4.2;
+  ctx.beginPath();
+  ctx.moveTo(p.x + back * 4, p.y + 2);
+  ctx.quadraticCurveTo(p.x + back * 22, p.y + 14, tailEnd.x, tailEnd.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#c98f3c';
+  ctx.lineWidth = 2.4;
+  ctx.stroke();
+  ctx.fillStyle = blazing ? '#ff8a1e' : '#8a4a16';
+  ctx.beginPath();
+  ctx.ellipse(tailEnd.x, tailEnd.y, 4, 5.5, 0.4 * back, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tawny fur over the body (much broader once he's bulked up)
+  // Jacked: a big V from broad shoulders down to a narrow waist
+  const chestHalf = blazing ? 18 : 9.5;
+  const waistHalf = blazing ? 7 : 7.5;
+  ctx.fillStyle = '#c98f3c';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.3;
+  ctx.shadowColor = blazing ? '#ff9a2e' : '#e0a656';
+  ctx.shadowBlur = blazing ? 12 : 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * chestHalf, c.y + ny * chestHalf);
+  ctx.lineTo(c.x - nx * chestHalf, c.y - ny * chestHalf);
+  ctx.lineTo(p.x - nx * waistHalf, p.y - ny * waistHalf);
+  ctx.lineTo(p.x + nx * waistHalf, p.y + ny * waistHalf);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // A paler belly
+  ctx.fillStyle = '#e9c78a';
+  ctx.beginPath();
+  ctx.ellipse((c.x + p.x) / 2 + nx * 2 * facing, (c.y + p.y) / 2 + ny * 2 * facing, blazing ? 5.5 : 4, 9, Math.atan2(sy, sx) - Math.PI / 2, 0, Math.PI * 2);
+  ctx.fill();
+  if (blazing) {
+    // Muscles: two big pecs and a six-pack
+    const at = (t: number, side: number) => ({ x: c.x + (p.x - c.x) * t + nx * side, y: c.y + (p.y - c.y) * t + ny * side });
+    ctx.strokeStyle = '#7a4314';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      const a = at(0.12, side * 1);
+      const m = at(0.4, side * 7);
+      const b = at(0.22, side * 12);
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(m.x, m.y, b.x, b.y);
+    }
+    for (const t of [0.55, 0.7, 0.85]) {
+      const l = at(t, -4);
+      const r = at(t, 4);
+      ctx.moveTo(l.x, l.y);
+      ctx.lineTo(r.x, r.y);
+    }
+    const top = at(0.45, 0);
+    const bottom = at(0.92, 0);
+    ctx.moveTo(top.x, top.y);
+    ctx.lineTo(bottom.x, bottom.y);
+    ctx.stroke();
+  }
+
+  // The mane (or, with his courage, a mane of fire)
+  const h = pose.head;
+  const tufts = lionMane(pose, time, blazing);
+  ctx.save();
+  if (blazing) {
+    const g = ctx.createRadialGradient(h.x, h.y, 6, h.x, h.y, 28);
+    g.addColorStop(0, '#fff3a0');
+    g.addColorStop(0.45, '#ffb020');
+    g.addColorStop(1, 'rgba(255, 60, 20, 0.9)');
+    ctx.fillStyle = g;
+    ctx.shadowColor = '#ff7a1a';
+    ctx.shadowBlur = 18;
+  } else {
+    ctx.fillStyle = '#9a561d';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1;
+  }
+  ctx.beginPath();
+  tufts.forEach((t, i) => {
+    const next = tufts[(i + 1) % tufts.length];
+    const mid = (t.a + (i === tufts.length - 1 ? next.a + Math.PI * 2 : next.a)) / 2;
+    const tip = { x: h.x + Math.cos(t.a) * t.length, y: h.y + Math.sin(t.a) * t.length - (blazing ? 3 : 0) };
+    // A shaggy ring when calm (shallow gaps between tufts), deep tongues of fire when blazing
+    const dip = blazing ? 9.5 : 13.5;
+    const valley = { x: h.x + Math.cos(mid) * dip, y: h.y + Math.sin(mid) * dip };
+    if (i === 0) ctx.moveTo(tip.x, tip.y);
+    else ctx.lineTo(tip.x, tip.y);
+    ctx.lineTo(valley.x, valley.y);
+  });
+  ctx.closePath();
+  ctx.fill();
+  if (!blazing) ctx.stroke();
+  ctx.restore();
+
+  // His face: a muzzle, a dark nose, eyes and whiskers
+  ctx.fillStyle = '#e8b866';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 8.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#f6dca6';
+  ctx.beginPath();
+  ctx.ellipse(h.x + facing * 4.5, h.y + 3, 4.5, 3.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2a1608';
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 6.5, h.y + 0.5);
+  ctx.lineTo(h.x + facing * 9.5, h.y + 0.5);
+  ctx.lineTo(h.x + facing * 8, h.y + 2.6);
+  ctx.closePath();
+  ctx.fill();
+  // Eyes: they glow once he's found his courage
+  ctx.save();
+  if (blazing) {
+    ctx.fillStyle = '#ffe14f';
+    ctx.shadowColor = '#ffb020';
+    ctx.shadowBlur = 8;
+  }
+  for (const ex of [1.5, 5.5]) {
+    ctx.beginPath();
+    ctx.arc(h.x + facing * ex, h.y - 2.5, blazing ? 1.4 : 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.strokeStyle = '#2a1608';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  for (const wy of [2.5, 4]) {
+    ctx.moveTo(h.x + facing * 7, h.y + wy);
+    ctx.lineTo(h.x + facing * 13, h.y + wy - 1 + (wy - 3));
+  }
+  ctx.stroke();
+
+  // Paws with claws, on top (so when he cowers they cover his face)
+  for (const [hand, elbow] of [
+    [pose.leftHand, pose.leftElbow],
+    [pose.rightHand, pose.rightElbow],
+  ] as const) {
+    const a = Math.atan2(hand.y - elbow.y, hand.x - elbow.x);
+    const big = blazing ? 1.4 : 1;
+    ctx.fillStyle = '#d9a24e';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(hand.x, hand.y, 4.2 * big, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Claws (glowing hot in his top-level form)
+    ctx.save();
+    ctx.strokeStyle = blazing ? '#fff1b0' : '#ffffff';
+    if (blazing) {
+      ctx.shadowColor = '#ff9a2e';
+      ctx.shadowBlur = 8;
+    }
+    ctx.lineWidth = 1.1 * big;
+    ctx.beginPath();
+    for (const k of [-0.5, 0, 0.5]) {
+      const ca = a + k;
+      ctx.moveTo(hand.x + Math.cos(ca) * 3.5 * big, hand.y + Math.sin(ca) * 3.5 * big);
+      ctx.lineTo(hand.x + Math.cos(ca) * 7.5 * big, hand.y + Math.sin(ca) * 7.5 * big);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 

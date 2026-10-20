@@ -11,7 +11,7 @@ import { fighterTier } from '../game/fighterTier';
 import { attackChainFrame, playerVictoryPose } from '../game/motion';
 import { getMoveForCombo, getOrientedPose } from '../game/animations';
 import { getHero, HeroDefinition, HeroId } from '../game/heroes';
-import { applyHeroBuild, drawFighter, drawSlashCrescent } from './fighterArt';
+import { applyHeroBuild, drawFighter, drawFlyingArmOverHit, drawSlashCrescent } from './fighterArt';
 import { bodyFill } from './neonBody';
 
 /**
@@ -236,8 +236,9 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
   ctx.translate(0, -68);
   drawFighter(ctx, pose, { tier, facing: 1, time: elapsed, combo: tier.minCombo, hero: hero.id });
   if (slashing && pose.bladeSlash) {
-    applyHeroBuild(ctx, hero.id, 1);
+    applyHeroBuild(ctx, hero.id, 1, false, tier.ascended);
     drawSlashCrescent(ctx, pose.bladeSlash);
+    if (hero.id === 'scarecrow') drawFlyingArmOverHit(ctx, pose, tier, 1);
   }
   ctx.restore();
 

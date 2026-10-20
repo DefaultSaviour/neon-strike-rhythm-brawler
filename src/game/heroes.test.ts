@@ -3,7 +3,7 @@ import { AttackMove, Point2D, SkeletonPose } from '../types/game';
 import { ATTACK_MOVES, getMoveForCombo, getOrientedPose } from './animations';
 import { LIMB } from './enemyMotion';
 import { DEFAULT_HERO, getHero, HEROES } from './heroes';
-import { isHeroUnlocked } from './heroUnlocks';
+import { EMPTY_STATS, isHeroUnlocked } from './heroUnlocks';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
 import { SAW_FACE_POSE_EDITS } from './heroMoves/sawFacePoses';
 import { COMBO_SNAP_SEC, comboDuration, comboFrame } from './combo';
@@ -649,7 +649,7 @@ describe('The Stallion', () => {
   });
 
   it('is earned by completing 5 songs', () => {
-    const later = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: n, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const later = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: n, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 });
     expect(isHeroUnlocked('stallion', later(4))).toBe(false);
     expect(isHeroUnlocked('stallion', later(5))).toBe(true);
   });
@@ -780,7 +780,7 @@ describe('The Kid', () => {
   });
 
   it('is earned by training for 30 minutes', () => {
-    const after = (s: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: s, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (s: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: s, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 });
     expect(isHeroUnlocked('kid', after(1799))).toBe(false);
     expect(isHeroUnlocked('kid', after(1800))).toBe(true);
   });
@@ -845,7 +845,7 @@ describe('The Spartan', () => {
   });
 
   it('is earned by reaching a 300 combo (300 Spartans)', () => {
-    const after = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: n, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: n, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 });
     expect(isHeroUnlocked('spartan', after(299))).toBe(false);
     expect(isHeroUnlocked('spartan', after(300))).toBe(true);
   });
@@ -909,7 +909,7 @@ describe('The Disco King', () => {
   });
 
   it('is earned by landing 2,500 PERFECT hits', () => {
-    const after = (n: number) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (n: number) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 });
     expect(isHeroUnlocked('discoKing', after(2499))).toBe(false);
     expect(isHeroUnlocked('discoKing', after(2500))).toBe(true);
   });
@@ -983,7 +983,7 @@ describe('The Bride', () => {
   });
 
   it('is earned by completing 8 songs, or straight away by watching one rewarded ad', () => {
-    const after = (songs: number, ads = 0) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: songs, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (songs: number, ads = 0) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: songs, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 });
     expect(isHeroUnlocked('bride', after(7))).toBe(false);
     expect(isHeroUnlocked('bride', after(8))).toBe(true);
     expect(isHeroUnlocked('bride', after(0, 1))).toBe(true);
@@ -1069,9 +1069,254 @@ describe('Saw Face', () => {
   });
 
   it('is earned by landing 666 PERFECT hits, with no ad shortcut', () => {
-    const after = (n: number, ads = 0) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (n: number, ads = 0) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 });
     expect(isHeroUnlocked('sawFace', after(665))).toBe(false);
     expect(isHeroUnlocked('sawFace', after(666))).toBe(true);
     expect(isHeroUnlocked('sawFace', after(0, 1))).toBe(false);
+  });
+});
+
+describe('The Scarecrow', () => {
+  const GRIP_GAP = 16;
+  const sc = getHero('scarecrow');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(sc.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => sc.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(sc.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [sc.idlePose, ...sc.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of sc.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of sc.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of sc.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('slumps in his stance, arms hanging down like empty sleeves', () => {
+    const idle = sc.idlePose;
+    expect(idle.leftHand.y).toBeGreaterThan(idle.chest.y + 10);
+    expect(idle.rightHand.y).toBeGreaterThan(idle.chest.y + 10);
+  });
+
+  it('his signature: on his big hits an arm flies off into them, from the very first tier', () => {
+    const flying = sc.moves.flatMap((m) => m.sequence!.filter((k) => k.flyingArm && !k.hold).map((k) => ({ m, k })));
+    expect(flying.length).toBeGreaterThanOrEqual(4);
+    expect(sc.moves.find((m) => m.name === 'Flying Fist')!.tier).toBe(1);
+    for (const { m, k } of flying) {
+      // Only on a hit, thrown from the arm that flies, and well out past his hand
+      expect(k.trail, m.name).toBeDefined();
+      const hand = k.flyingArm === 'front' ? k.pose.frontHand : k.pose.backHand;
+      expect(dist(hand, k.trail!.end), m.name).toBeGreaterThan(35);
+      expect(k.prop, m.name).toBeUndefined();
+    }
+  });
+
+  it('swings his pole two-handed, and only in the pole moves', () => {
+    const poleMoves = sc.moves.filter((m) => m.sequence!.some((k) => k.prop === 'pole'));
+    expect(poleMoves.length).toBeGreaterThanOrEqual(5);
+    for (const m of poleMoves) {
+      for (const k of m.sequence!) if (k.prop === 'pole') expect(dist(k.pose.frontHand, k.pose.backHand), m.name).toBeLessThan(GRIP_GAP);
+    }
+    expect(sc.moves.find((m) => m.name === 'Floppy Jab')!.sequence!.some((k) => k.prop)).toBe(false);
+  });
+
+  it('really falls in a heap and springs back out of it', () => {
+    const pile = sc.moves.find((m) => m.name === 'Pile Up')!;
+    expect(pile.sequence![0].pose.pelvis.y).toBeGreaterThan(40);
+    expect(pile.sequence![pile.sequence!.length - 1].pose.pelvis.y).toBeLessThan(15);
+  });
+
+  it('is earned by dying in 10 songs (quitting does not count), with no ad shortcut', () => {
+    const after = (n: number, ads = 0) => ({ ...EMPTY_STATS, songsDied: n, heroAds: ads });
+    expect(isHeroUnlocked('scarecrow', after(9))).toBe(false);
+    expect(isHeroUnlocked('scarecrow', after(10))).toBe(true);
+    expect(isHeroUnlocked('scarecrow', after(0, 1))).toBe(false);
+  });
+});
+
+describe('The Tin Man', () => {
+  const H = getHero('tinMan');
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(H.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => H.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(H.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [H.idlePose, ...H.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of H.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    const realPoses = (m: AttackMove) =>
+      m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+    for (const m of H.moves) {
+      expect(realPoses(m).length, m.name).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from the spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of H.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('rusts solid in tier 4: his whole body stays locked in his stance, and only his forearms move', () => {
+    const idle = H.idlePose;
+    const locked = ['pelvis', 'chest', 'head', 'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftKnee', 'rightKnee', 'leftFoot', 'rightFoot'] as const;
+    const rusty = H.moves.filter((m) => m.tier === 4);
+    expect(rusty).toHaveLength(4);
+    for (const m of rusty) {
+      const hands = new Set<string>();
+      for (const k of m.sequence!) {
+        const p = keyToPlayerPose(k);
+        for (const j of locked) expect(dist(p[j], idle[j]), `${m.name} ${j}`).toBeLessThan(1e-6);
+        hands.add(`${p.leftHand.x.toFixed(2)},${p.leftHand.y.toFixed(2)},${p.rightHand.x.toFixed(2)},${p.rightHand.y.toFixed(2)}`);
+      }
+      expect(hands.size, m.name).toBeGreaterThan(1);
+    }
+  });
+
+  it('stands stiff-legged, the axe raised in front', () => {
+    expect(H.idlePose.pelvis.y).toBeLessThan(10);
+    expect(H.idlePose.leftHand.x).toBeGreaterThan(H.idlePose.chest.x);
+  });
+
+  it('oils his jaw with the oil can, and only then', () => {
+    const oil = H.moves.find((m) => m.name === 'Oil Change')!;
+    const last = keyToPlayerPose(oil.sequence![oil.sequence!.length - 1]);
+    expect(last.prop).toBe('oilcan');
+    expect(dist(last.rightHand, last.head)).toBeLessThan(18);
+    expect(H.moves.find((m) => m.name === 'Axe Chop')!.sequence!.some((k) => k.prop)).toBe(false);
+  });
+
+  it('every finisher ends with a hand over his new heart', () => {
+    for (const m of H.moves.filter((x) => x.tier === 5)) {
+      const last = keyToPlayerPose(m.sequence![m.sequence!.length - 1]);
+      expect(dist(last.rightHand, last.chest), m.name).toBeLessThan(10);
+    }
+  });
+
+  it('is earned by hitting 20 OKs in a row', () => {
+    expect(isHeroUnlocked('tinMan', { ...EMPTY_STATS, bestOkStreak: 19 })).toBe(false);
+    expect(isHeroUnlocked('tinMan', { ...EMPTY_STATS, bestOkStreak: 20 })).toBe(true);
+  });
+});
+
+describe('The Lion', () => {
+  const H = getHero('lion');
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(H.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => H.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(H.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [H.idlePose, ...H.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of H.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    const realPoses = (m: AttackMove) =>
+      m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+    for (const m of H.moves) {
+      expect(realPoses(m).length, m.name).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from the spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of H.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('starts out a scaredy-cat: most tier 1 swipes end with him cowering, paws over his face', () => {
+    const cowering = H.moves.filter((m) => m.tier === 1).filter((m) => {
+      const last = keyToPlayerPose(m.sequence![m.sequence!.length - 1]);
+      return dist(last.leftHand, last.head) < 12 && dist(last.rightHand, last.head) < 12;
+    });
+    expect(cowering.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('finds his courage: every finisher ends on a roaring double-biceps flex, both fists up by his head', () => {
+    for (const m of H.moves.filter((x) => x.tier === 5)) {
+      const last = keyToPlayerPose(m.sequence![m.sequence!.length - 1]);
+      for (const [hand, elbow] of [[last.leftHand, last.leftElbow], [last.rightHand, last.rightElbow]] as const) {
+        expect(hand.y, m.name).toBeLessThan(last.chest.y - 10);
+        // Forearm upright, fist above the elbow: a flex, not a reach
+        expect(hand.y, m.name).toBeLessThan(elbow.y - 15);
+      }
+    }
+  });
+
+  it('is earned by running away from 5 songs', () => {
+    expect(isHeroUnlocked('lion', { ...EMPTY_STATS, songsQuit: 4 })).toBe(false);
+    expect(isHeroUnlocked('lion', { ...EMPTY_STATS, songsQuit: 5 })).toBe(true);
   });
 });

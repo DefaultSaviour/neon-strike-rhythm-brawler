@@ -11,6 +11,9 @@ import { PRO_WRESTLER_IDLE, PRO_WRESTLER_MOVES } from './heroMoves/proWrestler';
 import { SPARTAN_IDLE, SPARTAN_MOVES } from './heroMoves/spartan';
 import { STALLION_IDLE, STALLION_MOVES } from './heroMoves/stallion';
 import { SAW_FACE_IDLE, SAW_FACE_MOVES } from './heroMoves/sawFace';
+import { SCARECROW_IDLE, SCARECROW_MOVES } from './heroMoves/scarecrow';
+import { TIN_MAN_IDLE, TIN_MAN_MOVES } from './heroMoves/tinMan';
+import { LION_IDLE, LION_MOVES } from './heroMoves/lion';
 import { BRIDE_IDLE, BRIDE_MOVES } from './heroMoves/theBride';
 import { THE_KID_IDLE, THE_KID_MOVES } from './heroMoves/theKid';
 import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
@@ -22,7 +25,7 @@ import { THE_ONE_IDLE, THE_ONE_MOVES } from './heroMoves/theOne';
  * and angel wings are shared by every hero, so levelling up always looks the same.
  */
 
-export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid' | 'spartan' | 'discoKing' | 'bride' | 'sawFace';
+export type HeroId = 'striker' | 'dragon' | 'babaYaga' | 'theOne' | 'drunkenMaster' | 'proWrestler' | 'ballerina' | 'stallion' | 'kid' | 'spartan' | 'discoKing' | 'bride' | 'sawFace' | 'scarecrow' | 'tinMan' | 'lion';
 
 export interface HeroDefinition {
   id: HeroId;
@@ -140,6 +143,30 @@ export const HEROES: HeroDefinition[] = [
     description: 'A roaring chainsaw and a stitched mask: thrusts, chops, lumbering spins, and the chainsaw dance',
     idlePose: SAW_FACE_IDLE,
     moves: SAW_FACE_MOVES,
+  },
+  {
+    id: 'scarecrow',
+    label: 'The Scarecrow',
+    tagline: 'No brain? No problem.',
+    description: 'A floppy straw man: rubbery flails, his old pole, and a heap he springs back out of',
+    idlePose: SCARECROW_IDLE,
+    moves: SCARECROW_MOVES,
+  },
+  {
+    id: 'tinMan',
+    label: 'The Tin Man',
+    tagline: 'All tin, no heart (yet)',
+    description: 'Stiff, clanking axe work and an oil can, and when he rusts solid only his forearms still swing',
+    idlePose: TIN_MAN_IDLE,
+    moves: TIN_MAN_MOVES,
+  },
+  {
+    id: 'lion',
+    label: 'The Lion',
+    tagline: "Brave? He's working on it.",
+    description: 'Starts out cowering behind his paws, ends up pouncing, clawing and roaring',
+    idlePose: LION_IDLE,
+    moves: LION_MOVES,
   },
 ];
 
