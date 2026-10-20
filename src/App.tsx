@@ -30,7 +30,9 @@ import {
   showMidgameAd,
   submitLeaderboardScore,
   showRewardedAd,
+  progressStore,
 } from './platform/crazyGames';
+import { markFirstSongDone, needsFirstSong } from './game/firstSong';
 import { midgameAdDue } from './game/adPacing';
 import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from './game/enemyMotion';
 import { getHero, HeroId } from './game/heroes';
@@ -385,9 +387,12 @@ export default function App() {
 
   const handleStartChoice = useCallback((choice: StartChoice) => {
     // A brand-new player goes straight into a song with one click (CrazyGames asks for this):
-    // the easiest one. After that, New Game opens the song list.
-    if (choice === 'newGame' && engine.lifetimeStats.playSeconds === 0) handleStartGame(FIRST_SONG);
-    else if (choice === 'newGame') setShowTrackSelect(true);
+    // the easiest one, as practice, so getting hit doesn't end it straight away (see firstSong).
+    // After that, New Game opens the song list.
+    if (choice === 'newGame' && needsFirstSong(progressStore(), engine.lifetimeStats.playSeconds)) {
+      markFirstSongDone(progressStore());
+      handleStartGame(FIRST_SONG, true);
+    } else if (choice === 'newGame') setShowTrackSelect(true);
     else if (choice === 'studio') setShowStudio(true);
     else {
       if (choice === 'unlocks') {
@@ -679,6 +684,7 @@ export default function App() {
           heroId={engine.hero.id}
           practice={engine.practice}
           practiceHits={engine.practiceHits.length}
+          onPlayForReal={() => handleStartGame(selectedTrack, false)}
           newUnlocks={engine.newUnlocks}
           onPickHero={(hero) => handleUpdateSettings({ hero })}
           track={selectedTrack}
