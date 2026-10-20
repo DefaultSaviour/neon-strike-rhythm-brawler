@@ -14,8 +14,6 @@ interface StartScreenProps {
   onChoose: (choice: StartChoice) => void;
   /** The hero you'll play as */
   heroLabel: string;
-  unlockedHeroes: number;
-  totalHeroes: number;
   /** New unlocks not yet tapped on: a number badge on the Unlocks button */
   newUnlocks?: number;
   oneButtonMode: boolean;
@@ -36,8 +34,6 @@ const CHOICES = ALL_CHOICES.filter((c) => c.id !== 'studio' || STUDIO_ENABLED);
 export const StartScreen: React.FC<StartScreenProps> = ({
   onChoose,
   heroLabel,
-  unlockedHeroes,
-  totalHeroes,
   newUnlocks = 0,
   oneButtonMode,
   notice,
@@ -90,11 +86,6 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             >
               {c.icon}
               <span className="flex-1 text-left">{c.label}</span>
-              {c.id === 'unlocks' && (
-                <span className={`text-xs font-mono tracking-normal ${active ? 'text-black/70' : 'text-amber-300'}`}>
-                  {unlockedHeroes}/{totalHeroes}
-                </span>
-              )}
               {c.id === 'unlocks' && <CountBadge count={newUnlocks} className="absolute -top-2.5 -right-2.5" />}
             </button>
           );
