@@ -15,6 +15,7 @@ import { OptionsScreen } from './components/OptionsScreen';
 import { StancesScreen } from './components/StancesScreen';
 import { RecordsScreen } from './components/RecordsScreen';
 import { BackdropScreen } from './components/BackdropScreen';
+import { UnlockTab, UnlockTabs } from './components/UnlockTabs';
 import { bestSongScore, songRecords } from './game/records';
 import {
   followMuteSetting,
@@ -30,7 +31,6 @@ import {
   showRewardedAd,
 } from './platform/crazyGames';
 import { midgameAdDue } from './game/adPacing';
-import { formatCountdown, secondsToNextStance } from './game/stanceUnlocks';
 import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
 import { getHero, HeroId, HEROES } from './game/heroes';
 
@@ -59,7 +59,9 @@ export default function App() {
   const [showTrackSelect, setShowTrackSelect] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
   /** A screen opened from the title menu */
-  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'stances' | 'backdrop' | 'records' | 'options' | null>(null);
+  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'records' | 'options' | null>(null);
+  /** Which tab of the Unlocks screen is open */
+  const [unlockTab, setUnlockTab] = useState<UnlockTab>('heroes');
   /** Rewarded ads can be shown here (CrazyGames, or its local test mode) */
   const [adAvailable, setAdAvailable] = useState(false);
   const [adBusy, setAdBusy] = useState(false);
@@ -364,7 +366,10 @@ export default function App() {
     if (choice === 'newGame' && engine.lifetimeStats.playSeconds === 0) handleStartGame(FIRST_SONG);
     else if (choice === 'newGame') setShowTrackSelect(true);
     else if (choice === 'studio') setShowStudio(true);
-    else setMenuScreen(choice);
+    else {
+      if (choice === 'unlocks') setUnlockTab('heroes');
+      setMenuScreen(choice);
+    }
   }, [engine, handleStartGame]);
   const closeMenuScreen = useCallback(() => setMenuScreen(null), []);
 
@@ -490,18 +495,13 @@ export default function App() {
           unlockedHeroes={HEROES.filter((h) => engine.isHeroUnlocked(h.id)).length}
           totalHeroes={HEROES.length}
           oneButtonMode={audioSettings.oneButtonMode}
-          stanceCountdown={(() => {
-            const wait = secondsToNextStance(engine.lifetimeStats);
-            return wait === null ? null : formatCountdown(wait);
-          })()}
-          onWatchAd={adAvailable ? handleWatchAd : undefined}
-          adBusy={adBusy}
           notice={menuNotice}
         />
       )}
 
-      {menuScreen === 'stances' && (
+      {menuScreen === 'unlocks' && unlockTab === 'stances' && (
         <StancesScreen
+          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
           stats={engine.lifetimeStats}
           selected={engine.enemyMotion}
           isUnlocked={(id) => engine.isStanceUnlocked(id)}
@@ -514,8 +514,9 @@ export default function App() {
         />
       )}
 
-      {menuScreen === 'unlocks' && (
+      {menuScreen === 'unlocks' && unlockTab === 'heroes' && (
         <UnlocksScreen
+          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
           stats={engine.lifetimeStats}
           selectedHero={engine.hero.id}
           isUnlocked={(id) => engine.isHeroUnlocked(id)}
@@ -527,8 +528,9 @@ export default function App() {
         />
       )}
 
-      {menuScreen === 'backdrop' && (
+      {menuScreen === 'unlocks' && unlockTab === 'backdrops' && (
         <BackdropScreen
+          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
           stats={engine.lifetimeStats}
           selected={engine.backdrop}
           isUnlocked={(id) => engine.isBackdropUnlocked(id)}

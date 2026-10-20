@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Lock, Sliders, Clapperboard, Mountain, Trophy, Users } from 'lucide-react';
+import { Play, Lock, Sliders, Clapperboard, Trophy } from 'lucide-react';
 import { STUDIO_ENABLED } from '../game/studioAccess';
 
 /**
@@ -7,7 +7,7 @@ import { STUDIO_ENABLED } from '../game/studioAccess';
  * mouse, a tap, or the keyboard (Up / Down to move, Enter or Space to pick).
  */
 
-export type StartChoice = 'newGame' | 'unlocks' | 'stances' | 'backdrop' | 'records' | 'options' | 'studio';
+export type StartChoice = 'newGame' | 'unlocks' | 'records' | 'options' | 'studio';
 
 interface StartScreenProps {
   onChoose: (choice: StartChoice) => void;
@@ -16,11 +16,6 @@ interface StartScreenProps {
   unlockedHeroes: number;
   totalHeroes: number;
   oneButtonMode: boolean;
-  /** Countdown to the next enemy stance ("12:05"), or null when they're all open */
-  stanceCountdown: string | null;
-  /** Present only when an ad can be shown here */
-  onWatchAd?: () => void;
-  adBusy?: boolean;
   /** A short message, e.g. "New stance unlocked: Robot!" */
   notice?: string | null;
 }
@@ -28,8 +23,6 @@ interface StartScreenProps {
 const ALL_CHOICES: Array<{ id: StartChoice; label: string; icon: React.ReactNode }> = [
   { id: 'newGame', label: 'New Game', icon: <Play className="w-5 h-5 fill-current" /> },
   { id: 'unlocks', label: 'Unlocks', icon: <Lock className="w-5 h-5" /> },
-  { id: 'stances', label: 'Stances', icon: <Users className="w-5 h-5" /> },
-  { id: 'backdrop', label: 'Backdrop', icon: <Mountain className="w-5 h-5" /> },
   { id: 'records', label: 'Records', icon: <Trophy className="w-5 h-5" /> },
   { id: 'options', label: 'Options', icon: <Sliders className="w-5 h-5" /> },
   { id: 'studio', label: 'Pose Studio', icon: <Clapperboard className="w-5 h-5" /> },
@@ -43,9 +36,6 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   unlockedHeroes,
   totalHeroes,
   oneButtonMode,
-  stanceCountdown,
-  onWatchAd,
-  adBusy,
   notice,
 }) => {
   const [selected, setSelected] = useState(0);
@@ -101,32 +91,8 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                   {unlockedHeroes}/{totalHeroes}
                 </span>
               )}
-              {c.id === 'stances' && (
-                <span className={`text-xs font-mono tracking-normal tabular-nums whitespace-nowrap ${active ? 'text-black/70' : 'text-amber-300'}`}>
-                  {stanceCountdown ? `⏱ ${stanceCountdown}` : 'ALL'}
-                </span>
-              )}
             </button>
           );
-          // The Stances row also offers the ad, beside the button (a button can't hold another button)
-          if (c.id === 'stances' && stanceCountdown && onWatchAd) {
-            return (
-              <div key={c.id} className="flex items-stretch gap-2">
-                <div className="flex-1 flex flex-col">{button}</div>
-                <button
-                  type="button"
-                  onClick={onWatchAd}
-                  disabled={adBusy}
-                  title="Watch an ad to unlock the next enemy stance now"
-                  className="px-3 rounded-xl border-2 border-amber-400/70 bg-amber-400/10 hover:bg-amber-400/20 disabled:opacity-60 text-amber-300 text-[11px] font-black leading-tight cursor-pointer"
-                >
-                  ▶ Watch
-                  <br />
-                  ad
-                </button>
-              </div>
-            );
-          }
           return button;
         })}
       </nav>
