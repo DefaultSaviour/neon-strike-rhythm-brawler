@@ -16,17 +16,23 @@ import { OptionsScreen } from './components/OptionsScreen';
 import { StancesScreen } from './components/StancesScreen';
 import {
   followMuteSetting,
+  happytime,
   hasAdblock,
   initCrazyGames,
   loadingStart,
   loadingStop,
   RewardedResult,
   setGameplayActive,
+  showMidgameAd,
   showRewardedAd,
 } from './platform/crazyGames';
+import { midgameAdDue } from './game/adPacing';
 import { formatCountdown, secondsToNextStance } from './game/stanceUnlocks';
 import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
 import { getHero, HeroId, HEROES } from './game/heroes';
+
+/** Dev builds only: ?adTest makes a midgame ad due at the end of every song, to try the flow. */
+const AD_TEST = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('adTest');
 
 /** The song a brand-new player starts on: the easiest of the soundtrack. */
 const DIFFICULTY_ORDER = ['Easy', 'Medium', 'Hard', 'Custom'];
@@ -56,6 +62,8 @@ export default function App() {
   const [adBusy, setAdBusy] = useState(false);
   /** Why rewarded ads can't be offered here (shown where the ad buttons would be), or null */
   const [adsOffNote, setAdsOffNote] = useState<string | null>(null);
+  /** A midgame ad is being requested or shown at the end of a song: the results wait for it */
+  const [adBreak, setAdBreak] = useState(false);
   /** A song is being loaded (decoded and charted) before it starts */
   const [songLoading, setSongLoading] = useState(false);
   const [menuNotice, setMenuNotice] = useState<string | null>(null);
@@ -206,6 +214,7 @@ export default function App() {
   useEffect(() => {
     initCrazyGames().then(async (live) => {
       engine.reloadProgress();
+      playSecondsAtLastAd.current = engine.lifetimeStats.playSeconds;
       setAudioSettings({ ...engine.settings });
       refreshHighScores();
       followMuteSetting((muted) => audioEngine.setPlatformMuted(muted));
@@ -216,6 +225,30 @@ export default function App() {
       setAdAvailable(live);
     });
   }, [engine]);
+
+  // Midgame ads: at the end of a song, once there's been 5 minutes of play since the last one
+  // (see adPacing). The results screen waits behind the ad. Unlocking a hero makes the
+  // CrazyGames site celebrate, after any ad.
+  const playSecondsAtLastAd = useRef(engine.lifetimeStats.playSeconds);
+  useEffect(() => {
+    if (gameStatus !== 'GAME_OVER' && gameStatus !== 'CLEARED') return;
+    const unlockedHero = engine.newUnlocks.length > 0;
+    if (!midgameAdDue(engine.lifetimeStats.playSeconds, playSecondsAtLastAd.current, AD_TEST ? 0 : undefined)) {
+      if (unlockedHero) happytime();
+      return;
+    }
+    setAdBreak(true);
+    const ctx = audioEngine.getAudioContext();
+    showMidgameAd(
+      () => void ctx.suspend(),
+      () => void ctx.resume()
+    ).then((watched) => {
+      // No ad played (none available, too soon for CrazyGames, ad blocker): try again after the next song
+      if (watched) playSecondsAtLastAd.current = engine.lifetimeStats.playSeconds;
+      setAdBreak(false);
+      if (unlockedHero) happytime();
+    });
+  }, [gameStatus, engine]);
 
   // Tell CrazyGames when the player is actually in gameplay (in a song, not paused or loading).
   useEffect(() => {
@@ -314,6 +347,8 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // The Animation Studio has its own shortcuts (Space plays the preview there).
       if (showStudio) return;
+      // Nothing happens while an ad plays
+      if (adBreak) return;
       // Ignore typing in text fields (sliders and buttons are fine).
       const target = e.target as HTMLInputElement | null;
       if (target?.tagName === 'INPUT' && target.type !== 'range') return;
@@ -373,6 +408,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     gameStatus,
+    adBreak,
     showStudio,
     audioSettings.oneButtonMode,
     handleStrike,
@@ -496,7 +532,14 @@ export default function App() {
       )}
 
       {/* Game Over / Clear Results Modal */}
-      {(gameStatus === 'GAME_OVER' || gameStatus === 'CLEARED') && (
+      {(gameStatus === 'GAME_OVER' || gameStatus === 'CLEARED') && adBreak && (
+        // Blocks the screen while the ad is requested and plays (CrazyGames shows the ad on top)
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" aria-busy="true">
+          <div className="w-8 h-8 rounded-full border-2 border-cyan-400/30 border-t-cyan-400 animate-spin" />
+        </div>
+      )}
+
+      {(gameStatus === 'GAME_OVER' || gameStatus === 'CLEARED') && !adBreak && (
         <GameOverModal
           cleared={clearedOutcome}
           deathReport={deathReport}

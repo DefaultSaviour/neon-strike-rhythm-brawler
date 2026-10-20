@@ -13,6 +13,7 @@
  * - loading start/stop, around loading a song
  * - the muteAudio setting, which overrides the game's own volume
  * - rewarded ads, and adblock detection so ad buttons never sit there doing nothing
+ * - midgame ads at the end of a song (paced by adPacing), and a celebration when a hero unlocks
  * - the data module on CrazyGames, so progress follows the player's account
  */
 
@@ -39,6 +40,7 @@ interface CrazySdk {
     gameplayStop: () => void;
     loadingStart: () => void;
     loadingStop: () => void;
+    happytime?: () => void;
     settings?: GameSettings;
     addSettingsChangeListener?: (listener: (settings: GameSettings) => void) => void;
   };
@@ -170,6 +172,41 @@ export async function showRewardedAd(onPause: () => void, onResume: () => void):
       resolve('failed');
     }
   });
+}
+
+/**
+ * Show a midgame ad (at the end of a song). Resolves true if one played to
+ * the end. CrazyGames decides whether one actually plays: it skips requests
+ * that come too soon after the last ad (adCooldown), has none to show, or an
+ * ad blocker is on; any of those just resolves false straight away.
+ */
+export async function showMidgameAd(onPause: () => void, onResume: () => void): Promise<boolean> {
+  if (!(await initCrazyGames())) return false;
+  const s = sdk()!;
+  return new Promise((resolve) => {
+    try {
+      s.ad.requestAd('midgame', {
+        adStarted: onPause,
+        adFinished: () => {
+          onResume();
+          resolve(true);
+        },
+        adError: () => {
+          onResume();
+          resolve(false);
+        },
+      });
+    } catch {
+      onResume();
+      resolve(false);
+    }
+  });
+}
+
+/** Make the CrazyGames site celebrate (confetti): for special moments only, like unlocking a hero. */
+export function happytime() {
+  const g = game();
+  if (g?.happytime) safely(() => g.happytime!());
 }
 
 /** The browser's own storage, or nothing when it won't allow it (some privacy modes throw just for touching it). */

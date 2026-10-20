@@ -43,6 +43,8 @@ Launch (ads and revenue only start then).
 | Players with an ad blocker can still play normally | Full | Done |
 | Rewarded ads offer an alternative way to get the reward | Full | Done: stances open every 20 minutes of play; The Bride after 3 songs, or straight away with an ad |
 | No rewarded-ad button during gameplay | Full | Done: only on the title, Stances and Unlocks screens |
+| Midgame ads only at natural breaks, never mid-song or on menu buttons | Full | Done: at the end of a song (death or clear), once there's been 5 minutes of song play since the last ad (`adPacing.ts`); results wait behind the ad. Try it locally with `?adTest` |
+| Happy time used sparingly | Full (optional) | Done: only when a song unlocks a hero |
 
 ## Left to do
 
