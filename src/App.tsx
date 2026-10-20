@@ -611,6 +611,10 @@ export default function App() {
             setGameStatus('MENU');
             setShowTrackSelect(true);
           }}
+          onMainMenu={() => {
+            setShowTrackSelect(false);
+            setGameStatus('MENU');
+          }}
           averageTimingErrorMs={engine.getAverageTimingErrorMs()}
           currentLatencyOffsetMs={audioSettings.latencyOffsetMs}
           suggestedLatencyOffsetMs={engine.getSuggestedLatencyOffsetMs()}
