@@ -1128,6 +1128,19 @@ describe('The Scarecrow', () => {
     expect(idle.rightHand.y).toBeGreaterThan(idle.chest.y + 10);
   });
 
+  it('his signature: on his big hits an arm flies off into them, from the very first tier', () => {
+    const flying = sc.moves.flatMap((m) => m.sequence!.filter((k) => k.flyingArm && !k.hold).map((k) => ({ m, k })));
+    expect(flying.length).toBeGreaterThanOrEqual(4);
+    expect(sc.moves.find((m) => m.name === 'Flying Fist')!.tier).toBe(1);
+    for (const { m, k } of flying) {
+      // Only on a hit, thrown from the arm that flies, and well out past his hand
+      expect(k.trail, m.name).toBeDefined();
+      const hand = k.flyingArm === 'front' ? k.pose.frontHand : k.pose.backHand;
+      expect(dist(hand, k.trail!.end), m.name).toBeGreaterThan(35);
+      expect(k.prop, m.name).toBeUndefined();
+    }
+  });
+
   it('swings his pole two-handed, and only in the pole moves', () => {
     const poleMoves = sc.moves.filter((m) => m.sequence!.some((k) => k.prop === 'pole'));
     expect(poleMoves.length).toBeGreaterThanOrEqual(5);

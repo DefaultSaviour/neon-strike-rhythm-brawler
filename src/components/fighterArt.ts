@@ -2,6 +2,7 @@ import { Point2D, SkeletonPose } from '../types/game';
 import { FighterTier } from '../game/fighterTier';
 import type { HeroId } from '../game/heroes';
 import { BodyJoints, bodyFill, drawNeonBody, neonHead, neonLimb } from './neonBody';
+import { LIMB_WIDTH } from '../game/bodyProportions';
 
 /**
  * Draws the player's fighter: the hero's top-level form (god tier), lightning (overdrive),
@@ -164,6 +165,10 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   if (opts.hero === 'theOne') drawCoatTail(ctx, pose, tier, opts.facing, opts.time);
 
   // 5. Solid neon body. The left limbs lead in every attack pose, so they're in front.
+  // The Scarecrow's flying arm is left off the body (drawn out in the air, below).
+  const fly = opts.hero === 'scarecrow' ? flyingArmOf(pose, opts.facing) : null;
+  const nearGone = fly?.left === true;
+  const farGone = fly?.left === false;
   drawNeonBody(
     ctx,
     {
@@ -171,11 +176,11 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
       chest: pose.chest,
       pelvis: pose.pelvis,
       nearShoulder: pose.leftShoulder,
-      nearElbow: pose.leftElbow,
-      nearHand: pose.leftHand,
+      nearElbow: nearGone ? pose.leftShoulder : pose.leftElbow,
+      nearHand: nearGone ? pose.leftShoulder : pose.leftHand,
       farShoulder: pose.rightShoulder,
-      farElbow: pose.rightElbow,
-      farHand: pose.rightHand,
+      farElbow: farGone ? pose.rightShoulder : pose.rightElbow,
+      farHand: farGone ? pose.rightShoulder : pose.rightHand,
       nearHip: pose.leftHip,
       nearKnee: pose.leftKnee,
       nearFoot: pose.leftFoot,
@@ -202,7 +207,12 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'sawFace') drawSawFaceOutfit(ctx, pose, opts.facing, opts.time);
-  if (opts.hero === 'scarecrow') drawScarecrowOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
+  if (fly) drawFlyingArm(ctx, fly, tier);
+  if (opts.hero === 'scarecrow') {
+    // His cuff straw goes with the flying arm
+    const dressed = fly ? (fly.left ? { ...pose, leftElbow: fly.elbow, leftHand: fly.hand } : { ...pose, rightElbow: fly.elbow, rightHand: fly.hand }) : pose;
+    drawScarecrowOutfit(ctx, dressed, opts.facing, opts.time, tier.ascended);
+  }
   if (opts.hero === 'tinMan') drawTinManOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
   if (opts.hero === 'lion') drawLionOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
   if (tier.ascended && opts.hero === 'bride') {
@@ -1858,6 +1868,62 @@ function drawSawFaceOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: n
   const back = along(-15, 0);
   ctx.moveTo(back.x, back.y);
   ctx.lineTo(rear.hand.x, rear.hand.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The Scarecrow's flying arm: on his big hits an arm comes right off and
+ * flies into them fist first, trailing straw, then snaps back on as the hit
+ * fades. The arm keeps its shape, moved out along the hit so its fist lands
+ * at the end of the trail. Facing left mirrors the pose, which swaps the sides.
+ */
+export function flyingArmOf(pose: SkeletonPose, facing: 1 | -1) {
+  if (!pose.flyingArm || !pose.bladeSlash) return null;
+  const left = (pose.flyingArm === 'front') === facing > 0;
+  const shoulder = left ? pose.leftShoulder : pose.rightShoulder;
+  const elbow = left ? pose.leftElbow : pose.rightElbow;
+  const hand = left ? pose.leftHand : pose.rightHand;
+  const dx = pose.bladeSlash.end.x - hand.x;
+  const dy = pose.bladeSlash.end.y - hand.y;
+  const move = (q: Point2D) => ({ x: q.x + dx, y: q.y + dy });
+  return { left, stump: shoulder, shoulder: move(shoulder), elbow: move(elbow), hand: move(hand) };
+}
+
+/**
+ * The Scarecrow's flying arm drawn again over his hit effect (callers draw
+ * it after the slash), so the fist flying in isn't hidden under the slash.
+ */
+export function drawFlyingArmOverHit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1) {
+  const fly = flyingArmOf(pose, facing);
+  if (fly) drawFlyingArm(ctx, fly, tier);
+}
+
+/** The flying arm itself: the neon arm out in the air, straw bursting from its torn end and from his empty shoulder. */
+function drawFlyingArm(ctx: Ctx, fly: NonNullable<ReturnType<typeof flyingArmOf>>, tier: FighterTier) {
+  neonLimb(ctx, fly.shoulder, fly.elbow, LIMB_WIDTH.upperArm, tier.color, bodyFill(tier.color), tier.glow);
+  neonLimb(ctx, fly.elbow, fly.hand, LIMB_WIDTH.forearm, tier.color, bodyFill(tier.color), tier.glow);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#f2c94c';
+  ctx.shadowColor = '#f2c94c';
+  ctx.shadowBlur = 5;
+  ctx.lineWidth = 1.4;
+  const back = Math.atan2(fly.stump.y - fly.shoulder.y, fly.stump.x - fly.shoulder.x);
+  // The cuff straw at the fist, and the torn end
+  const fist = Math.atan2(fly.hand.y - fly.elbow.y, fly.hand.x - fly.elbow.x);
+  strawTuft(ctx, fly.hand, fist, 5, 6);
+  strawTuft(ctx, fly.shoulder, back, 6, 7);
+  strawTuft(ctx, fly.stump, back + Math.PI, 5, 6);
+  // A trail of loose straw between them
+  ctx.beginPath();
+  for (let i = 1; i < 5; i++) {
+    const t = i / 5;
+    const x = fly.stump.x + (fly.shoulder.x - fly.stump.x) * t;
+    const y = fly.stump.y + (fly.shoulder.y - fly.stump.y) * t + (i % 2 ? -2.5 : 2.5);
+    ctx.moveTo(x - Math.cos(back + 0.5) * 2.5, y - Math.sin(back + 0.5) * 2.5);
+    ctx.lineTo(x + Math.cos(back + 0.5) * 2.5, y + Math.sin(back + 0.5) * 2.5);
+  }
   ctx.stroke();
   ctx.restore();
 }

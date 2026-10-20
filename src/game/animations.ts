@@ -870,6 +870,7 @@ export function getOrientedPose(pose: SkeletonPose, direction: 'left' | 'right')
     prop: pose.prop,
     shot: pose.shot,
     spin: pose.spin,
+    flyingArm: pose.flyingArm,
     bladeSlash: pose.bladeSlash
       ? {
           start: mirrorX(pose.bladeSlash.start),

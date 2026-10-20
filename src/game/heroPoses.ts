@@ -110,6 +110,7 @@ export function applyEdit(move: AttackMove, edit: HeroPoseEdit): AttackMove {
     }
     if (source.prop) key.prop = source.prop;
     if (source.spin) key.spin = source.spin;
+    if (source.flyingArm && key.trail) key.flyingArm = source.flyingArm;
     return key;
   });
   // The first pose is the hit: it must have a hit effect.

@@ -52,6 +52,7 @@ export function blendPose(a: SkeletonPose, b: SkeletonPose, t: number): Skeleton
     prop: b.prop ?? a.prop,
     shot: b.shot,
     spin: b.spin,
+    flyingArm: b.flyingArm,
     bladeSlash: b.bladeSlash ?? a.bladeSlash,
   };
 }

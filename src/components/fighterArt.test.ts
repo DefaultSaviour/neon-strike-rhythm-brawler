@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
+import { getOrientedPose } from '../game/animations';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, flyingArmOf, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -315,6 +316,23 @@ describe("The Scarecrow's pole and brain", () => {
         expect(dist(poleEnds(keyToPlayerPose(k), 1).tip, k.trail.end), m.name).toBeLessThan(6);
       }
     }
+  });
+
+  it('his flying arm comes right off: fist at the end of the hit, torn end well away from his shoulder, both ways round', () => {
+    const fist = sc.moves.find((m) => m.name === 'Flying Fist')!;
+    const pose = keyToPlayerPose(fist.sequence![0]);
+    for (const facing of [1, -1] as const) {
+      const p = facing > 0 ? pose : getOrientedPose(pose, 'left');
+      const fly = flyingArmOf(p, facing)!;
+      expect(fly).not.toBeNull();
+      expect(dist(fly.hand, p.bladeSlash!.end)).toBeLessThan(1e-6);
+      expect(dist(fly.shoulder, fly.stump)).toBeGreaterThan(30);
+      // The arm keeps its shape in the air
+      expect(dist(fly.shoulder, fly.elbow)).toBeCloseTo(dist(fly.stump, facing > 0 ? p.rightElbow : p.leftElbow), 3);
+    }
+    // ...and is back on when there's no hit showing
+    expect(flyingArmOf({ ...pose, bladeSlash: undefined }, 1)).toBeNull();
+    expect(flyingArmOf(sc.idlePose, 1)).toBeNull();
   });
 
   it('his brain glows in the top of his head, with sparks of genius round it, both ways round', () => {

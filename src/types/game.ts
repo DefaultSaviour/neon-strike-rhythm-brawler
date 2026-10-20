@@ -120,6 +120,8 @@ export interface SkeletonPose {
   shot?: 'lead' | 'rear';
   /** Turning fast in this pose (a pirouette): draws a spin blur round the body */
   spin?: boolean;
+  /** This arm has come off and flies into the enemy (The Scarecrow's hits): drawn at the end of the trail */
+  flyingArm?: 'front' | 'back';
   bladeSlash?: {
     start: Point2D;
     end: Point2D;
@@ -142,6 +144,8 @@ export interface MoveKey {
   shot?: SkeletonPose['shot'];
   /** Turning fast on the way into this keyframe (a pirouette) */
   spin?: boolean;
+  /** This arm flies off into the enemy on the way into this keyframe (shown with the trail) */
+  flyingArm?: SkeletonPose['flyingArm'];
   /** A hold: the previous pose kept still, with its hit effect (trail, flash) still showing */
   hold?: boolean;
 }

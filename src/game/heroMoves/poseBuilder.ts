@@ -46,6 +46,8 @@ export interface FighterSpec {
   shot?: SkeletonPose['shot'];
   /** Turning fast: a spin blur round the body */
   spin?: boolean;
+  /** This arm comes off and flies into the enemy (needs a trail from that hand) */
+  flyingArm?: SkeletonPose['flyingArm'];
 }
 
 const SPINE = 30;
@@ -159,6 +161,7 @@ export function buildKey(spec: FighterSpec, trailColor: string, ms = 0): MoveKey
     ...(spec.prop ? { prop: spec.prop } : {}),
     ...(spec.shot && spec.trail ? { shot: spec.shot } : {}),
     ...(spec.spin ? { spin: true } : {}),
+    ...(spec.flyingArm && spec.trail ? { flyingArm: spec.flyingArm } : {}),
   };
 }
 
@@ -171,6 +174,8 @@ export function keyToPlayerPose(key: MoveKey): SkeletonPose {
   // The flash only shows while the bullet streak does.
   if (key.shot && key.trail) pose.shot = key.shot;
   if (key.spin) pose.spin = true;
+  // The arm only flies while the hit effect shows, so it snaps back on as the trail fades
+  if (key.flyingArm && key.trail) pose.flyingArm = key.flyingArm;
   return pose;
 }
 

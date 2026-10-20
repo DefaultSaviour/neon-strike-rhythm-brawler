@@ -13,7 +13,7 @@ import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
 import { drawBackdropLayers } from './backdropArt';
 import { drawConveyors, drawPit } from './stageArt';
-import { applyHeroBuild, drawFighter, drawMeatHooks, drawStrawBurst, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
+import { applyHeroBuild, drawFighter, drawFlyingArmOverHit, drawMeatHooks, drawStrawBurst, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
@@ -499,7 +499,10 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     drawSlashCrescent(ctx, pose.bladeSlash);
     drawShotFlash(ctx, pose, facing);
     if (engine.hero.id === 'theOne') drawImpactRipple(ctx, pose);
-    if (engine.hero.id === 'scarecrow') drawStrawBurst(ctx, pose);
+    if (engine.hero.id === 'scarecrow') {
+      drawFlyingArmOverHit(ctx, pose, tier, facing);
+      drawStrawBurst(ctx, pose);
+    }
     ctx.restore();
   }
 

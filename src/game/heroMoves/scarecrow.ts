@@ -9,7 +9,9 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, handOf
  * (drawn by fighterArt). He fights like he's stuffed: loose, rubbery
  * flails, kicks that whip out, a heap he collapses into and springs back
  * out of, and the old wooden pole he was hung on, swung two-handed like a
- * staff. Every hit puffs out straw (NeonCanvas). His top-level form: he
+ * staff. His signature: on his big hits an arm rips right off, flies into
+ * them trailing straw, and snaps back on (`flyingArm`). Every hit puffs out
+ * straw (NeonCanvas). His top-level form: he
  * finally gets a brain, glowing in the open top of his head.
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
@@ -74,8 +76,12 @@ export const SCARECROW_IDLE: SkeletonPose = buildFighterPose({ ...slump, lean: 8
 const slumped = (ms: number): Key => ({ ms, ...slump, lean: 8, tilt: 18, frontArm: dangleFront, backArm: dangleBack });
 /** The lead arm flopping out straight. */
 const flopJab = (extra: Partial<Key> = {}): Key => ({ ...lurch, lean: 14, tilt: 10, frontArm: straight(-2), backArm: flungBack, trail: { from: 'frontHand', reach: 18 }, ...extra });
+/** How far a flying arm goes: it rips off and flies this far past his hand before snapping back. */
+const ARM_FLIES = 40;
 /** The rear arm swinging round wide like a rope. */
 const ropeHook = (extra: Partial<Key> = {}): Key => ({ ...lurch, lean: 18, tilt: -10, frontArm: { upper: 150, lower: 120 }, backArm: { upper: -6, lower: 24 }, trail: { from: 'backHand', reach: 18, curve: 26 }, ...extra });
+/** His signature: the rear arm rips right off and flies into them, fist first, trailing straw. */
+const flyingFist = (extra: Partial<Key> = {}): Key => ropeHook({ backArm: straight(-4), flyingArm: 'back', trail: { from: 'backHand', reach: ARM_FLIES, curve: 12 }, ...extra });
 /** A loose leg whipping out. */
 const whipKick = (deg = -10, extra: Partial<Key> = {}): Key => ({ ...onBackLeg, lean: -16, tilt: 14, frontArm: { upper: -40, lower: -10 }, backArm: flungBack, frontLeg: kick(deg), trail: { from: 'frontFoot', reach: 16 }, ...extra });
 /** The pole driven straight at them, two-handed. */
@@ -92,7 +98,7 @@ const eureka = (ms: number): Key => ({ ms, pelvis: { x: 0, y: 10 }, lean: -4, ti
 export const SCARECROW_MOVES: AttackMove[] = [
   // ======================= Tier 1: the straw man =======================
   combo(1, 'Floppy Jab', 'The lead arm flops out straight like a stuffed sleeve', [flopJab(), slumped(150)]),
-  combo(1, 'Rope Haymaker', 'The rear arm swings round wide, like a rope with a fist on the end', [ropeHook(), slumped(150)]),
+  combo(1, 'Flying Fist', 'His rear arm rips right off, flies into them, and snaps back on', [flyingFist(), slumped(150)]),
   combo(1, 'Loose Kick', 'A leg whips out, wobbling all the way', [whipKick(), slumped(150)]),
   combo(1, 'Pole Poke', 'Grabs his old pole and jabs it straight in', [polePoke(), slumped(150)]),
   combo(1, 'Straw Slap', 'A wild backhand slap, straw flying', [
@@ -106,7 +112,7 @@ export const SCARECROW_MOVES: AttackMove[] = [
     { ms: 100, ...ropeHook({ backArm: { upper: -30, lower: 20 } }) },
   ]),
   combo(2, 'Pole Sweep', 'Drops low and sweeps the pole across their legs', [poleSweep(), slumped(170)]),
-  combo(2, 'Double Flop', 'Two floppy punches, one from each limp arm', [flopJab(), { ms: 100, ...ropeHook({ backArm: straight(0), trail: { from: 'backHand', reach: 18 } }) }]),
+  combo(2, 'Double Flop', 'A floppy jab, then he throws the other arm at them', [flopJab(), { ms: 100, ...flyingFist() }]),
   combo(2, 'Kick and Wobble', 'Kicks, then wobbles about trying to stay up', [
     whipKick(-14),
     { ms: 170, pelvis: { x: -6, y: 12 }, lean: -20, tilt: 24, frontArm: { upper: -60, lower: -30 }, backArm: { upper: -130, lower: -160 }, frontLeg: { x: 10, y: F }, backLeg: { x: -18, y: F } },
@@ -144,14 +150,14 @@ export const SCARECROW_MOVES: AttackMove[] = [
     { ...airborne, lean: 20, frontArm: { upper: -60, lower: -100 }, backArm: { upper: -120, lower: -80 }, frontLeg: { upper: 10, lower: 100 }, trail: { from: 'frontKnee', reach: 14 } },
     { ms: 170, ...heap, lean: 10, tilt: 10, frontArm: { upper: 60, lower: 80 }, backArm: { upper: 120, lower: 100 }, frontLeg: kick(4) },
   ]),
-  combo(4, 'Rag Doll', 'Flops forward with everything flailing, then rebounds', [
-    { ...lurch, pelvis: { x: 8, y: 22 }, lean: 40, tilt: 20, frontArm: straight(10), backArm: { upper: -20, lower: 30 }, trail: { from: 'frontHand', reach: 18, curve: 20 } },
+  combo(4, 'Rag Doll', 'Flops forward and throws his whole lead arm at them, then rebounds', [
+    { ...lurch, pelvis: { x: 8, y: 22 }, lean: 40, tilt: 20, frontArm: straight(4), backArm: { upper: -20, lower: 30 }, flyingArm: 'front', trail: { from: 'frontHand', reach: ARM_FLIES + 4, curve: 10 } },
     { ms: 110, ...ropeHook() },
   ]),
 
   // ================= Tier 5: the brain =================
   combo(5, 'Big Idea', 'Pokes with the pole, then taps his head as the idea lights up', [polePoke(), { ms: 100, ...poleSweep() }, eureka(170)]),
-  combo(5, 'Genius Combo', 'Jab, haymaker, kick: suddenly it all makes sense', [flopJab(), { ms: 90, ...ropeHook() }, { ms: 100, ...whipKick(-16) }, eureka(170)]),
+  combo(5, 'Genius Combo', 'Jab, a flying fist, a kick: suddenly it all makes sense', [flopJab(), { ms: 90, ...flyingFist() }, { ms: 100, ...whipKick(-16) }, eureka(170)]),
   combo(5, 'Brainstorm', 'Spins the pole twice in a storm of straw, then the eureka pose', [
     polePoke({ spin: true, trail: { from: 'frontHand', reach: POLE_REACH, curve: 30 } }),
     { ms: 100, ...poleSweep({ spin: true }) },
