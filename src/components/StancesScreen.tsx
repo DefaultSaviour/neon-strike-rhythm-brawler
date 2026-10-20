@@ -16,12 +16,16 @@ interface StancesScreenProps {
   /** Present only when an ad can be shown here */
   onWatchAd?: () => void;
   adBusy?: boolean;
+  /** Why ads can't be offered here, shown in place of the ad button */
+  adsOffNote?: string | null;
+  /** A message after watching an ad (unlocked, or why not) */
+  notice?: string | null;
   onClose: () => void;
 }
 
 const ORDER: EnemyMotionStyle[] = [...FREE_STANCES, ...STANCE_UNLOCK_ORDER];
 
-export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, onClose }) => {
+export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose();
@@ -60,12 +64,18 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
                   ▶ Watch ad to unlock now
                 </button>
               )}
+              {!onWatchAd && adsOffNote && <div className="max-w-[12rem] text-[11px] text-slate-500 leading-snug">{adsOffNote}</div>}
             </div>
           ) : (
             <div className="text-sm font-bold text-emerald-300">All stances unlocked!</div>
           )}
         </div>
 
+        {notice && (
+          <div role="status" className="px-6 py-2 text-sm font-bold text-amber-200 bg-amber-500/10 border-b border-amber-400/30">
+            {notice}
+          </div>
+        )}
         <div className="p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
           {stances.map((m) => {
             const unlocked = isUnlocked(m.id);

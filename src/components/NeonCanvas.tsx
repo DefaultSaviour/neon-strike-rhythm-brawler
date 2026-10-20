@@ -5,7 +5,7 @@ import { getMoveForCombo } from '../game/animations';
 import { getEnemyStyle, resolveBandTier } from '../game/enemyStyles';
 import { audioEngine } from '../audio/audioEngine';
 import { beatPulse } from '../audio/beatGrid';
-import { ArenaLayout, computeArenaLayout, FLOOR_Y } from '../game/layout';
+import { ArenaLayout, computeArenaLayout, FLOOR_Y, SPAWN_DISTANCE } from '../game/layout';
 import { HIT_WINDOWS } from '../game/timing';
 import { Enemy } from '../types/game';
 import { enemyPoseFor } from '../game/customAnimation';
@@ -625,8 +625,10 @@ function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine,
     }
     if (Math.abs(enemy.x) > halfW + 120) continue;
     const isNext = enemy === nextLeft || enemy === nextRight;
+    // Fade in over the first stretch of the walk: on screens wider than 16:9 the spawn point is in view
+    const fadeIn = Math.min(1, Math.max(0, (SPAWN_DISTANCE - Math.abs(enemy.x)) / 50));
     ctx.save();
-    ctx.globalAlpha = isNext ? 1 : 0.42;
+    ctx.globalAlpha = (isNext ? 1 : 0.42) * fadeIn;
     drawEnemyFigure(ctx, enemy, engine, {});
     ctx.restore();
   }

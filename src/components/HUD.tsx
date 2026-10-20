@@ -257,13 +257,13 @@ export const HUD: React.FC<HUDProps> = ({
         <div className="w-full flex-1 flex pointer-events-auto mt-6">
           <div
             onPointerDown={handleSingleDown}
-            className={`w-full flex-1 flex flex-col justify-end items-center pb-8 border-t border-amber-500/20 cursor-pointer select-none transition-colors ${
-              singleActive ? 'bg-amber-400/20' : 'hover:bg-amber-400/5'
+            className={`w-full flex-1 flex flex-col justify-end items-center pb-8 border-t border-amber-500/20 cursor-pointer select-none touch-none transition-colors ${
+              singleActive ? 'bg-amber-400/20' : ''
             }`}
           >
             <div className="flex items-center gap-3 text-amber-300 text-xs font-bold tracking-widest uppercase bg-slate-950/80 px-4 py-2 rounded-full border border-amber-400/50 shadow-[0_0_15px_rgba(255,230,0,0.3)]">
               <span className="px-2.5 py-1 rounded bg-amber-950/80 border border-amber-400/80 text-[11px] font-mono font-black text-amber-300">
-                [SPACE] · [TAP ANYWHERE]
+                <span className="[@media(pointer:coarse)]:hidden">[SPACE] · </span>[TAP ANYWHERE]
               </span>
               <span>One-Button Strike (Auto-Targets Nearest Beat)</span>
             </div>
@@ -274,28 +274,30 @@ export const HUD: React.FC<HUDProps> = ({
           {/* Left Strike Zone */}
           <div
             onPointerDown={handleLeftDown}
-            className={`flex-1 flex flex-col justify-end pb-8 pl-6 border-r border-cyan-500/10 cursor-pointer select-none transition-colors ${
-              leftActive ? 'bg-cyan-500/15' : 'hover:bg-cyan-500/5'
+            className={`flex-1 flex flex-col justify-end pb-8 pl-6 border-r border-cyan-500/10 cursor-pointer select-none touch-none transition-colors ${
+              leftActive ? 'bg-cyan-500/15' : ''
             }`}
           >
             <div className="flex items-center gap-2 opacity-50 text-cyan-400 text-xs font-bold tracking-widest uppercase">
-              <span className="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono">
+              <span className="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono [@media(pointer:coarse)]:hidden">
                 [←] or [A]
               </span>
-              <span>Strike Left</span>
+              <span className="[@media(pointer:coarse)]:hidden">Strike Left</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">Tap to strike</span>
             </div>
           </div>
 
           {/* Right Strike Zone */}
           <div
             onPointerDown={handleRightDown}
-            className={`flex-1 flex flex-col justify-end pb-8 pr-6 items-end border-l border-pink-500/10 cursor-pointer select-none transition-colors ${
-              rightActive ? 'bg-pink-500/15' : 'hover:bg-pink-500/5'
+            className={`flex-1 flex flex-col justify-end pb-8 pr-6 items-end border-l border-pink-500/10 cursor-pointer select-none touch-none transition-colors ${
+              rightActive ? 'bg-pink-500/15' : ''
             }`}
           >
             <div className="flex items-center gap-2 opacity-50 text-pink-400 text-xs font-bold tracking-widest uppercase">
-              <span>Strike Right</span>
-              <span className="px-2 py-1 rounded bg-pink-950/80 border border-pink-500/40 text-[10px] font-mono">
+              <span className="[@media(pointer:coarse)]:hidden">Strike Right</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">Tap to strike</span>
+              <span className="px-2 py-1 rounded bg-pink-950/80 border border-pink-500/40 text-[10px] font-mono [@media(pointer:coarse)]:hidden">
                 [→] or [D]
               </span>
             </div>

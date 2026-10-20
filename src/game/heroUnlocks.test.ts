@@ -26,10 +26,10 @@ describe('hero unlocks', () => {
     expect(ids.filter((id) => isHeroUnlocked(id, EMPTY_STATS))).toEqual([DEFAULT_HERO]);
   });
 
-  it('every other hero has a goal, and the goals mix kinds (playing, finishing, combos, perfects, time trained, an ad)', () => {
+  it('every other hero has a goal, and the goals mix kinds (playing, finishing, combos, perfects, time trained)', () => {
     for (const id of ids) if (id !== DEFAULT_HERO) expect(HERO_UNLOCKS[id], id).toBeDefined();
     const kinds = new Set(Object.values(HERO_UNLOCKS).map((g) => g!.stat));
-    expect(kinds).toEqual(new Set(['enemiesDefeated', 'songsCleared', 'bestCombo', 'perfects', 'playSeconds', 'heroAds']));
+    expect(kinds).toEqual(new Set(['enemiesDefeated', 'songsCleared', 'bestCombo', 'perfects', 'playSeconds']));
   });
 
   it('lists every hero once in the unlock path, the free hero first', () => {

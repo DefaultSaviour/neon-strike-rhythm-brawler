@@ -284,7 +284,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             className="w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Restart Song (Press Space / R)</span>
+            <span>
+              Restart Song<span className="[@media(pointer:coarse)]:hidden"> (Press Space / R)</span>
+            </span>
           </button>
 
           <button

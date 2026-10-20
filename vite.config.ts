@@ -5,6 +5,8 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // Relative paths, so the built game loads from whatever folder CrazyGames serves it from
+    base: './',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

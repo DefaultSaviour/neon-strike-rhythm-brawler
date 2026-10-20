@@ -64,15 +64,16 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   }, [selected, onChoose]);
 
   return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-10 p-6 bg-black/60 backdrop-blur-[2px]">
+    // Short screens (a phone on its side): the logo sits beside the menu instead of above it
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-10 p-6 bg-black/60 backdrop-blur-[2px] overflow-y-auto [@media(max-height:560px)]:flex-row [@media(max-height:560px)]:gap-8 [@media(max-height:560px)]:p-3">
       <div className="flex flex-col items-center text-center">
-        <h1 className="text-6xl md:text-8xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-cyan-300 to-pink-500 drop-shadow-[0_0_35px_rgba(0,243,255,0.6)]">
+        <h1 className="text-6xl md:text-8xl [@media(max-height:560px)]:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-cyan-300 to-pink-500 drop-shadow-[0_0_35px_rgba(0,243,255,0.6)]">
           NEON STRIKE
         </h1>
         <p className="mt-3 text-sm md:text-base font-mono tracking-[0.3em] uppercase text-cyan-300/80">Rhythm Brawler</p>
       </div>
 
-      <nav className="flex flex-col gap-3 w-full max-w-xs" aria-label="Main menu">
+      <nav className="flex flex-col gap-3 [@media(max-height:560px)]:gap-2 w-full max-w-xs" aria-label="Main menu">
         {CHOICES.map((c, i) => {
           const active = i === selected;
           const button = (
@@ -82,7 +83,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               onMouseEnter={() => setSelected(i)}
               onFocus={() => setSelected(i)}
               onClick={() => onChoose(c.id)}
-              className={`group relative flex items-center gap-3 px-6 py-4 rounded-xl border-2 font-black text-lg tracking-widest uppercase transition-all cursor-pointer ${
+              className={`group relative flex items-center gap-3 px-6 py-4 [@media(max-height:560px)]:py-2 [@media(max-height:560px)]:text-base rounded-xl border-2 font-black text-lg tracking-widest uppercase transition-all cursor-pointer ${
                 active
                   ? 'bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-300 border-transparent text-black shadow-[0_0_30px_rgba(0,243,255,0.55)] scale-105'
                   : 'bg-slate-950/80 border-slate-700 text-slate-200 hover:border-cyan-400'
@@ -126,12 +127,12 @@ export const StartScreen: React.FC<StartScreenProps> = ({
       </nav>
 
       {notice && (
-        <div className="-mt-6 px-4 py-2 rounded-lg bg-amber-400/15 border border-amber-400/60 text-amber-200 text-sm font-bold" role="status">
+        <div className="-mt-6 [@media(max-height:560px)]:mt-0 [@media(max-height:560px)]:absolute [@media(max-height:560px)]:bottom-3 px-4 py-2 rounded-lg bg-amber-400/15 border border-amber-400/60 text-amber-200 text-sm font-bold" role="status">
           {notice}
         </div>
       )}
 
-      <div className="flex flex-col items-center gap-2 text-xs font-mono text-slate-400">
+      <div className="flex flex-col items-center gap-2 text-xs font-mono text-slate-400 [@media(max-height:560px)]:hidden">
         <div>
           Playing as <span className="text-cyan-300 font-bold">{heroLabel}</span>
         </div>

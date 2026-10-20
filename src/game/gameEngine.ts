@@ -23,12 +23,13 @@ import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGr
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
 import { comboDuration, comboFrame } from './combo';
-import { FLOOR_Y } from './layout';
+import { FLOOR_Y, SPAWN_DISTANCE } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { recordRunProgress, RunProgress } from './runProgress';
 import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, EnemyMotionStyle } from './enemyMotion';
 import { enemyPoseFor } from './customAnimation';
 import { getActiveAnimations } from './animationLibrary';
+import { progressStore } from '../platform/crazyGames';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -150,6 +151,16 @@ export class GameEngine {
     this.loadSettings();
   }
 
+  /**
+   * Load the saved progress again (totals and settings). Called once the
+   * CrazyGames SDK has started: on CrazyGames, progress lives in its data
+   * module, which can only be read after that.
+   */
+  public reloadProgress() {
+    if (!this.devUnlockAll) this.lifetimeStats = loadStats(safeStorage());
+    this.loadSettings();
+  }
+
   /** The player's totals over every song, which unlock the heroes (see heroUnlocks). */
   public lifetimeStats: LifetimeStats;
   /** Heroes the last song unlocked, for the results screen to announce */
@@ -221,7 +232,7 @@ export class GameEngine {
 
   public loadSettings() {
     try {
-      const saved = localStorage.getItem('neon_strike_settings');
+      const saved = progressStore()?.getItem('neon_strike_settings');
       if (saved) {
         this.settings = { ...this.settings, ...JSON.parse(saved) };
         // Settings saved by older versions (or edited by hand) may hold values we no longer know.
@@ -242,7 +253,7 @@ export class GameEngine {
   public saveSettings(newSettings: Partial<AudioSettings>) {
     this.settings = { ...this.settings, ...newSettings };
     try {
-      localStorage.setItem('neon_strike_settings', JSON.stringify(this.settings));
+      progressStore()?.setItem('neon_strike_settings', JSON.stringify(this.settings));
       audioEngine.setVolume(this.settings.volume, this.settings.sfxVolume);
     } catch {}
   }
@@ -663,7 +674,8 @@ export class GameEngine {
       const t = timeRemaining / this.approachDuration;
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      const spawnX = enemy.lane === 'left' ? -worldHalfWidth - 80 : worldHalfWidth + 80;
+      // Every screen: the same start point and speed (see SPAWN_DISTANCE)
+      const spawnX = enemy.lane === 'left' ? -SPAWN_DISTANCE : SPAWN_DISTANCE;
 
       enemy.x = hitX + (spawnX - hitX) * t;
       // Late enemies press in but never walk through the player.
@@ -828,13 +840,7 @@ export class GameEngine {
   private recordProgress(cleared: boolean) {
     if (!this.track || this.lastRun) return;
     const duration = this.track.audioBuffer?.duration ?? this.track.duration;
-    let store: Storage | undefined;
-    try {
-      store = typeof localStorage !== 'undefined' ? localStorage : undefined;
-    } catch {
-      store = undefined;
-    }
-    this.lastRun = recordRunProgress(this.track.id, this.songTime, duration, cleared, store);
+    this.lastRun = recordRunProgress(this.track.id, this.songTime, duration, cleared, progressStore());
   }
 
   private finishSong(cleared: boolean) {
@@ -885,12 +891,12 @@ export class GameEngine {
 
     try {
       const key = `neon_strike_highscores_v1`;
-      const current = JSON.parse(localStorage.getItem(key) || '{}');
+      const current = JSON.parse(progressStore()?.getItem(key) || '{}');
       const prevBest: HighScoreRecord | undefined = current[this.track.id];
 
       if (!prevBest || record.highScore > prevBest.highScore) {
         current[this.track.id] = record;
-        localStorage.setItem(key, JSON.stringify(current));
+        progressStore()?.setItem(key, JSON.stringify(current));
       }
     } catch {}
   }
@@ -898,7 +904,7 @@ export class GameEngine {
   public getHighScore(trackId: string): HighScoreRecord | null {
     try {
       const key = `neon_strike_highscores_v1`;
-      const current = JSON.parse(localStorage.getItem(key) || '{}');
+      const current = JSON.parse(progressStore()?.getItem(key) || '{}');
       return current[trackId] || null;
     } catch {
       return null;
@@ -908,18 +914,14 @@ export class GameEngine {
   public getAllHighScores(): Record<string, HighScoreRecord> {
     try {
       const key = `neon_strike_highscores_v1`;
-      return JSON.parse(localStorage.getItem(key) || '{}');
+      return JSON.parse(progressStore()?.getItem(key) || '{}');
     } catch {
       return {};
     }
   }
 }
 
-/** localStorage, or nothing when the browser won't allow it (some privacy modes throw just for touching it). */
-function safeStorage(): Storage | undefined {
-  try {
-    return typeof localStorage !== 'undefined' ? localStorage : undefined;
-  } catch {
-    return undefined;
-  }
+/** Where progress is kept: the CrazyGames data module there, localStorage everywhere else (see progressStore). */
+function safeStorage() {
+  return progressStore();
 }

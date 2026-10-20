@@ -6,7 +6,7 @@ import type { HeroId } from './heroes';
  * song moves them closer to the next hero, even a song they don't finish.
  * The goals mix kinds on purpose: some reward simply playing, some reward
  * finishing a song, some reward skill (big combos, PERFECT hits). One hero
- * (The Bride) is unlocked only by watching a rewarded ad.
+ * (The Bride) can also be unlocked straight away by watching a rewarded ad.
  */
 
 /** The player's totals over every song they have ever played. */
@@ -23,7 +23,7 @@ export interface LifetimeStats {
   playSeconds: number;
   /** Enemy stances unlocked early by watching a rewarded ad */
   adUnlocks: number;
-  /** Rewarded ads watched to unlock a hero (The Bride) */
+  /** Rewarded ads watched to unlock the ad hero (The Bride) early */
   heroAds: number;
 }
 
@@ -34,7 +34,11 @@ export interface UnlockGoal {
   target: number;
   /** Shown on the locked hero, e.g. "Defeat 150 enemies" */
   label: string;
-  /** Unlocked by watching a rewarded ad (the Unlocks screen shows a Watch ad button) */
+  /**
+   * Can also be unlocked straight away by watching a rewarded ad (the Unlocks
+   * screen adds a Watch ad button). CrazyGames requires the play goal as well:
+   * every rewarded ad must have another way to earn the reward.
+   */
   ad?: boolean;
 }
 
@@ -44,24 +48,21 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
   theOne: { stat: 'songsCleared', target: 1, label: 'Complete any song' },
   drunkenMaster: { stat: 'bestCombo', target: 50, label: 'Reach a 50 combo' },
   stallion: { stat: 'songsCleared', target: 3, label: 'Complete 3 songs' },
+  bride: { stat: 'songsCleared', target: 3, label: 'Complete 3 songs', ad: true },
   kid: { stat: 'playSeconds', target: 1800, label: 'Train for 30 minutes' },
   spartan: { stat: 'enemiesDefeated', target: 300, label: 'Defeat 300 enemies' },
   discoKing: { stat: 'perfects', target: 100, label: 'Land 100 PERFECT hits' },
   proWrestler: { stat: 'enemiesDefeated', target: 1000, label: 'Defeat 1,000 enemies' },
   babaYaga: { stat: 'bestCombo', target: 100, label: 'Reach a 100 combo' },
   ballerina: { stat: 'perfects', target: 200, label: 'Land 200 PERFECT hits' },
-  bride: { stat: 'heroAds', target: 1, label: 'Watch an ad to unlock', ad: true },
 };
 
-/**
- * Heroes in the order players earn them, easiest first: the picker lists them this way, as a path.
- * The ad-only hero comes last: she can be unlocked at any time.
- */
-export const UNLOCK_ORDER: HeroId[] = ['striker', 'dragon', 'theOne', 'drunkenMaster', 'stallion', 'spartan', 'kid', 'discoKing', 'proWrestler', 'babaYaga', 'ballerina', 'bride'];
+/** Heroes in the order players earn them, easiest first: the picker lists them this way, as a path. */
+export const UNLOCK_ORDER: HeroId[] = ['striker', 'dragon', 'theOne', 'drunkenMaster', 'stallion', 'bride', 'spartan', 'kid', 'discoKing', 'proWrestler', 'babaYaga', 'ballerina'];
 
 export function isHeroUnlocked(id: HeroId, stats: LifetimeStats): boolean {
   const goal = HERO_UNLOCKS[id];
-  return !goal || stats[goal.stat] >= goal.target;
+  return !goal || stats[goal.stat] >= goal.target || (!!goal.ad && stats.heroAds > 0);
 }
 
 /** How far the player is toward a locked hero (null for free heroes). */
@@ -69,7 +70,7 @@ export function unlockProgress(id: HeroId, stats: LifetimeStats): { goal: Unlock
   const goal = HERO_UNLOCKS[id];
   if (!goal) return null;
   const current = Math.min(goal.target, stats[goal.stat]);
-  return { goal, current, done: current >= goal.target };
+  return { goal, current, done: isHeroUnlocked(id, stats) };
 }
 
 /** One song's results, as they count toward the totals. */

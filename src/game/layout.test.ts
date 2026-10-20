@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeArenaLayout, FIGHTER_HEIGHT, FLOOR_Y } from './layout';
+import { computeArenaLayout, FIGHTER_HEIGHT, FLOOR_Y, SPAWN_DISTANCE, VISIBLE_HALF_WIDTH } from './layout';
 
 describe('computeArenaLayout', () => {
   it('makes fighters about a third of the screen tall on a laptop', () => {
@@ -13,9 +13,21 @@ describe('computeArenaLayout', () => {
     expect(computeArenaLayout(2560, 1440).scale).toBeGreaterThan(computeArenaLayout(1280, 720).scale * 1.5);
   });
 
-  it('keeps enough arena width visible on a narrow phone screen', () => {
-    const l = computeArenaLayout(390, 844);
-    expect(l.worldHalfWidth * 2).toBeGreaterThanOrEqual(440);
+  it('shows the same arena on every 16:9 screen, so enemies look the same speed everywhere', () => {
+    for (const [w, h] of [[800, 450], [1280, 720], [1920, 1080], [3840, 2160]]) {
+      expect(computeArenaLayout(w, h).worldHalfWidth).toBeCloseTo(VISIBLE_HALF_WIDTH, 0);
+    }
+  });
+
+  it('always shows the whole approach to the strike line, on tablets and phones too', () => {
+    for (const [w, h] of [[1024, 768], [768, 1024], [812, 375], [390, 844], [907, 510], [2560, 1080]]) {
+      expect(computeArenaLayout(w, h).worldHalfWidth, `${w}x${h}`).toBeGreaterThanOrEqual(VISIBLE_HALF_WIDTH - 0.5);
+    }
+  });
+
+  it('starts enemies just off the edge of a 16:9 screen', () => {
+    expect(SPAWN_DISTANCE).toBeGreaterThan(VISIBLE_HALF_WIDTH);
+    expect(SPAWN_DISTANCE - VISIBLE_HALF_WIDTH).toBeLessThan(120);
   });
 
   it('puts the floor line (world y = FLOOR_Y) at the floor screen position', () => {
