@@ -5,8 +5,12 @@ import type { HeroId } from './heroes';
  * the player's lifetime totals (kept across songs and sessions), so every
  * song moves them closer to the next hero, even a song they don't finish.
  * The goals mix kinds on purpose: some reward simply playing, some reward
- * finishing a song, some reward skill (big combos, PERFECT hits). One hero
- * (The Bride) can also be unlocked straight away by watching a rewarded ad.
+ * finishing a song, some reward skill (big combos, PERFECT hits, a song
+ * finished at 98% accuracy or with no misses at all). One hero (The Bride)
+ * can also be unlocked straight away by watching a rewarded ad.
+ *
+ * The numbers were set with the user on 2026-10-20, one hero at a time,
+ * after one song (about 500 enemies) unlocked five or more heroes at once.
  */
 
 /** The player's totals over every song they have ever played. */
@@ -29,9 +33,25 @@ export interface LifetimeStats {
   totalScore: number;
   /** Backdrop pieces unlocked early by watching a rewarded ad (see backdrops) */
   backdropAds: number;
+  /** OK hits (the sloppiest hit that still counts) */
+  okHits: number;
+  /** Best accuracy (0-100) of any song finished without dying */
+  bestClearAccuracy: number;
+  /** Songs finished without a single miss */
+  flawlessClears: number;
 }
 
-export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0 };
+export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0 };
+
+/**
+ * A song's accuracy, 0-100: PERFECT counts 100, GOOD 70, OK 40, a miss 0
+ * (the same sum the results screen and the grade use).
+ */
+export function accuracyPercent(c: { perfect: number; good: number; ok: number; miss: number }): number {
+  const total = c.perfect + c.good + c.ok + c.miss;
+  if (total <= 0) return 0;
+  return Math.round(((c.perfect * 100 + c.good * 70 + c.ok * 40) / (total * 100)) * 100);
+}
 
 export interface UnlockGoal {
   stat: keyof LifetimeStats;
@@ -48,22 +68,26 @@ export interface UnlockGoal {
 
 /** What it takes to earn each hero. Heroes not listed are free from the start. */
 export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
-  dragon: { stat: 'enemiesDefeated', target: 150, label: 'Defeat 150 enemies' },
   theOne: { stat: 'songsCleared', target: 1, label: 'Complete any song' },
-  drunkenMaster: { stat: 'bestCombo', target: 50, label: 'Reach a 50 combo' },
-  stallion: { stat: 'songsCleared', target: 3, label: 'Complete 3 songs' },
-  bride: { stat: 'songsCleared', target: 3, label: 'Complete 3 songs', ad: true },
-  kid: { stat: 'playSeconds', target: 1800, label: 'Train for 30 minutes' },
-  spartan: { stat: 'enemiesDefeated', target: 300, label: 'Defeat 300 enemies' },
-  discoKing: { stat: 'perfects', target: 100, label: 'Land 100 PERFECT hits' },
-  proWrestler: { stat: 'enemiesDefeated', target: 1000, label: 'Defeat 1,000 enemies' },
-  babaYaga: { stat: 'bestCombo', target: 100, label: 'Reach a 100 combo' },
-  ballerina: { stat: 'perfects', target: 200, label: 'Land 200 PERFECT hits' },
+  dragon: { stat: 'enemiesDefeated', target: 333, label: 'Defeat 333 enemies' },
   sawFace: { stat: 'perfects', target: 666, label: 'Land 666 PERFECT hits' },
+  stallion: { stat: 'songsCleared', target: 5, label: 'Complete 5 songs' },
+  proWrestler: { stat: 'okHits', target: 200, label: 'Land 200 OK hits' },
+  bride: { stat: 'songsCleared', target: 8, label: 'Complete 8 songs', ad: true },
+  kid: { stat: 'playSeconds', target: 1800, label: 'Train for 30 minutes' },
+  discoKing: { stat: 'perfects', target: 2500, label: 'Land 2,500 PERFECT hits' },
+  drunkenMaster: { stat: 'bestCombo', target: 200, label: 'Reach a 200 combo' },
+  spartan: { stat: 'bestCombo', target: 300, label: 'Reach a 300 combo' },
+  babaYaga: { stat: 'bestClearAccuracy', target: 98, label: 'Complete a song with 98% accuracy' },
+  ballerina: { stat: 'flawlessClears', target: 1, label: 'Complete a song with no misses' },
 };
 
-/** Heroes in the order players earn them, easiest first: the picker lists them this way, as a path. */
-export const UNLOCK_ORDER: HeroId[] = ['striker', 'dragon', 'theOne', 'drunkenMaster', 'stallion', 'bride', 'spartan', 'kid', 'discoKing', 'proWrestler', 'babaYaga', 'ballerina', 'sawFace'];
+/**
+ * Heroes in the order players earn them, easiest first: the picker lists
+ * them this way, as a path. Play goals come first (about 1 to 10 songs),
+ * then the skill goals, hardest last.
+ */
+export const UNLOCK_ORDER: HeroId[] = ['striker', 'theOne', 'dragon', 'sawFace', 'stallion', 'proWrestler', 'bride', 'kid', 'discoKing', 'drunkenMaster', 'spartan', 'babaYaga', 'ballerina'];
 
 export function isHeroUnlocked(id: HeroId, stats: LifetimeStats): boolean {
   const goal = HERO_UNLOCKS[id];
@@ -78,10 +102,23 @@ export function unlockProgress(id: HeroId, stats: LifetimeStats): { goal: Unlock
   return { goal, current, done: isHeroUnlocked(id, stats) };
 }
 
+/** How far along a goal is, as shown under a locked hero ("12 / 30 min", "Best 91% / 98%"). */
+export function progressText(goal: UnlockGoal, current: number): string {
+  if (goal.stat === 'playSeconds') return `${Math.floor(current / 60)} / ${Math.round(goal.target / 60)} min`;
+  if (goal.stat === 'bestClearAccuracy') return `Best ${current}% / ${goal.target}%`;
+  if (goal.stat === 'flawlessClears' && goal.target === 1) return current >= 1 ? 'Done' : 'Not yet';
+  return `${current.toLocaleString()} / ${goal.target.toLocaleString()}`;
+}
+
 /** One song's results, as they count toward the totals. */
 export interface RunResult {
   enemiesDefeated: number;
   perfects: number;
+  /** OK hits */
+  oks: number;
+  misses: number;
+  /** 0-100, see accuracyPercent */
+  accuracy: number;
   maxCombo: number;
   cleared: boolean;
   /** How long the song was played for */
@@ -101,6 +138,10 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     heroAds: stats.heroAds,
     totalScore: stats.totalScore + Math.max(0, run.score),
     backdropAds: stats.backdropAds,
+    okHits: stats.okHits + run.oks,
+    bestClearAccuracy: run.cleared ? Math.max(stats.bestClearAccuracy, run.accuracy) : stats.bestClearAccuracy,
+    // A song you finished, with hits and not one miss
+    flawlessClears: stats.flawlessClears + (run.cleared && run.misses === 0 && run.enemiesDefeated > 0 ? 1 : 0),
   };
 }
 
@@ -128,6 +169,9 @@ export function loadStats(store: Pick<Storage, 'getItem'> | undefined): Lifetime
       heroAds: num(parsed.heroAds),
       totalScore: num(parsed.totalScore),
       backdropAds: num(parsed.backdropAds),
+      okHits: num(parsed.okHits),
+      bestClearAccuracy: Math.min(100, num(parsed.bestClearAccuracy)),
+      flawlessClears: num(parsed.flawlessClears),
     };
   } catch {
     return { ...EMPTY_STATS };
