@@ -12,6 +12,7 @@ import { enemyPoseFor } from '../game/customAnimation';
 import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
 import { drawBackdropLayers } from './backdropArt';
+import { drawConveyors, drawPit } from './stageArt';
 import { drawFighter, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
@@ -101,8 +102,10 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       const halfW = layout.worldHalfWidth / zoom + 20;
       const worldBottom = (height - layout.originY) / layout.scale + 20;
 
-      drawConvergingConveyors(ctx, halfW, worldBottom, engine.pitRadius, conveyorOffset, pulse);
-      drawCentralPit(ctx, worldBottom, engine.pitRadius, pulse);
+      // The belts and the pit, styled to match the chosen floor (see stageArt)
+      const stage = { ctx, halfW, top: FLOOR_Y - FLOOR_BACK, front: FLOOR_Y + 22, worldBottom, pitRadius: engine.pitRadius, conveyorOffset, pulse };
+      drawConveyors(stage, engine.backdrop.floor);
+      drawPit(stage, engine.backdrop.floor, FLOOR_Y);
       drawTacticalStrikeZones(ctx, engine);
       drawFloorShadowsAndReflections(ctx, engine, halfW);
       drawDebrisPieces(ctx, engine);
@@ -186,137 +189,6 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, layout: ArenaLayout, width:
     },
     engine.backdrop
   );
-}
-
-// DUAL CONVERGING CONVEYOR FLOORS (world units):
-// Left side moves RIGHT (inwards towards the pit: >>>>>)
-// Right side moves LEFT (inwards towards the pit: <<<<<)
-function drawConvergingConveyors(
-  ctx: CanvasRenderingContext2D,
-  halfW: number,
-  worldBottom: number,
-  pitRadius: number,
-  conveyorOffset: number,
-  pulse: number
-) {
-  const top = FLOOR_Y - FLOOR_BACK;
-  const front = FLOOR_Y + 22;
-
-  ctx.save();
-
-  // Belt surfaces
-  const leftGrad = ctx.createLinearGradient(0, top, 0, front);
-  leftGrad.addColorStop(0, '#0a0d24');
-  leftGrad.addColorStop(1, '#10163c');
-  ctx.fillStyle = leftGrad;
-  ctx.fillRect(-halfW, top, halfW - pitRadius, front - top);
-
-  const rightGrad = ctx.createLinearGradient(0, top, 0, front);
-  rightGrad.addColorStop(0, '#1c0a1a');
-  rightGrad.addColorStop(1, '#2c0f29');
-  ctx.fillStyle = rightGrad;
-  ctx.fillRect(pitRadius, top, halfW - pitRadius, front - top);
-
-  // Front face of the machine below the belts
-  const faceGrad = ctx.createLinearGradient(0, front, 0, worldBottom);
-  faceGrad.addColorStop(0, '#0b0c1c');
-  faceGrad.addColorStop(1, '#040510');
-  ctx.fillStyle = faceGrad;
-  ctx.fillRect(-halfW, front, halfW - pitRadius, worldBottom - front);
-  ctx.fillRect(pitRadius, front, halfW - pitRadius, worldBottom - front);
-
-  // Rails glow brighter on every beat
-  ctx.lineWidth = 1.6;
-  ctx.shadowBlur = 8 + pulse * 14;
-  for (const side of [-1, 1]) {
-    const color = side < 0 ? '#00f3ff' : '#ff007f';
-    const x0 = side < 0 ? -halfW : pitRadius;
-    const x1 = side < 0 ? -pitRadius : halfW;
-    ctx.strokeStyle = color;
-    ctx.shadowColor = color;
-    ctx.beginPath();
-    ctx.moveTo(x0, top);
-    ctx.lineTo(x1, top);
-    ctx.moveTo(x0, front);
-    ctx.lineTo(x1, front);
-    ctx.stroke();
-  }
-  ctx.shadowBlur = 0;
-
-  // Moving chevrons show which way the belts run
-  const segment = 40;
-  ctx.lineWidth = 1.4;
-  ctx.strokeStyle = `rgba(0, 243, 255, ${0.16 + pulse * 0.18})`;
-  for (let x = -halfW - segment + ((conveyorOffset + halfW) % segment); x < -pitRadius; x += segment) {
-    if (x - 8 < -halfW) continue;
-    ctx.beginPath();
-    ctx.moveTo(x - 8, top + 6);
-    ctx.lineTo(x, (top + front) / 2);
-    ctx.lineTo(x - 8, front - 6);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = `rgba(255, 0, 127, ${0.18 + pulse * 0.18})`;
-  for (let x = halfW + segment - ((conveyorOffset + halfW) % segment); x > pitRadius; x -= segment) {
-    if (x + 8 > halfW) continue;
-    ctx.beginPath();
-    ctx.moveTo(x + 8, top + 6);
-    ctx.lineTo(x, (top + front) / 2);
-    ctx.lineTo(x + 8, front - 6);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-// CENTRAL ABYSS PIT: debris that reaches the middle drops in here
-function drawCentralPit(ctx: CanvasRenderingContext2D, worldBottom: number, pitRadius: number, pulse: number) {
-  const top = FLOOR_Y - FLOOR_BACK;
-
-  ctx.save();
-  const pitVoid = ctx.createLinearGradient(0, top, 0, worldBottom);
-  pitVoid.addColorStop(0, '#020208');
-  pitVoid.addColorStop(0.6, '#080518');
-  pitVoid.addColorStop(1, `rgba(255, 0, 127, ${0.25 + pulse * 0.2})`);
-  ctx.fillStyle = pitVoid;
-  ctx.fillRect(-pitRadius, top, pitRadius * 2, worldBottom - top);
-
-  // Hazard walls
-  ctx.strokeStyle = '#ffe600';
-  ctx.shadowColor = '#ffe600';
-  ctx.shadowBlur = 10;
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  ctx.moveTo(-pitRadius, top);
-  ctx.lineTo(-pitRadius, worldBottom);
-  ctx.moveTo(pitRadius, top);
-  ctx.lineTo(pitRadius, worldBottom);
-  ctx.stroke();
-
-  // Grate teeth
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(255, 230, 0, 0.22)';
-  ctx.lineWidth = 1;
-  for (let y = FLOOR_Y + 14; y < worldBottom; y += 14) {
-    ctx.beginPath();
-    ctx.moveTo(-pitRadius + 4, y);
-    ctx.lineTo(pitRadius - 4, y);
-    ctx.stroke();
-  }
-
-  // Catwalk the fighter stands on, spanning the pit
-  ctx.strokeStyle = '#00f3ff';
-  ctx.shadowColor = '#00f3ff';
-  ctx.shadowBlur = 12;
-  ctx.lineWidth = 2.2;
-  ctx.beginPath();
-  ctx.moveTo(-pitRadius - 4, FLOOR_Y + 1);
-  ctx.lineTo(pitRadius + 4, FLOOR_Y + 1);
-  ctx.stroke();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 0.8;
-  ctx.shadowBlur = 0;
-  ctx.stroke();
-  ctx.restore();
 }
 
 function drawTacticalStrikeZones(ctx: CanvasRenderingContext2D, engine: GameEngine) {
