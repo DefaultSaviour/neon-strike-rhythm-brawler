@@ -15,6 +15,7 @@ import { UnlocksScreen } from './components/UnlocksScreen';
 import { OptionsScreen } from './components/OptionsScreen';
 import { StancesScreen } from './components/StancesScreen';
 import { RecordsScreen } from './components/RecordsScreen';
+import { BackdropScreen } from './components/BackdropScreen';
 import { bestSongScore, songRecords } from './game/records';
 import {
   followMuteSetting,
@@ -59,7 +60,7 @@ export default function App() {
   const [showTrackSelect, setShowTrackSelect] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
   /** A screen opened from the title menu */
-  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'stances' | 'records' | 'options' | null>(null);
+  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'stances' | 'backdrop' | 'records' | 'options' | null>(null);
   /** Rewarded ads can be shown here (CrazyGames, or its local test mode) */
   const [adAvailable, setAdAvailable] = useState(false);
   const [adBusy, setAdBusy] = useState(false);
@@ -321,6 +322,14 @@ export default function App() {
     });
   }, [watchRewardedAd, engine]);
 
+  /** Watch a rewarded ad for the next backdrop piece. */
+  const handleWatchBackdropAd = useCallback(() => {
+    void watchRewardedAd(() => {
+      const piece = engine.unlockBackdropWithAd();
+      setMenuNotice(piece ? `New backdrop piece unlocked: ${piece.label}!` : null);
+    });
+  }, [watchRewardedAd, engine]);
+
   /** Watch a rewarded ad to unlock an ad-only hero (The Bride), then play as her. */
   const handleWatchHeroAd = useCallback(
     (hero: HeroId) => {
@@ -494,6 +503,20 @@ export default function App() {
           onSelect={(hero) => handleUpdateSettings({ hero })}
           onWatchAd={adAvailable ? handleWatchHeroAd : undefined}
           adBusy={adBusy}
+          notice={menuNotice}
+          onClose={closeMenuScreen}
+        />
+      )}
+
+      {menuScreen === 'backdrop' && (
+        <BackdropScreen
+          stats={engine.lifetimeStats}
+          selected={engine.backdrop}
+          isUnlocked={(id) => engine.isBackdropUnlocked(id)}
+          onSelect={(layer, id) => handleUpdateSettings({ backdrop: { ...engine.backdrop, [layer]: id } })}
+          onWatchAd={adAvailable ? handleWatchBackdropAd : undefined}
+          adBusy={adBusy}
+          adsOffNote={adsOffNote}
           notice={menuNotice}
           onClose={closeMenuScreen}
         />
