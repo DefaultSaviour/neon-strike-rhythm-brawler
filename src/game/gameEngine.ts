@@ -23,7 +23,7 @@ import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGr
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
 import { comboDuration, comboFrame } from './combo';
-import { FLOOR_Y } from './layout';
+import { FLOOR_Y, SPAWN_DISTANCE } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { recordRunProgress, RunProgress } from './runProgress';
 import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, EnemyMotionStyle } from './enemyMotion';
@@ -674,7 +674,8 @@ export class GameEngine {
       const t = timeRemaining / this.approachDuration;
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      const spawnX = enemy.lane === 'left' ? -worldHalfWidth - 80 : worldHalfWidth + 80;
+      // Every screen: the same start point and speed (see SPAWN_DISTANCE)
+      const spawnX = enemy.lane === 'left' ? -SPAWN_DISTANCE : SPAWN_DISTANCE;
 
       enemy.x = hitX + (spawnX - hitX) * t;
       // Late enemies press in but never walk through the player.

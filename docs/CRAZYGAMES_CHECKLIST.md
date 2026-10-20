@@ -12,6 +12,8 @@ Launch (ads and revenue only start then).
 | Total size ≤ 250 MB, ≤ 1,500 files | Basic | Done: 23 MB, 8 files (`npm run build`) |
 | Relative paths only | Basic | Done: Vite `base: './'`, songs at `audio/...` (tested from a subfolder) |
 | Works on Chrome and Edge; mouse, keyboard and touch | Basic | Done; Safari and a 4 GB Chromebook not tested |
+| Same game on every screen size | Basic | Done: enemies start the same distance away and move at the same speed on every screen; every menu and the HUD fit at 667×375, 740×360, 800×450, 821×462, 907×510, 1024×768, 768×1024 and 390×844 (checked in the browser) |
+| Phones | Basic | Tap the left or right half to strike (labels say "Tap to strike" on touchscreens), no double-tap zoom. **In the submission, set the orientation to landscape**: portrait works, but the fighters are small |
 | No page scroll, text selection or right-click menu over the game | Basic | Done: `overflow-hidden select-none` on the body, right-click blocked |
 | iOS: resume audio after an interruption, on the next tap | Basic | Done (`App.tsx`), not tested on an iPhone |
 | SDK: gameplay start/stop | Basic + Full | Done: start when a song is playing, stop on pause, death, clear, quit and menus |

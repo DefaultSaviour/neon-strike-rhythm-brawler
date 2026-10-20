@@ -30,10 +30,20 @@ export interface ArenaLayout {
 const FLOOR_SCREEN_FRACTION = 0.8;
 /** Target fighter height as a fraction of screen height */
 const FIGHTER_SCREEN_FRACTION = 0.34;
-/** Minimum world width that must stay visible so enemies have room to approach */
-const MIN_VISIBLE_WORLD_WIDTH = 440;
-const MIN_SCALE = 0.6;
-const MAX_SCALE = 3.2;
+/**
+ * The arena looks and plays the same on every screen: enemies always start
+ * SPAWN_DISTANCE from the centre and cross to the strike line at the same
+ * speed. At least VISIBLE_HALF_WIDTH either side of the centre is always on
+ * screen (exactly that on a 16:9 screen), so the approach can always be seen;
+ * narrower screens (tablets, phones) shrink the fighters a little to fit it,
+ * wider ones show extra floor and the enemies fade in at the spawn point.
+ */
+export const VISIBLE_HALF_WIDTH = 380;
+/** Where enemies start, from the centre: just off the edge of a 16:9 screen */
+export const SPAWN_DISTANCE = 460;
+const MIN_VISIBLE_WORLD_WIDTH = VISIBLE_HALF_WIDTH * 2;
+const MIN_SCALE = 0.45;
+const MAX_SCALE = 6;
 /** Height of the horizon above the floor line, in world units (a fighter is 145 tall) */
 const HORIZON_ABOVE_FLOOR = 175;
 
