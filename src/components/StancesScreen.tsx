@@ -1,6 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { NewTag } from './NewBadge';
 import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from '../game/enemyMotion';
 import type { LifetimeStats } from '../game/heroUnlocks';
+import { getActiveAnimations } from '../game/animationLibrary';
+import { enemyPoseFor } from '../game/customAnimation';
+import { getEnemyStyle } from '../game/enemyStyles';
+import type { EnemyTier, FrequencyBand } from '../types/game';
+import { drawEnemyArt } from './enemyArt';
 import { FREE_STANCES, formatCountdown, MINUTES_PER_STANCE, nextStance, secondsToNextStance, STANCE_UNLOCK_ORDER } from '../game/stanceUnlocks';
 
 /**
@@ -20,6 +26,10 @@ interface StancesScreenProps {
   adsOffNote?: string | null;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** Open but not yet tapped on: these wear a NEW tag */
+  isNew?: (id: EnemyMotionStyle) => boolean;
+  /** The player tapped on a card */
+  onSeen?: (id: EnemyMotionStyle) => void;
   /** The Heroes / Stances / Backdrops tab bar, shown under the header */
   tabs?: React.ReactNode;
   onClose: () => void;
@@ -27,7 +37,66 @@ interface StancesScreenProps {
 
 const ORDER: EnemyMotionStyle[] = [...FREE_STANCES, ...STANCE_UNLOCK_ORDER];
 
-export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, tabs, onClose }) => {
+/** A different enemy on each card, so the grid shows off the whole cast. */
+const CAST: Array<[FrequencyBand, EnemyTier]> = [
+  ['bass', 2],
+  ['sub', 1],
+  ['high', 1],
+  ['bass', 3],
+  ['sub', 3],
+  ['high', 2],
+  ['bass', 1],
+  ['high', 3],
+];
+
+/** An enemy moving in a stance, on a steady beat (dark and grey when the stance is still locked). Same size as a hero portrait. */
+const StancePortrait: React.FC<{ stance: EnemyMotionStyle; band: FrequencyBand; tier: EnemyTier; locked: boolean }> = ({ stance, band, tier, locked }) => {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = 120;
+    const h = 150;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    const style = getEnemyStyle(band, tier);
+    let frame = 0;
+    const draw = () => {
+      // Locked stances stand still; unlocked ones move on a beat of about 120 BPM
+      const beat = locked ? 0.25 : (performance.now() / 1000) * 2;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.translate(w / 2, 62);
+      // Facing left, like the enemies coming at you down the right lane; feet on the floor (y = 68)
+      const scale = 0.8 * style.scale;
+      ctx.translate(0, 68);
+      ctx.scale(-scale, scale);
+      ctx.translate(0, -68);
+      if (locked) {
+        ctx.filter = 'grayscale(1) brightness(0.35)';
+        ctx.globalAlpha = 0.8;
+      }
+      ctx.strokeStyle = style.color;
+      ctx.shadowColor = style.color;
+      ctx.shadowBlur = 12;
+      ctx.lineWidth = 3.6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const pose = enemyPoseFor(stance, beat, band, tier, getActiveAnimations());
+      drawEnemyArt(ctx, pose, band, tier, { main: style.color, accent: style.accent }, beat, false);
+      ctx.restore();
+      if (!locked) frame = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(frame);
+  }, [stance, band, tier, locked]);
+  return <canvas ref={ref} style={{ width: 120, height: 150 }} aria-hidden="true" />;
+};
+
+export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, isNew, onSeen, tabs, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose();
@@ -42,8 +111,8 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-pink-500/30 rounded-xl shadow-[0_0_40px_rgba(255,0,127,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-pink-500/30 rounded-xl shadow-[0_0_40px_rgba(255,0,127,0.15)] flex flex-col overflow-hidden h-[min(92vh,880px)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 min-h-[128px] sm:min-h-[112px] lg:min-h-[88px] border-b border-slate-800 bg-slate-900/50">
           <div>
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-amber-300 to-cyan-400">
               ENEMY STANCES
@@ -80,43 +149,51 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
             {notice}
           </div>
         )}
-        <div className="p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {stances.map((m) => {
+        <div className="flex-1 min-h-0 content-start p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {stances.map((m, i) => {
             const unlocked = isUnlocked(m.id);
             const chosen = m.id === selected;
             const isNext = m.id === next;
+            const [band, tier] = CAST[i % CAST.length];
             return (
               <div
                 key={m.id}
-                className={`rounded-xl border p-3 flex items-center gap-3 ${
+                onClick={() => unlocked && onSeen?.(m.id)}
+                className={`relative rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
                   chosen
-                    ? 'border-cyan-400 bg-cyan-950/30'
+                    ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_18px_rgba(0,243,255,0.25)]'
                     : unlocked
                       ? 'border-slate-700 bg-slate-900/50'
                       : 'border-slate-800 bg-slate-950/70'
                 }`}
               >
-                <div className="flex-1">
-                  <div className={`text-sm font-bold ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>
-                    {!unlocked && <span aria-hidden="true">🔒 </span>}
-                    {m.label}
-                    {FREE_STANCES.includes(m.id) && <span className="ml-2 text-[10px] font-mono text-emerald-400">FREE</span>}
-                  </div>
-                  <div className={`text-[11px] leading-snug ${unlocked ? 'text-slate-400' : 'text-slate-600'}`}>
-                    {unlocked ? m.description : isNext && wait !== null ? `Next up: opens in ${formatCountdown(wait)} of play` : 'Locked: keep playing'}
-                  </div>
+                {unlocked && isNew?.(m.id) && <NewTag />}
+                <StancePortrait stance={m.id} band={band} tier={tier} locked={!unlocked} />
+                <div className={`text-sm font-bold ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>
+                  {!unlocked && <span aria-hidden="true">🔒 </span>}
+                  {m.label}
+                  {FREE_STANCES.includes(m.id) && <span className="ml-1.5 text-[10px] font-mono text-emerald-400">FREE</span>}
                 </div>
-                {unlocked && (
-                  <button
-                    type="button"
-                    onClick={() => onSelect(m.id)}
-                    disabled={chosen}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold shrink-0 ${
-                      chosen ? 'bg-cyan-400 text-black cursor-default' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer'
-                    }`}
-                  >
-                    {chosen ? 'Selected' : 'Select'}
-                  </button>
+                {unlocked ? (
+                  <>
+                    <div className="text-[11px] text-slate-400 leading-snug flex-1">{m.description}</div>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(m.id)}
+                      disabled={chosen}
+                      className={`w-full min-h-11 rounded-md text-sm font-bold transition-colors ${
+                        chosen ? 'bg-cyan-400 text-black cursor-default' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer'
+                      }`}
+                    >
+                      {chosen ? 'Selected' : 'Select'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="w-full flex flex-col gap-1 flex-1 justify-end">
+                    <div className="text-[11px] text-amber-300/90">
+                      {isNext && wait !== null ? `Opens in ${formatCountdown(wait)} of play` : 'Keep playing to unlock'}
+                    </div>
+                  </div>
                 )}
               </div>
             );

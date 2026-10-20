@@ -10,6 +10,7 @@ import {
 } from '../game/backdrops';
 import type { LifetimeStats } from '../game/heroUnlocks';
 import { drawBackdropLayers } from './backdropArt';
+import { NewTag } from './NewBadge';
 
 /**
  * Build your backdrop: a live preview at the top, then a row of pieces for
@@ -30,6 +31,10 @@ interface BackdropScreenProps {
   adsOffNote?: string | null;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** Open but not yet tapped on: these wear a NEW tag */
+  isNew?: (id: string) => boolean;
+  /** The player tapped on a piece */
+  onSeen?: (id: string) => void;
   /** The Heroes / Stances / Backdrops tab bar, shown under the header */
   tabs?: React.ReactNode;
   onClose: () => void;
@@ -72,7 +77,7 @@ const BackdropCanvas: React.FC<{ pieces: Record<BackdropLayer, string>; animated
   return <canvas ref={ref} className={`${className ?? ''} ${dim ? 'opacity-30 grayscale' : ''}`} />;
 };
 
-export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, tabs, onClose }) => {
+export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, isNew, onSeen, tabs, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose();
@@ -87,8 +92,8 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-cyan-400/30 rounded-xl shadow-[0_0_40px_rgba(0,243,255,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-cyan-400/30 rounded-xl shadow-[0_0_40px_rgba(0,243,255,0.15)] flex flex-col overflow-hidden h-[min(92vh,880px)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 min-h-[128px] sm:min-h-[112px] lg:min-h-[88px] border-b border-slate-800 bg-slate-900/50">
           <div>
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-pink-500 to-amber-300">BACKDROP</div>
             <div className="text-xs text-slate-400">Mix your own: a sky, a skyline, a centrepiece and a floor. New pieces open as your total score grows.</div>
@@ -124,7 +129,7 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
           </div>
         )}
 
-        <div className="p-4 md:p-6 overflow-y-auto flex flex-col gap-4">
+        <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto flex flex-col gap-4">
           <BackdropCanvas pieces={selected} animated className="w-full h-36 md:h-48 rounded-lg border border-slate-700" />
 
           {BACKDROP_LAYERS.map(({ layer, label }) => (
@@ -139,12 +144,16 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
                       key={b.id}
                       type="button"
                       disabled={!unlocked || chosen}
-                      onClick={() => onSelect(layer, b.id)}
+                      onClick={() => {
+                        onSeen?.(b.id);
+                        onSelect(layer, b.id);
+                      }}
                       title={b.description}
-                      className={`flex flex-col rounded-lg border overflow-hidden text-left ${
+                      className={`relative flex flex-col rounded-lg border overflow-hidden text-left ${
                         chosen ? 'border-cyan-400 shadow-[0_0_12px_rgba(0,243,255,0.35)]' : unlocked ? 'border-slate-700 hover:border-cyan-400 cursor-pointer' : 'border-slate-800 cursor-default'
                       }`}
                     >
+                      {unlocked && isNew?.(b.id) && <NewTag />}
                       <BackdropCanvas pieces={{ ...selected, [layer]: b.id }} dim={!unlocked} closeUp className="w-full h-14" />
                       <div className="px-2 py-1.5 bg-slate-950/80">
                         <div className={`text-[11px] font-bold truncate ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>

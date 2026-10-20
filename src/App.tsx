@@ -16,6 +16,7 @@ import { StancesScreen } from './components/StancesScreen';
 import { RecordsScreen } from './components/RecordsScreen';
 import { BackdropScreen } from './components/BackdropScreen';
 import { UnlockTab, UnlockTabs } from './components/UnlockTabs';
+import type { UnlockKind } from './game/seenUnlocks';
 import { bestSongScore, songRecords } from './game/records';
 import {
   followMuteSetting,
@@ -367,11 +368,29 @@ export default function App() {
     else if (choice === 'newGame') setShowTrackSelect(true);
     else if (choice === 'studio') setShowStudio(true);
     else {
-      if (choice === 'unlocks') setUnlockTab('heroes');
+      if (choice === 'unlocks') {
+        // Open on the tab with something new to see, if any
+        const fresh = engine.unseenUnlocks();
+        setUnlockTab(fresh.hero.length ? 'heroes' : fresh.stance.length ? 'stances' : fresh.backdrop.length ? 'backdrops' : 'heroes');
+      }
       setMenuScreen(choice);
     }
   }, [engine, handleStartGame]);
   const closeMenuScreen = useCallback(() => setMenuScreen(null), []);
+
+  // New unlocks not yet tapped on: badges on the Unlocks button and its tabs
+  const [, setSeenTick] = useState(0);
+  const markSeen = useCallback((kind: UnlockKind, id: string) => {
+    if (engine.markUnlockSeen(kind, id)) setSeenTick((n) => n + 1);
+  }, [engine]);
+  const unseen = engine.unseenUnlocks();
+  const unlockTabs = (
+    <UnlockTabs
+      tab={unlockTab}
+      onTab={setUnlockTab}
+      counts={{ heroes: unseen.hero.length, stances: unseen.stance.length, backdrops: unseen.backdrop.length }}
+    />
+  );
 
   const handleToggleOneButtonMode = useCallback(() => {
     handleUpdateSettings({ oneButtonMode: !audioSettings.oneButtonMode });
@@ -494,6 +513,7 @@ export default function App() {
           heroLabel={engine.hero.label}
           unlockedHeroes={HEROES.filter((h) => engine.isHeroUnlocked(h.id)).length}
           totalHeroes={HEROES.length}
+          newUnlocks={unseen.hero.length + unseen.stance.length + unseen.backdrop.length}
           oneButtonMode={audioSettings.oneButtonMode}
           notice={menuNotice}
         />
@@ -501,10 +521,12 @@ export default function App() {
 
       {menuScreen === 'unlocks' && unlockTab === 'stances' && (
         <StancesScreen
-          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
+          tabs={unlockTabs}
           stats={engine.lifetimeStats}
           selected={engine.enemyMotion}
           isUnlocked={(id) => engine.isStanceUnlocked(id)}
+          isNew={(id) => unseen.stance.includes(id)}
+          onSeen={(id) => markSeen('stance', id)}
           onSelect={(enemyMotion) => handleUpdateSettings({ enemyMotion })}
           onWatchAd={adAvailable ? handleWatchAd : undefined}
           adBusy={adBusy}
@@ -516,10 +538,12 @@ export default function App() {
 
       {menuScreen === 'unlocks' && unlockTab === 'heroes' && (
         <UnlocksScreen
-          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
+          tabs={unlockTabs}
           stats={engine.lifetimeStats}
           selectedHero={engine.hero.id}
           isUnlocked={(id) => engine.isHeroUnlocked(id)}
+          isNew={(id) => unseen.hero.includes(id)}
+          onSeen={(id) => markSeen('hero', id)}
           onSelect={(hero) => handleUpdateSettings({ hero })}
           onWatchAd={adAvailable ? handleWatchHeroAd : undefined}
           adBusy={adBusy}
@@ -530,10 +554,12 @@ export default function App() {
 
       {menuScreen === 'unlocks' && unlockTab === 'backdrops' && (
         <BackdropScreen
-          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
+          tabs={unlockTabs}
           stats={engine.lifetimeStats}
           selected={engine.backdrop}
           isUnlocked={(id) => engine.isBackdropUnlocked(id)}
+          isNew={(id) => unseen.backdrop.includes(id)}
+          onSeen={(id) => markSeen('backdrop', id)}
           onSelect={(layer, id) => handleUpdateSettings({ backdrop: { ...engine.backdrop, [layer]: id } })}
           onWatchAd={adAvailable ? handleWatchBackdropAd : undefined}
           adBusy={adBusy}

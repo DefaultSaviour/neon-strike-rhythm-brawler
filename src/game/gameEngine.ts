@@ -30,7 +30,8 @@ import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, EnemyMotionStyle } from './e
 import { enemyPoseFor } from './customAnimation';
 import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
-import { activeBackdrop, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
+import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
+import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -150,6 +151,7 @@ export class GameEngine {
       this.devUnlockAll = true;
     }
     this.loadSettings();
+    this.loadSeenUnlocks();
   }
 
   /**
@@ -160,6 +162,43 @@ export class GameEngine {
   public reloadProgress() {
     if (!this.devUnlockAll) this.lifetimeStats = loadStats(safeStorage());
     this.loadSettings();
+    this.loadSeenUnlocks();
+  }
+
+  /** Unlocks already tapped on (see seenUnlocks): the rest wear a "new" badge */
+  private seenUnlocks = new Set<string>();
+
+  private loadSeenUnlocks() {
+    // ?unlockAll opens everything: leave the real list alone, so every piece shows as new
+    this.seenUnlocks = loadSeen(safeStorage(), this.openUnlockKeys(), { seed: !this.devUnlockAll });
+  }
+
+  /** Everything open right now, as seenUnlocks keys */
+  private openUnlockKeys(): string[] {
+    return [
+      ...HEROES.filter((h) => this.isHeroUnlocked(h.id)).map((h) => unlockKey('hero', h.id)),
+      ...ENEMY_MOTION_STYLES.filter((m) => this.isStanceUnlocked(m.id)).map((m) => unlockKey('stance', m.id)),
+      ...BACKDROP_ITEMS.filter((b) => this.isBackdropUnlocked(b.id)).map((b) => unlockKey('backdrop', b.id)),
+    ];
+  }
+
+  /** Open unlocks not yet tapped on, by kind: their ids */
+  public unseenUnlocks(): Record<UnlockKind, string[]> {
+    const out: Record<UnlockKind, string[]> = { hero: [], stance: [], backdrop: [] };
+    for (const key of unseen(this.openUnlockKeys(), this.seenUnlocks)) {
+      const [kind, id] = key.split(':') as [UnlockKind, string];
+      out[kind].push(id);
+    }
+    return out;
+  }
+
+  /** The player tapped on an unlock: its badge goes. Returns true if it was new. */
+  public markUnlockSeen(kind: UnlockKind, id: string): boolean {
+    const key = unlockKey(kind, id);
+    if (this.seenUnlocks.has(key)) return false;
+    this.seenUnlocks = new Set(this.seenUnlocks).add(key);
+    if (!this.devUnlockAll) saveSeen(safeStorage(), this.seenUnlocks);
+    return true;
   }
 
   /** The player's totals over every song, which unlock the heroes (see heroUnlocks). */

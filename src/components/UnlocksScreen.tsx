@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { NewTag } from './NewBadge';
 import { HeroId, HEROES } from '../game/heroes';
 import { LifetimeStats, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
 import { fighterTier } from '../game/fighterTier';
@@ -21,6 +22,10 @@ interface UnlocksScreenProps {
   adBusy?: boolean;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** Open but not yet tapped on: these wear a NEW tag */
+  isNew?: (id: HeroId) => boolean;
+  /** The player tapped on a card */
+  onSeen?: (id: HeroId) => void;
   /** The Heroes / Stances / Backdrops tab bar, shown under the header */
   tabs?: React.ReactNode;
   onClose: () => void;
@@ -54,7 +59,7 @@ const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked })
   return <canvas ref={ref} style={{ width: 120, height: 150 }} aria-hidden="true" />;
 };
 
-export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, notice, tabs, onClose }) => {
+export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, notice, isNew, onSeen, tabs, onClose }) => {
   const heroes = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
   const unlockedCount = heroes.filter((h) => isUnlocked(h.id)).length;
 
@@ -75,8 +80,8 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-amber-400/30 rounded-xl shadow-[0_0_40px_rgba(255,194,58,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-amber-400/30 rounded-xl shadow-[0_0_40px_rgba(255,194,58,0.15)] flex flex-col overflow-hidden h-[min(92vh,880px)]">
+        <div className="flex items-center justify-between px-6 py-4 min-h-[128px] sm:min-h-[112px] lg:min-h-[88px] border-b border-slate-800 bg-slate-900/50">
           <div>
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-500 to-cyan-400">
               UNLOCKS
@@ -102,7 +107,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
             {notice}
           </div>
         )}
-        <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex-1 min-h-0 content-start p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {heroes.map((h) => {
             const unlocked = isUnlocked(h.id);
             const progress = unlockProgress(h.id, stats);
@@ -110,7 +115,8 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
             return (
               <div
                 key={h.id}
-                className={`rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
+                onClick={() => unlocked && onSeen?.(h.id)}
+                className={`relative rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
                   chosen
                     ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_18px_rgba(0,243,255,0.25)]'
                     : unlocked
@@ -118,6 +124,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                       : 'border-slate-800 bg-slate-950/70'
                 }`}
               >
+                {unlocked && isNew?.(h.id) && <NewTag />}
                 <HeroPortrait id={h.id} locked={!unlocked} />
                 <div className={`text-sm font-bold ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>
                   {!unlocked && <span aria-hidden="true">🔒 </span>}
@@ -130,7 +137,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                       type="button"
                       onClick={() => onSelect(h.id)}
                       disabled={chosen}
-                      className={`w-full py-1.5 rounded-md text-xs font-bold transition-colors ${
+                      className={`w-full min-h-11 rounded-md text-sm font-bold transition-colors ${
                         chosen ? 'bg-cyan-400 text-black cursor-default' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer'
                       }`}
                     >
