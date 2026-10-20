@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { NewTag } from './NewBadge';
 import { HeroId, HEROES } from '../game/heroes';
 import { LifetimeStats, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
 import { fighterTier } from '../game/fighterTier';
@@ -21,6 +22,10 @@ interface UnlocksScreenProps {
   adBusy?: boolean;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** Open but not yet tapped on: these wear a NEW tag */
+  isNew?: (id: HeroId) => boolean;
+  /** The player tapped on a card */
+  onSeen?: (id: HeroId) => void;
   /** The Heroes / Stances / Backdrops tab bar, shown under the header */
   tabs?: React.ReactNode;
   onClose: () => void;
@@ -54,7 +59,7 @@ const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked })
   return <canvas ref={ref} style={{ width: 120, height: 150 }} aria-hidden="true" />;
 };
 
-export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, notice, tabs, onClose }) => {
+export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, notice, isNew, onSeen, tabs, onClose }) => {
   const heroes = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
   const unlockedCount = heroes.filter((h) => isUnlocked(h.id)).length;
 
@@ -110,7 +115,8 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
             return (
               <div
                 key={h.id}
-                className={`rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
+                onClick={() => unlocked && onSeen?.(h.id)}
+                className={`relative rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
                   chosen
                     ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_18px_rgba(0,243,255,0.25)]'
                     : unlocked
@@ -118,6 +124,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                       : 'border-slate-800 bg-slate-950/70'
                 }`}
               >
+                {unlocked && isNew?.(h.id) && <NewTag />}
                 <HeroPortrait id={h.id} locked={!unlocked} />
                 <div className={`text-sm font-bold ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>
                   {!unlocked && <span aria-hidden="true">🔒 </span>}

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { NewTag } from './NewBadge';
 import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from '../game/enemyMotion';
 import type { LifetimeStats } from '../game/heroUnlocks';
 import { getActiveAnimations } from '../game/animationLibrary';
@@ -25,6 +26,10 @@ interface StancesScreenProps {
   adsOffNote?: string | null;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** Open but not yet tapped on: these wear a NEW tag */
+  isNew?: (id: EnemyMotionStyle) => boolean;
+  /** The player tapped on a card */
+  onSeen?: (id: EnemyMotionStyle) => void;
   /** The Heroes / Stances / Backdrops tab bar, shown under the header */
   tabs?: React.ReactNode;
   onClose: () => void;
@@ -91,7 +96,7 @@ const StancePortrait: React.FC<{ stance: EnemyMotionStyle; band: FrequencyBand; 
   return <canvas ref={ref} style={{ width: 120, height: 150 }} aria-hidden="true" />;
 };
 
-export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, tabs, onClose }) => {
+export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, isNew, onSeen, tabs, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose();
@@ -153,7 +158,8 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
             return (
               <div
                 key={m.id}
-                className={`rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
+                onClick={() => unlocked && onSeen?.(m.id)}
+                className={`relative rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
                   chosen
                     ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_18px_rgba(0,243,255,0.25)]'
                     : unlocked
@@ -161,6 +167,7 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
                       : 'border-slate-800 bg-slate-950/70'
                 }`}
               >
+                {unlocked && isNew?.(m.id) && <NewTag />}
                 <StancePortrait stance={m.id} band={band} tier={tier} locked={!unlocked} />
                 <div className={`text-sm font-bold ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>
                   {!unlocked && <span aria-hidden="true">🔒 </span>}

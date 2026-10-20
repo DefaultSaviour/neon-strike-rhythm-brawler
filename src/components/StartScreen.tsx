@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { CountBadge } from './NewBadge';
 import { Play, Lock, Sliders, Clapperboard, Trophy } from 'lucide-react';
 import { STUDIO_ENABLED } from '../game/studioAccess';
 
@@ -15,6 +16,8 @@ interface StartScreenProps {
   heroLabel: string;
   unlockedHeroes: number;
   totalHeroes: number;
+  /** New unlocks not yet tapped on: a number badge on the Unlocks button */
+  newUnlocks?: number;
   oneButtonMode: boolean;
   /** A short message, e.g. "New stance unlocked: Robot!" */
   notice?: string | null;
@@ -35,6 +38,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   heroLabel,
   unlockedHeroes,
   totalHeroes,
+  newUnlocks = 0,
   oneButtonMode,
   notice,
 }) => {
@@ -91,6 +95,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                   {unlockedHeroes}/{totalHeroes}
                 </span>
               )}
+              {c.id === 'unlocks' && <CountBadge count={newUnlocks} className="absolute -top-2.5 -right-2.5" />}
             </button>
           );
           return button;

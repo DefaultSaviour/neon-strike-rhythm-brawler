@@ -10,6 +10,7 @@ import {
 } from '../game/backdrops';
 import type { LifetimeStats } from '../game/heroUnlocks';
 import { drawBackdropLayers } from './backdropArt';
+import { NewTag } from './NewBadge';
 
 /**
  * Build your backdrop: a live preview at the top, then a row of pieces for
@@ -30,6 +31,10 @@ interface BackdropScreenProps {
   adsOffNote?: string | null;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** Open but not yet tapped on: these wear a NEW tag */
+  isNew?: (id: string) => boolean;
+  /** The player tapped on a piece */
+  onSeen?: (id: string) => void;
   /** The Heroes / Stances / Backdrops tab bar, shown under the header */
   tabs?: React.ReactNode;
   onClose: () => void;
@@ -72,7 +77,7 @@ const BackdropCanvas: React.FC<{ pieces: Record<BackdropLayer, string>; animated
   return <canvas ref={ref} className={`${className ?? ''} ${dim ? 'opacity-30 grayscale' : ''}`} />;
 };
 
-export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, tabs, onClose }) => {
+export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, isNew, onSeen, tabs, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose();
@@ -139,12 +144,16 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
                       key={b.id}
                       type="button"
                       disabled={!unlocked || chosen}
-                      onClick={() => onSelect(layer, b.id)}
+                      onClick={() => {
+                        onSeen?.(b.id);
+                        onSelect(layer, b.id);
+                      }}
                       title={b.description}
-                      className={`flex flex-col rounded-lg border overflow-hidden text-left ${
+                      className={`relative flex flex-col rounded-lg border overflow-hidden text-left ${
                         chosen ? 'border-cyan-400 shadow-[0_0_12px_rgba(0,243,255,0.35)]' : unlocked ? 'border-slate-700 hover:border-cyan-400 cursor-pointer' : 'border-slate-800 cursor-default'
                       }`}
                     >
+                      {unlocked && isNew?.(b.id) && <NewTag />}
                       <BackdropCanvas pieces={{ ...selected, [layer]: b.id }} dim={!unlocked} closeUp className="w-full h-14" />
                       <div className="px-2 py-1.5 bg-slate-950/80">
                         <div className={`text-[11px] font-bold truncate ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>
