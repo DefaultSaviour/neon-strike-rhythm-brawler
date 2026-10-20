@@ -33,7 +33,7 @@ import {
 } from './platform/crazyGames';
 import { midgameAdDue } from './game/adPacing';
 import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from './game/enemyMotion';
-import { getHero, HeroId, HEROES } from './game/heroes';
+import { getHero, HeroId } from './game/heroes';
 import { adOffer, backdropLayerOf, describeUnlock, RunUnlock } from './game/runUnlocks';
 import { UnlockFanfare } from './components/UnlockFanfare';
 
@@ -558,8 +558,6 @@ export default function App() {
         <StartScreen
           onChoose={handleStartChoice}
           heroLabel={engine.hero.label}
-          unlockedHeroes={HEROES.filter((h) => engine.isHeroUnlocked(h.id)).length}
-          totalHeroes={HEROES.length}
           newUnlocks={unseen.hero.length + unseen.stance.length + unseen.backdrop.length}
           oneButtonMode={audioSettings.oneButtonMode}
           notice={menuNotice}
