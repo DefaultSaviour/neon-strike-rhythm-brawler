@@ -117,6 +117,17 @@ export const HUD: React.FC<HUDProps> = ({
 
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10">
+      {/* Practice: a big banner as the song starts, so nobody misses that it's practice */}
+      {practice && (
+        <div className="practice-banner absolute inset-x-0 top-[22%] flex flex-col items-center text-center px-4">
+          <div className="px-6 py-2 rounded-xl bg-amber-400 text-black text-2xl md:text-4xl font-black tracking-[0.25em] shadow-[0_0_40px_rgba(255,194,58,0.6)]">
+            PRACTICE
+          </div>
+          <div className="mt-2 text-sm md:text-base font-bold text-amber-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+            Getting hit won't end the song. Nothing counts toward unlocks.
+          </div>
+        </div>
+      )}
       {/* Top Header & Song Progress */}
       <div className="w-full max-w-4xl mx-auto flex flex-col gap-2 pointer-events-auto">
         <div className="flex items-center justify-between text-xs tracking-wider text-slate-300">
@@ -132,7 +143,7 @@ export const HUD: React.FC<HUDProps> = ({
               </span>
             </button>
             {practice && (
-              <span className="px-2 py-1 rounded bg-amber-400/15 border border-amber-400/60 text-amber-300 text-[10px] font-black tracking-[0.2em]">
+              <span className="px-3 py-1.5 rounded bg-amber-400 text-black text-xs font-black tracking-[0.2em] shadow-[0_0_14px_rgba(255,194,58,0.6)]">
                 PRACTICE
               </span>
             )}

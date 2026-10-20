@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Track, HighScoreRecord, AudioSettings } from '../types/game';
 import { PRELOADED_TRACKS, audioEngine } from '../audio/audioEngine';
-import { Play, Upload, Award, Sliders, Volume2, Sparkles, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
+import { Play, Upload, Award, Sliders, Volume2, Sparkles, AlertCircle, CheckCircle, Trash2, Shield } from 'lucide-react';
 
 interface TrackSelectModalProps {
   currentTrack: Track | null;
@@ -187,6 +187,19 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
                         </button>
                       )}
 
+                      {onPracticeTrack && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPracticeTrack(track);
+                          }}
+                          title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records"
+                          className="min-h-11 px-4 py-2 rounded font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer bg-amber-400/10 border border-amber-400/70 text-amber-300 hover:bg-amber-400/20"
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          <span>Practice</span>
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -331,8 +344,9 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
               <button
                 onClick={() => onPracticeTrack(currentTrack)}
                 title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records"
-                className="min-h-11 px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-400/60 text-amber-300 font-bold text-sm cursor-pointer"
+                className="min-h-11 px-6 py-2.5 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border-2 border-amber-400 text-amber-300 font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(255,194,58,0.3)] flex items-center gap-2 cursor-pointer"
               >
+                <Shield className="w-4 h-4" />
                 Practice
               </button>
             )}

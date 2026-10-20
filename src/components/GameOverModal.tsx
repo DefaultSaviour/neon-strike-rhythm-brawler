@@ -5,7 +5,7 @@ import type { RunProgress } from '../game/runProgress';
 import { getHero, HeroId } from '../game/heroes';
 import { HERO_UNLOCKS } from '../game/heroUnlocks';
 import { RunProgressBar } from './RunProgressBar';
-import { RotateCcw, Music, Trophy, Flame, Target, Home } from 'lucide-react';
+import { RotateCcw, Music, Trophy, Flame, Target, Home, Play } from 'lucide-react';
 
 interface GameOverModalProps {
   cleared: boolean;
@@ -41,6 +41,8 @@ interface GameOverModalProps {
   /** A practice run (nothing was saved), and how many hits were taken */
   practice?: boolean;
   practiceHits?: number;
+  /** After practice: play the same song for real (the main button then) */
+  onPlayForReal?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -63,7 +65,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   adOffer,
   practice = false,
   practiceHits = 0,
+  onPlayForReal,
 }) => {
+  const forReal = practice && onPlayForReal;
   const [pickedHero, setPickedHero] = React.useState<HeroId | null>(null);
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
   // Freeze the suggestion when the screen opens: once applied, the setting
@@ -297,13 +301,28 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* Action Buttons */}
         <div className="w-full flex flex-col gap-2.5">
+          {/* After practice, the main button is the real thing */}
+          {forReal && (
+            <button
+              onClick={onPlayForReal}
+              className="w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>Play for Real</span>
+            </button>
+          )}
           <button
             onClick={onRestart}
-            className="w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className={
+              forReal
+                ? 'w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-400/60 font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer'
+                : 'w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer'
+            }
           >
             <RotateCcw className="w-4 h-4" />
             <span>
-              Restart Song<span className="[@media(pointer:coarse)]:hidden"> (Press Space / R)</span>
+              {forReal ? 'Practice Again' : 'Restart Song'}
+              <span className="[@media(pointer:coarse)]:hidden"> (Press Space / R)</span>
             </span>
           </button>
 
