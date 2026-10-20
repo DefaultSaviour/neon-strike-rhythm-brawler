@@ -201,6 +201,8 @@ export interface AudioSettings {
   enemyMotion: EnemyMotionStyle;
   /** Which hero you play (see game/heroes.ts) */
   hero: HeroId;
+  /** The chosen backdrop pieces, one per layer (see game/backdrops); missing means the free piece */
+  backdrop?: Partial<Record<'sky' | 'skyline' | 'centre' | 'floor', string>>;
   /** Hit feedback sound */
   hitSound: HitSoundMode;
 }

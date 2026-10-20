@@ -11,6 +11,7 @@ import { Enemy } from '../types/game';
 import { enemyPoseFor } from '../game/customAnimation';
 import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
+import { drawBackdropLayers } from './backdropArt';
 import { drawFighter, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
@@ -85,7 +86,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       }
 
       // Screen-space backdrop (kept dim and distant so the fight stays readable)
-      drawBackdrop(ctx, layout, width, pulse);
+      drawBackdrop(ctx, layout, width, pulse, engine);
 
       // World space: everything in the fight is drawn in world units, scaled to fit the screen.
       ctx.save();
@@ -169,147 +170,22 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/**
- * DISTANT BACKDROP. Everything here is deliberately dim, small and hazy, so it
- * reads as far away and never competes with the fighters (a timing game has to
- * stay readable). Layers, back to front: sky glow, sun, skyline, haze, and a
- * perspective grid floor running from the horizon to the conveyors.
- */
-function drawBackdrop(ctx: CanvasRenderingContext2D, layout: ArenaLayout, width: number, pulse: number) {
-  const cx = layout.originX;
-  const hy = layout.horizonY;
-  const s = layout.scale;
-  const beltTop = layout.originY + (FLOOR_Y - FLOOR_BACK) * s;
-  const bass = audioEngine.bassMeter;
-
-  // Sky: deep gradient with a soft glow low on the horizon
-  const sky = ctx.createLinearGradient(0, 0, 0, hy);
-  sky.addColorStop(0, '#05060f');
-  sky.addColorStop(1, '#1a0b2e');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, width, hy);
-  const glow = ctx.createRadialGradient(cx, hy, 10, cx, hy, width * 0.6);
-  glow.addColorStop(0, `rgba(255, 0, 127, ${0.16 + bass * 0.08 + pulse * 0.05})`);
-  glow.addColorStop(1, 'rgba(255, 0, 127, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, hy);
-
-  // Small, dim sun far away
-  const sunR = (34 + pulse * 2) * s;
-  ctx.save();
-  ctx.globalAlpha = 0.55;
-  ctx.beginPath();
-  ctx.arc(cx, hy, sunR, Math.PI, 0);
-  ctx.closePath();
-  const sunGrad = ctx.createLinearGradient(0, hy - sunR, 0, hy);
-  sunGrad.addColorStop(0, '#ffe600');
-  sunGrad.addColorStop(0.55, '#ff007f');
-  sunGrad.addColorStop(1, '#7928ca');
-  ctx.fillStyle = sunGrad;
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#12082a';
-  for (let i = 1; i <= 5; i++) {
-    ctx.fillRect(cx - sunR - 2, hy - (sunR / 6) * i, sunR * 2 + 4, (0.8 + i * 0.5) * s * 0.6);
-  }
-  ctx.restore();
-
-  // City skyline silhouette on the horizon
-  drawSkyline(ctx, width, hy, s);
-
-  // Atmospheric haze: the horizon fades into fog
-  const haze = ctx.createLinearGradient(0, hy - 40 * s, 0, hy + 6 * s);
-  haze.addColorStop(0, 'rgba(26, 11, 46, 0)');
-  haze.addColorStop(1, 'rgba(46, 16, 70, 0.75)');
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, hy - 40 * s, width, 46 * s);
-
-  // Perspective grid floor from the horizon down to the conveyors
-  const floorGrad = ctx.createLinearGradient(0, hy, 0, beltTop);
-  floorGrad.addColorStop(0, '#120726');
-  floorGrad.addColorStop(1, '#070816');
-  ctx.fillStyle = floorGrad;
-  ctx.fillRect(0, hy, width, Math.max(0, beltTop - hy));
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, hy, width, Math.max(0, beltTop - hy));
-  ctx.clip();
-  const depth = beltTop - hy;
-  // Lines running into the distance, all meeting at the vanishing point
-  ctx.strokeStyle = `rgba(0, 243, 255, ${0.1 + pulse * 0.05})`;
-  ctx.lineWidth = 1;
-  for (let i = -24; i <= 24; i++) {
-    ctx.beginPath();
-    ctx.moveTo(cx + i * 6 * s, hy);
-    ctx.lineTo(cx + i * 80 * s, beltTop + depth);
-    ctx.stroke();
-  }
-  // Cross lines bunch up toward the horizon (perspective) and drift toward you on the beat grid
-  const drift = (performance.now() / 1000) * 0.35;
-  for (let k = 0; k < 14; k++) {
-    const t = ((k + (drift % 1)) / 14);
-    const y = hy + depth * t * t;
-    ctx.strokeStyle = `rgba(255, 0, 127, ${0.04 + t * 0.14})`;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  // Thin, soft horizon line
-  ctx.save();
-  ctx.strokeStyle = 'rgba(0, 243, 255, 0.45)';
-  ctx.shadowColor = '#00f3ff';
-  ctx.shadowBlur = 6 + pulse * 6;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, hy);
-  ctx.lineTo(width, hy);
-  ctx.stroke();
-  ctx.restore();
-
-  // Dark band just behind the conveyors so the fighters separate from the grid
-  const sep = ctx.createLinearGradient(0, beltTop - 30 * s, 0, beltTop);
-  sep.addColorStop(0, 'rgba(6, 7, 19, 0)');
-  sep.addColorStop(1, 'rgba(6, 7, 19, 0.6)');
-  ctx.fillStyle = sep;
-  ctx.fillRect(0, beltTop - 30 * s, width, 30 * s);
-}
-
-/** Skyline building shapes depend only on the screen size, so build them once and reuse. */
-let skylineCache: { key: string; buildings: Array<{ x: number; w: number; h: number; windows: Array<[number, number]> }> } | null =
-  null;
-
-function drawSkyline(ctx: CanvasRenderingContext2D, width: number, horizonY: number, s: number) {
-  const key = `${Math.round(width)}:${s.toFixed(3)}`;
-  if (!skylineCache || skylineCache.key !== key) {
-    let seed = 1337;
-    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const buildings: Array<{ x: number; w: number; h: number; windows: Array<[number, number]> }> = [];
-    for (let x = -10; x < width + 10; ) {
-      const w = (10 + rnd() * 22) * s;
-      // Taller towards the edges, leaving a gap around the sun in the middle
-      const edge = Math.abs(x + w / 2 - width / 2) / (width / 2);
-      const h = (6 + rnd() * 26 * (0.35 + edge)) * s;
-      const windows: Array<[number, number]> = [];
-      for (let k = 0; k < Math.floor(h / (6 * s)); k++) {
-        if (rnd() > 0.55) windows.push([x + rnd() * (w - 3 * s), horizonY - h + 3 * s + k * 6 * s]);
-      }
-      buildings.push({ x, w, h, windows });
-      x += w + rnd() * 4 * s;
-    }
-    skylineCache = { key, buildings };
-  }
-  ctx.save();
-  ctx.fillStyle = '#140a28';
-  for (const b of skylineCache.buildings) ctx.fillRect(b.x, horizonY - b.h, b.w, b.h);
-  ctx.fillStyle = 'rgba(255, 180, 255, 0.22)';
-  for (const b of skylineCache.buildings) {
-    for (const [wx, wy] of b.windows) ctx.fillRect(wx, wy, 1.6 * s, 1.6 * s);
-  }
-  ctx.restore();
+/** The distant backdrop: the player's chosen sky, centrepiece, skyline and floor (see backdropArt). */
+function drawBackdrop(ctx: CanvasRenderingContext2D, layout: ArenaLayout, width: number, pulse: number, engine: GameEngine) {
+  drawBackdropLayers(
+    {
+      ctx,
+      width,
+      cx: layout.originX,
+      hy: layout.horizonY,
+      s: layout.scale,
+      beltTop: layout.originY + (FLOOR_Y - FLOOR_BACK) * layout.scale,
+      pulse,
+      bass: audioEngine.bassMeter,
+      time: performance.now() / 1000,
+    },
+    engine.backdrop
+  );
 }
 
 // DUAL CONVERGING CONVEYOR FLOORS (world units):

@@ -30,6 +30,7 @@ import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, EnemyMotionStyle } from './e
 import { enemyPoseFor } from './customAnimation';
 import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
+import { activeBackdrop, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -145,7 +146,7 @@ export class GameEngine {
     // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
     // stripped from the published build (import.meta.env.DEV is false there).
     if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
-      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 0 };
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 1e9, backdropAds: 0 };
       this.devUnlockAll = true;
     }
     this.loadSettings();
@@ -195,6 +196,24 @@ export class GameEngine {
     this.lifetimeStats = { ...this.lifetimeStats, adUnlocks: this.lifetimeStats.adUnlocks + 1 };
     if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
     return stance;
+  }
+
+  /** The backdrop being drawn: the chosen pieces, any locked ones swapped for the free piece of that layer. */
+  public get backdrop(): Record<BackdropLayer, string> {
+    return activeBackdrop(this.settings.backdrop, this.lifetimeStats);
+  }
+
+  public isBackdropUnlocked(id: string): boolean {
+    return isBackdropUnlocked(id, this.lifetimeStats);
+  }
+
+  /** The player watched a rewarded ad: open the next backdrop piece now. Returns it, or null if they're all open. */
+  public unlockBackdropWithAd(): BackdropItem | null {
+    const next = nextBackdrop(this.lifetimeStats);
+    if (!next) return null;
+    this.lifetimeStats = { ...this.lifetimeStats, backdropAds: this.lifetimeStats.backdropAds + 1 };
+    if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
+    return next;
   }
 
   /** The player watched a rewarded ad for an ad-only hero: unlock them. Returns false if there was nothing to unlock. */
