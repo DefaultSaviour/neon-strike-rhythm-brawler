@@ -640,7 +640,7 @@ describe('The Stallion', () => {
   });
 
   it('is earned by completing 3 songs', () => {
-    const later = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: n, playSeconds: 0, adUnlocks: 0, heroAds: 0 });
+    const later = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: n, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0 });
     expect(isHeroUnlocked('stallion', later(2))).toBe(false);
     expect(isHeroUnlocked('stallion', later(3))).toBe(true);
   });
@@ -771,7 +771,7 @@ describe('The Kid', () => {
   });
 
   it('is earned by training for 30 minutes', () => {
-    const after = (s: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: s, adUnlocks: 0, heroAds: 0 });
+    const after = (s: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: s, adUnlocks: 0, heroAds: 0, totalScore: 0 });
     expect(isHeroUnlocked('kid', after(1799))).toBe(false);
     expect(isHeroUnlocked('kid', after(1800))).toBe(true);
   });
@@ -836,7 +836,7 @@ describe('The Spartan', () => {
   });
 
   it('is earned by defeating 300 enemies', () => {
-    const after = (n: number) => ({ enemiesDefeated: n, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0 });
+    const after = (n: number) => ({ enemiesDefeated: n, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0 });
     expect(isHeroUnlocked('spartan', after(299))).toBe(false);
     expect(isHeroUnlocked('spartan', after(300))).toBe(true);
   });
@@ -900,7 +900,7 @@ describe('The Disco King', () => {
   });
 
   it('is earned by landing 100 PERFECT hits', () => {
-    const after = (n: number) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0 });
+    const after = (n: number) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0 });
     expect(isHeroUnlocked('discoKing', after(99))).toBe(false);
     expect(isHeroUnlocked('discoKing', after(100))).toBe(true);
   });
@@ -974,7 +974,7 @@ describe('The Bride', () => {
   });
 
   it('is earned by completing 3 songs, or straight away by watching one rewarded ad', () => {
-    const after = (songs: number, ads = 0) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: songs, playSeconds: 0, adUnlocks: 0, heroAds: ads });
+    const after = (songs: number, ads = 0) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: songs, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0 });
     expect(isHeroUnlocked('bride', after(2))).toBe(false);
     expect(isHeroUnlocked('bride', after(3))).toBe(true);
     expect(isHeroUnlocked('bride', after(0, 1))).toBe(true);

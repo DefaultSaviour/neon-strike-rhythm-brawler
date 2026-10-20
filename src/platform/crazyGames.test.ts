@@ -26,6 +26,9 @@ function fakeSdk(environment: 'crazygames' | 'local' | 'disabled', adError?: str
       settings: { muteAudio: true },
       addSettingsChangeListener: () => calls.push('listen'),
     },
+    user: {
+      submitScore: (sub: { encryptedScore: string; score: number }) => void calls.push(`submitScore ${sub.score} ${sub.encryptedScore.length > 20}`),
+    },
     data: {
       getItem: (k: string) => data.get(k) ?? null,
       setItem: (k: string, v: string) => void data.set(k, v),
@@ -115,6 +118,27 @@ describe('the CrazyGames wrapper', () => {
     await other.initCrazyGames();
     other.happytime();
     expect(off.calls).not.toContain('happytime');
+  });
+
+  it('encrypts a score so that it decrypts back with the same key (AES-GCM, IV in front)', async () => {
+    const cg = await wrapper();
+    const keyB64 = btoa(String.fromCharCode(...new Uint8Array(32).map((_, i) => i * 7)));
+    const packed = Uint8Array.from(atob(await cg.encryptScore(48250, keyB64)), (c) => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey('raw', Uint8Array.from(atob(keyB64), (c) => c.charCodeAt(0)), 'AES-GCM', false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: packed.slice(0, 12) }, key, packed.slice(12));
+    expect(new TextDecoder().decode(plain)).toBe('48250');
+  });
+
+  it('sends a score to the leaderboard only with a key and only where the SDK is live', async () => {
+    const keyB64 = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
+    const live = fakeSdk('crazygames');
+    const cg = await wrapper();
+    await cg.submitLeaderboardScore(48250.4, keyB64);
+    await cg.submitLeaderboardScore(1000, undefined);
+    expect(live.calls.filter((c) => c.startsWith('submitScore'))).toEqual(['submitScore 48250 true']);
+    const off = fakeSdk('disabled');
+    await (await wrapper()).submitLeaderboardScore(5, keyB64);
+    expect(off.calls).toEqual([]);
   });
 
   it('detects an ad blocker', async () => {

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Lock, Sliders, Clapperboard, Users } from 'lucide-react';
+import { Play, Lock, Sliders, Clapperboard, Trophy, Users } from 'lucide-react';
 
 /**
  * The title screen: the game's name and five big choices. Works with the
  * mouse, a tap, or the keyboard (Up / Down to move, Enter or Space to pick).
  */
 
-export type StartChoice = 'newGame' | 'unlocks' | 'stances' | 'options' | 'studio';
+export type StartChoice = 'newGame' | 'unlocks' | 'stances' | 'records' | 'options' | 'studio';
 
 interface StartScreenProps {
   onChoose: (choice: StartChoice) => void;
@@ -28,6 +28,7 @@ const CHOICES: Array<{ id: StartChoice; label: string; icon: React.ReactNode }> 
   { id: 'newGame', label: 'New Game', icon: <Play className="w-5 h-5 fill-current" /> },
   { id: 'unlocks', label: 'Unlocks', icon: <Lock className="w-5 h-5" /> },
   { id: 'stances', label: 'Stances', icon: <Users className="w-5 h-5" /> },
+  { id: 'records', label: 'Records', icon: <Trophy className="w-5 h-5" /> },
   { id: 'options', label: 'Options', icon: <Sliders className="w-5 h-5" /> },
   { id: 'studio', label: 'Pose Studio', icon: <Clapperboard className="w-5 h-5" /> },
 ];

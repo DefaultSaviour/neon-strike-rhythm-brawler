@@ -182,6 +182,7 @@ export interface GameScoreState {
 export interface HighScoreRecord {
   trackId: string;
   highScore: number;
+  /** The longest combo ever on this song (kept even when a later run beats the score with a shorter one) */
   maxCombo: number;
   accuracy: number;
   grade: 'SSS' | 'SS' | 'S' | 'A' | 'B' | 'C' | 'D';

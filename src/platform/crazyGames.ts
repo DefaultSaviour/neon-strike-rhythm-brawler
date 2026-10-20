@@ -14,6 +14,7 @@
  * - the muteAudio setting, which overrides the game's own volume
  * - rewarded ads, and adblock detection so ad buttons never sit there doing nothing
  * - midgame ads at the end of a song (paced by adPacing), and a celebration when a hero unlocks
+ * - the leaderboard: the best single-song score (once CrazyGames invites the game)
  * - the data module on CrazyGames, so progress follows the player's account
  */
 
@@ -45,6 +46,9 @@ interface CrazySdk {
     addSettingsChangeListener?: (listener: (settings: GameSettings) => void) => void;
   };
   data?: StorageLike;
+  user?: {
+    submitScore?: (submission: { encryptedScore: string; score: number }) => void;
+  };
 }
 
 function sdk(): CrazySdk | undefined {
@@ -207,6 +211,43 @@ export async function showMidgameAd(onPause: () => void, onResume: () => void): 
 export function happytime() {
   const g = game();
   if (g?.happytime) safely(() => g.happytime!());
+}
+
+/**
+ * The leaderboard's encryption key, from the CrazyGames Developer Portal
+ * (Leaderboard settings). Leaderboards are invite-only: until CrazyGames
+ * invites the game there's no key, and scores simply aren't sent. Set it in
+ * a `.env` file as VITE_CRAZYGAMES_LEADERBOARD_KEY=... before building.
+ */
+const LEADERBOARD_KEY: string | undefined = import.meta.env?.VITE_CRAZYGAMES_LEADERBOARD_KEY;
+
+/** Encrypt a score the way CrazyGames asks: AES-GCM with the base64 key, a random 12-byte IV in front, all base64. */
+export async function encryptScore(score: number, keyBase64: string): Promise<string> {
+  const keyBytes = Uint8Array.from(atob(keyBase64), (c) => c.charCodeAt(0));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const algorithm = { name: 'AES-GCM', iv };
+  const key = await crypto.subtle.importKey('raw', keyBytes, algorithm, false, ['encrypt']);
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt(algorithm, key, new TextEncoder().encode(String(score))));
+  const combined = new Uint8Array(iv.length + encrypted.length);
+  combined.set(iv);
+  combined.set(encrypted, iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+/**
+ * Send a score to the CrazyGames leaderboard (it ranks the best single-song
+ * score). Does nothing without a leaderboard key or off CrazyGames.
+ */
+export async function submitLeaderboardScore(score: number, key = LEADERBOARD_KEY) {
+  if (!key || !(await initCrazyGames())) return;
+  const user = sdk()?.user;
+  if (!user?.submitScore) return;
+  try {
+    const encryptedScore = await encryptScore(Math.round(score), key);
+    user.submitScore({ encryptedScore, score: Math.round(score) });
+  } catch {
+    // A bad key or a missing crypto API must never break the game.
+  }
 }
 
 /** The browser's own storage, or nothing when it won't allow it (some privacy modes throw just for touching it). */
