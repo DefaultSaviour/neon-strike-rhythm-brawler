@@ -75,8 +75,8 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-amber-400/30 rounded-xl shadow-[0_0_40px_rgba(255,194,58,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-amber-400/30 rounded-xl shadow-[0_0_40px_rgba(255,194,58,0.15)] flex flex-col overflow-hidden h-[min(92vh,880px)]">
+        <div className="flex items-center justify-between px-6 py-4 min-h-[128px] sm:min-h-[112px] lg:min-h-[88px] border-b border-slate-800 bg-slate-900/50">
           <div>
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-500 to-cyan-400">
               UNLOCKS
@@ -102,7 +102,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
             {notice}
           </div>
         )}
-        <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex-1 min-h-0 content-start p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {heroes.map((h) => {
             const unlocked = isUnlocked(h.id);
             const progress = unlockProgress(h.id, stats);

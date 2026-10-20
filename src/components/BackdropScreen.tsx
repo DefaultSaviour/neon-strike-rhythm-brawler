@@ -87,8 +87,8 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-cyan-400/30 rounded-xl shadow-[0_0_40px_rgba(0,243,255,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-cyan-400/30 rounded-xl shadow-[0_0_40px_rgba(0,243,255,0.15)] flex flex-col overflow-hidden h-[min(92vh,880px)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 min-h-[128px] sm:min-h-[112px] lg:min-h-[88px] border-b border-slate-800 bg-slate-900/50">
           <div>
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-pink-500 to-amber-300">BACKDROP</div>
             <div className="text-xs text-slate-400">Mix your own: a sky, a skyline, a centrepiece and a floor. New pieces open as your total score grows.</div>
@@ -124,7 +124,7 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
           </div>
         )}
 
-        <div className="p-4 md:p-6 overflow-y-auto flex flex-col gap-4">
+        <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto flex flex-col gap-4">
           <BackdropCanvas pieces={selected} animated className="w-full h-36 md:h-48 rounded-lg border border-slate-700" />
 
           {BACKDROP_LAYERS.map(({ layer, label }) => (
