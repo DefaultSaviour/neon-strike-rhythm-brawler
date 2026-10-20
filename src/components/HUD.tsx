@@ -117,7 +117,7 @@ export const HUD: React.FC<HUDProps> = ({
 
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10">
-      {/* Practice: a big banner as the song starts, so nobody misses that it's practice */}
+      {/* Practice: a big banner, up the whole song, so nobody misses that it's practice */}
       {practice && (
         <div className="practice-banner absolute inset-x-0 top-[22%] flex flex-col items-center text-center px-4">
           <div className="px-6 py-2 rounded-xl bg-amber-400 text-black text-2xl md:text-4xl font-black tracking-[0.25em] shadow-[0_0_40px_rgba(255,194,58,0.6)]">
