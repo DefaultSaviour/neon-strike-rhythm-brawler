@@ -25,9 +25,11 @@ export interface LifetimeStats {
   adUnlocks: number;
   /** Rewarded ads watched to unlock the ad hero (The Bride) early */
   heroAds: number;
+  /** Every song's score added together (the Records screen's Total Score) */
+  totalScore: number;
 }
 
-export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0 };
+export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0 };
 
 export interface UnlockGoal {
   stat: keyof LifetimeStats;
@@ -81,6 +83,8 @@ export interface RunResult {
   cleared: boolean;
   /** How long the song was played for */
   seconds: number;
+  /** The run's final score */
+  score: number;
 }
 
 export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
@@ -92,6 +96,7 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     playSeconds: stats.playSeconds + Math.max(0, run.seconds),
     adUnlocks: stats.adUnlocks,
     heroAds: stats.heroAds,
+    totalScore: stats.totalScore + Math.max(0, run.score),
   };
 }
 
@@ -117,6 +122,7 @@ export function loadStats(store: Pick<Storage, 'getItem'> | undefined): Lifetime
       playSeconds: num(parsed.playSeconds),
       adUnlocks: num(parsed.adUnlocks),
       heroAds: num(parsed.heroAds),
+      totalScore: num(parsed.totalScore),
     };
   } catch {
     return { ...EMPTY_STATS };

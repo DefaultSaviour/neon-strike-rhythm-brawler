@@ -20,6 +20,7 @@ Launch (ads and revenue only start then).
 | SDK: loading start/stop | Full (optional) | Done, around loading a song |
 | SDK: `muteAudio` setting overrides the game's volume | Full | Done (`audioEngine.setPlatformMuted`) |
 | SDK: data module for progress, so it follows the account | Full | Done: lifetime totals, settings and high scores go through `progressStore()` on CrazyGames. **Pick "Yes, using the Data Module" in the submission form**, or it stays switched off |
+| SDK: leaderboard (invite-only, one per game) | Optional | Ready: ranks the best single-song score; scores are sent encrypted when a song sets a new best. **Once invited: set the board to POINTS, sorted high-to-low, and put its Encryption Key in `.env` as `VITE_CRAZYGAMES_LEADERBOARD_KEY` before building.** The game's own Records screen has three tabs (best song, total score, biggest combo) |
 
 ## Gameplay
 

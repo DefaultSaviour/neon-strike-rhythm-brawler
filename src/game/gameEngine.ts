@@ -145,7 +145,7 @@ export class GameEngine {
     // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
     // stripped from the published build (import.meta.env.DEV is false there).
     if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
-      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9 };
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 0 };
       this.devUnlockAll = true;
     }
     this.loadSettings();
@@ -221,6 +221,7 @@ export class GameEngine {
       maxCombo: s.maxCombo,
       cleared,
       seconds: this.songTime,
+      score: s.score,
     });
     this.newUnlocks = newlyUnlocked(
       HEROES.map((h) => h.id),
@@ -895,7 +896,12 @@ export class GameEngine {
       const prevBest: HighScoreRecord | undefined = current[this.track.id];
 
       if (!prevBest || record.highScore > prevBest.highScore) {
-        current[this.track.id] = record;
+        // A new best run, keeping the song's best combo even if this run's was lower
+        current[this.track.id] = { ...record, maxCombo: Math.max(record.maxCombo, prevBest?.maxCombo ?? 0) };
+        progressStore()?.setItem(key, JSON.stringify(current));
+      } else if (record.maxCombo > prevBest.maxCombo) {
+        // Not a better score, but a longer combo: the song's best combo is kept on its own
+        current[this.track.id] = { ...prevBest, maxCombo: record.maxCombo };
         progressStore()?.setItem(key, JSON.stringify(current));
       }
     } catch {}

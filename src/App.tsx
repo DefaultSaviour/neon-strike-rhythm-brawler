@@ -14,6 +14,8 @@ import { StartChoice, StartScreen } from './components/StartScreen';
 import { UnlocksScreen } from './components/UnlocksScreen';
 import { OptionsScreen } from './components/OptionsScreen';
 import { StancesScreen } from './components/StancesScreen';
+import { RecordsScreen } from './components/RecordsScreen';
+import { bestSongScore, songRecords } from './game/records';
 import {
   followMuteSetting,
   happytime,
@@ -24,6 +26,7 @@ import {
   RewardedResult,
   setGameplayActive,
   showMidgameAd,
+  submitLeaderboardScore,
   showRewardedAd,
 } from './platform/crazyGames';
 import { midgameAdDue } from './game/adPacing';
@@ -56,7 +59,7 @@ export default function App() {
   const [showTrackSelect, setShowTrackSelect] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
   /** A screen opened from the title menu */
-  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'stances' | 'options' | null>(null);
+  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'stances' | 'records' | 'options' | null>(null);
   /** Rewarded ads can be shown here (CrazyGames, or its local test mode) */
   const [adAvailable, setAdAvailable] = useState(false);
   const [adBusy, setAdBusy] = useState(false);
@@ -215,6 +218,7 @@ export default function App() {
     initCrazyGames().then(async (live) => {
       engine.reloadProgress();
       playSecondsAtLastAd.current = engine.lifetimeStats.playSeconds;
+      bestSongAtStart.current = bestSongScore(engine.getAllHighScores());
       setAudioSettings({ ...engine.settings });
       refreshHighScores();
       followMuteSetting((muted) => audioEngine.setPlatformMuted(muted));
@@ -230,8 +234,16 @@ export default function App() {
   // (see adPacing). The results screen waits behind the ad. Unlocking a hero makes the
   // CrazyGames site celebrate, after any ad.
   const playSecondsAtLastAd = useRef(engine.lifetimeStats.playSeconds);
+  /** The best single-song score already sent to the leaderboard (or saved before this visit) */
+  const bestSongAtStart = useRef(bestSongScore(engine.getAllHighScores()));
   useEffect(() => {
     if (gameStatus !== 'GAME_OVER' && gameStatus !== 'CLEARED') return;
+    // A new best single-song score goes to the CrazyGames leaderboard
+    const best = bestSongScore(engine.getAllHighScores());
+    if (best > bestSongAtStart.current) {
+      bestSongAtStart.current = best;
+      void submitLeaderboardScore(best);
+    }
     const unlockedHero = engine.newUnlocks.length > 0;
     if (!midgameAdDue(engine.lifetimeStats.playSeconds, playSecondsAtLastAd.current, AD_TEST ? 0 : undefined)) {
       if (unlockedHero) happytime();
@@ -483,6 +495,14 @@ export default function App() {
           onWatchAd={adAvailable ? handleWatchHeroAd : undefined}
           adBusy={adBusy}
           notice={menuNotice}
+          onClose={closeMenuScreen}
+        />
+      )}
+
+      {menuScreen === 'records' && (
+        <RecordsScreen
+          stats={engine.lifetimeStats}
+          songs={songRecords(highScores, [...PRELOADED_TRACKS, ...customTracks])}
           onClose={closeMenuScreen}
         />
       )}
