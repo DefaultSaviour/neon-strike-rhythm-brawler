@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, HERO_BUILDS, meatHooks, sawBarTip, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, HERO_BUILDS, meatHooks, poleEnds, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -301,5 +301,30 @@ describe('hero builds', () => {
     calls.length = 0;
     applyHeroBuild(ctx, 'bride', 1, true);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("The Scarecrow's pole and brain", () => {
+  const sc = getHero('scarecrow');
+
+  it('every pole hit lands at the end of the pole', () => {
+    for (const m of sc.moves) {
+      for (const k of m.sequence!) {
+        // The vault kick lands with his feet, not the pole
+        if (!k.trail || k.prop !== 'pole' || m.name === 'Pole Vault Kick') continue;
+        expect(dist(poleEnds(keyToPlayerPose(k), 1).tip, k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+  });
+
+  it('his brain glows in the top of his head, with sparks of genius round it, both ways round', () => {
+    for (const facing of [1, -1] as const) {
+      const { brain, sparks } = scarecrowBrain(sc.idlePose, 0, facing);
+      expect(brain.y).toBeLessThan(sc.idlePose.head.y);
+      expect(Math.abs(brain.x - sc.idlePose.head.x)).toBeLessThan(3);
+      expect(sparks.length).toBeGreaterThanOrEqual(3);
+      expect(sparks.length).toBeLessThanOrEqual(5); // sparse
+    }
+    expect(scarecrowBrain(sc.idlePose, 0.4, 1).sparks[0].x).not.toBeCloseTo(scarecrowBrain(sc.idlePose, 0, 1).sparks[0].x, 1);
   });
 });

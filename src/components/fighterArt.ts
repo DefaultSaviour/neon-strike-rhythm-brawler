@@ -88,6 +88,9 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     else if (opts.hero === 'sawFace') {
       /* his meat hooks are part of the stage, drawn behind everything (NeonCanvas) */
     }
+    else if (opts.hero === 'scarecrow') {
+      /* his brain glows in the top of his head, drawn with his outfit */
+    }
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -188,6 +191,7 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'sawFace') drawSawFaceOutfit(ctx, pose, opts.facing, opts.time);
+  if (opts.hero === 'scarecrow') drawScarecrowOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
   if (tier.ascended && opts.hero === 'bride') {
     drawBrideHelmet(ctx, pose, opts.facing);
     drawBlossomStorm(ctx, pose, opts.time, 'front');
@@ -208,8 +212,8 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     drawSleepyEyes(ctx, pose, opts.facing);
   } else if (opts.hero === 'spartan' && tier.ascended) {
     // His closed battle helmet has its own glowing eye slits
-  } else if (opts.hero === 'sawFace') {
-    // He looks out through the eye hole in his mask
+  } else if (opts.hero === 'sawFace' || opts.hero === 'scarecrow') {
+    // They look out through their masks (Saw Face's eye hole, the Scarecrow's sack)
   } else {
     ctx.fillStyle = tier.visorColor;
     ctx.shadowColor = tier.visorColor;
@@ -1842,6 +1846,278 @@ function drawSawFaceOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: n
   ctx.moveTo(back.x, back.y);
   ctx.lineTo(rear.hand.x, rear.hand.y);
   ctx.stroke();
+  ctx.restore();
+}
+
+/** How far The Scarecrow's pole reaches past his lead hand (matches his pole hits, see scarecrow.ts), and back past it. */
+const POLE_FRONT = 44;
+const POLE_BACK = 30;
+
+/** The two ends of The Scarecrow's pole: it lies along his lead forearm. */
+export function poleEnds(pose: SkeletonPose, facing: 1 | -1) {
+  const { lead } = arms(pose, facing);
+  const { dir, muzzle } = weaponAt(lead.hand, lead.elbow, POLE_FRONT);
+  return { tip: muzzle, back: { x: lead.hand.x - dir.x * POLE_BACK, y: lead.hand.y - dir.y * POLE_BACK } };
+}
+
+/**
+ * The Scarecrow's top-level form: he gets a brain. It sits glowing in the
+ * open top of his sack head, his hat lifted off it like a lid, with a few
+ * sparks of genius crackling round it.
+ */
+export function scarecrowBrain(pose: SkeletonPose, time: number, facing: 1 | -1) {
+  const h = pose.head;
+  const brain = { x: h.x - facing * 0.5, y: h.y - 11, r: 7.5, glow: 0.7 + Math.sin(time * 5) * 0.3 };
+  const sparks = Array.from({ length: 4 }, (_, i) => {
+    const a = time * 2.2 + (i / 4) * Math.PI * 2;
+    const r = 14 + Math.sin(time * 7 + i * 2) * 2.5;
+    return { x: brain.x + Math.cos(a) * r, y: brain.y - 3 + Math.sin(a) * r * 0.7, size: 2 + ((i + Math.floor(time * 6)) % 2) };
+  });
+  return { brain, sparks };
+}
+
+/** A tuft of straw sticking out at `at`, fanning round the direction `dir` (radians). */
+function strawTuft(ctx: Ctx, at: Point2D, dir: number, count = 5, length = 6) {
+  ctx.beginPath();
+  for (let i = 0; i < count; i++) {
+    const a = dir + (i - (count - 1) / 2) * 0.32;
+    const l = length * (0.75 + ((i * 37) % 10) / 30);
+    ctx.moveTo(at.x, at.y);
+    ctx.lineTo(at.x + Math.cos(a) * l, at.y + Math.sin(a) * l);
+  }
+  ctx.stroke();
+}
+
+/** Straw bursting out of whatever he just hit, at the end of the hit's trail (drawn with the hit effect). */
+export function drawStrawBurst(ctx: Ctx, pose: SkeletonPose) {
+  const end = pose.bladeSlash?.end;
+  if (!end) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#f2c94c';
+  ctx.shadowColor = '#f2c94c';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.3;
+    const r0 = 4 + (i % 3) * 2;
+    const r1 = r0 + 7 + ((i * 5) % 4);
+    ctx.moveTo(end.x + Math.cos(a) * r0, end.y + Math.sin(a) * r0);
+    ctx.lineTo(end.x + Math.cos(a + 0.25) * r1, end.y + Math.sin(a + 0.25) * r1);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** His floppy pointed hat: a wide brim, and a cone that slumps over backwards. */
+function drawScarecrowHat(ctx: Ctx, at: Point2D, facing: 1 | -1) {
+  const back = -facing;
+  ctx.fillStyle = '#5a4527';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(at.x - 8, at.y);
+  ctx.quadraticCurveTo(at.x + back * 2, at.y - 20, at.x + back * 10, at.y - 18);
+  ctx.quadraticCurveTo(at.x + back * 15, at.y - 16, at.x + back * 13, at.y - 11);
+  ctx.quadraticCurveTo(at.x + back * 6, at.y - 12, at.x + 8, at.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(at.x, at.y, 14, 3.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // A straw band round it
+  ctx.strokeStyle = '#d9b44a';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(at.x - 7.5, at.y - 2);
+  ctx.lineTo(at.x + 7.5, at.y - 2);
+  ctx.stroke();
+}
+
+/**
+ * The Scarecrow: a burlap sack head with a stitched smile and button-dark
+ * eyes, a floppy pointed hat, a patched blue shirt with a rope belt, straw
+ * poking out at his collar, cuffs and boots, and (when he has it) the
+ * wooden pole. In his top-level form the hat lifts off and his new brain
+ * glows in the top of his head.
+ */
+function drawScarecrowOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number, brainy: boolean) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const down = { x: sx / sl, y: sy / sl };
+  const nx = -down.y;
+  const ny = down.x;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // The pole, behind his hands
+  if (pose.prop === 'pole') {
+    const { tip, back } = poleEnds(pose, facing);
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 5.5;
+    ctx.beginPath();
+    ctx.moveTo(back.x, back.y);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+    ctx.strokeStyle = '#a0703a';
+    ctx.shadowColor = '#c9925a';
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = 3.2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // Patched blue shirt over the torso
+  ctx.fillStyle = '#4f72a8';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#6f94cc';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 9.5, c.y + ny * 9.5);
+  ctx.lineTo(c.x - nx * 9.5, c.y - ny * 9.5);
+  ctx.lineTo(p.x - nx * 7.5, p.y - ny * 7.5);
+  ctx.lineTo(p.x + nx * 7.5, p.y + ny * 7.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // A red patch, stitched on
+  const patch = { x: c.x + down.x * 13 + nx * 2.5 * facing, y: c.y + down.y * 13 + ny * 2.5 * facing };
+  ctx.fillStyle = '#c0504d';
+  ctx.beginPath();
+  ctx.moveTo(patch.x - 3.5, patch.y - 3.5);
+  ctx.lineTo(patch.x + 3.5, patch.y - 3);
+  ctx.lineTo(patch.x + 3, patch.y + 3.5);
+  ctx.lineTo(patch.x - 3.5, patch.y + 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#f2e6c8';
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([1.2, 1.2]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Rope belt
+  ctx.strokeStyle = '#b58a4a';
+  ctx.lineWidth = 2.2;
+  const belt = { x: p.x - down.x * 4, y: p.y - down.y * 4 };
+  ctx.beginPath();
+  ctx.moveTo(belt.x + nx * 8, belt.y + ny * 8);
+  ctx.lineTo(belt.x - nx * 8, belt.y - ny * 8);
+  ctx.stroke();
+
+  // Straw at the cuffs, the boots and the collar
+  ctx.strokeStyle = '#f2c94c';
+  ctx.shadowColor = '#f2c94c';
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 1.3;
+  for (const [joint, end] of [
+    [pose.leftElbow, pose.leftHand],
+    [pose.rightElbow, pose.rightHand],
+    [pose.leftKnee, pose.leftFoot],
+    [pose.rightKnee, pose.rightFoot],
+  ] as const) {
+    strawTuft(ctx, end, Math.atan2(end.y - joint.y, end.x - joint.x), 5, 6);
+  }
+  const neck = { x: c.x - down.x * 3, y: c.y - down.y * 3 };
+  strawTuft(ctx, { x: neck.x + nx * 5, y: neck.y + ny * 5 }, Math.atan2(-down.y + ny * 0.8, -down.x + nx * 0.8), 3, 5);
+  strawTuft(ctx, { x: neck.x - nx * 5, y: neck.y - ny * 5 }, Math.atan2(-down.y - ny * 0.8, -down.x - nx * 0.8), 3, 5);
+  ctx.shadowBlur = 0;
+
+  // The sack head: burlap, a stitched smile and two dark triangle eyes
+  const h = pose.head;
+  ctx.fillStyle = '#d4b483';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#d4b483';
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 9.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#1a1208';
+  for (const ex of [2.5, 7]) {
+    const e = { x: h.x + facing * ex, y: h.y - 2 };
+    ctx.beginPath();
+    ctx.moveTo(e.x - 1.8, e.y - 1.2);
+    ctx.lineTo(e.x + 1.8, e.y - 1.2);
+    ctx.lineTo(e.x, e.y + 1.8);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#3a2410';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 0.5, h.y + 3.5);
+  ctx.quadraticCurveTo(h.x + facing * 5, h.y + 7.5, h.x + facing * 9, h.y + 3);
+  for (let i = 0; i < 4; i++) {
+    const t = 0.15 + i * 0.23;
+    const sxp = h.x + facing * (0.5 + t * 8.5);
+    const syp = h.y + 3.5 + Math.sin(t * Math.PI) * 3.3;
+    ctx.moveTo(sxp, syp - 1.4);
+    ctx.lineTo(sxp, syp + 1.4);
+  }
+  ctx.stroke();
+
+  const hatAt = { x: h.x - facing * 0.5, y: h.y - 7.5 };
+  if (brainy) {
+    const { brain, sparks } = scarecrowBrain(pose, time, facing);
+    // The brain, pink and glowing, with its folds
+    ctx.save();
+    ctx.fillStyle = '#ff9fd0';
+    ctx.strokeStyle = '#7a2350';
+    ctx.lineWidth = 1;
+    ctx.shadowColor = '#ff6fbf';
+    ctx.shadowBlur = 10 + brain.glow * 10;
+    ctx.beginPath();
+    ctx.ellipse(brain.x, brain.y, brain.r, brain.r * 0.72, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(brain.x, brain.y - brain.r * 0.7);
+    ctx.lineTo(brain.x, brain.y + brain.r * 0.6);
+    for (const [ox, oy] of [
+      [-4.5, -1.5],
+      [-3, 2],
+      [3.5, -2],
+      [4, 2],
+    ]) {
+      ctx.moveTo(brain.x + ox - 1.6, brain.y + oy);
+      ctx.quadraticCurveTo(brain.x + ox, brain.y + oy - 2, brain.x + ox + 1.6, brain.y + oy);
+    }
+    ctx.stroke();
+    // Sparks of genius
+    ctx.fillStyle = '#fff3a8';
+    ctx.shadowColor = '#ffe14f';
+    ctx.shadowBlur = 8;
+    for (const s of sparks) {
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y - s.size * 1.6);
+      ctx.lineTo(s.x + s.size * 0.5, s.y);
+      ctx.lineTo(s.x, s.y + s.size * 1.6);
+      ctx.lineTo(s.x - s.size * 0.5, s.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    // The hat lifted right off, tipped back like an opened lid
+    ctx.save();
+    ctx.translate(hatAt.x - facing * 5, hatAt.y - 17);
+    ctx.rotate(-facing * 0.35);
+    drawScarecrowHat(ctx, { x: 0, y: 0 }, facing);
+    ctx.restore();
+  } else {
+    drawScarecrowHat(ctx, hatAt, facing);
+  }
   ctx.restore();
 }
 

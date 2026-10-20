@@ -3,7 +3,7 @@ import { AttackMove, Point2D, SkeletonPose } from '../types/game';
 import { ATTACK_MOVES, getMoveForCombo, getOrientedPose } from './animations';
 import { LIMB } from './enemyMotion';
 import { DEFAULT_HERO, getHero, HEROES } from './heroes';
-import { isHeroUnlocked } from './heroUnlocks';
+import { EMPTY_STATS, isHeroUnlocked } from './heroUnlocks';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
 import { SAW_FACE_POSE_EDITS } from './heroMoves/sawFacePoses';
 import { COMBO_SNAP_SEC, comboDuration, comboFrame } from './combo';
@@ -649,7 +649,7 @@ describe('The Stallion', () => {
   });
 
   it('is earned by completing 5 songs', () => {
-    const later = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: n, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const later = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: n, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 });
     expect(isHeroUnlocked('stallion', later(4))).toBe(false);
     expect(isHeroUnlocked('stallion', later(5))).toBe(true);
   });
@@ -780,7 +780,7 @@ describe('The Kid', () => {
   });
 
   it('is earned by training for 30 minutes', () => {
-    const after = (s: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: s, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (s: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: s, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 });
     expect(isHeroUnlocked('kid', after(1799))).toBe(false);
     expect(isHeroUnlocked('kid', after(1800))).toBe(true);
   });
@@ -845,7 +845,7 @@ describe('The Spartan', () => {
   });
 
   it('is earned by reaching a 300 combo (300 Spartans)', () => {
-    const after = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: n, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (n: number) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: n, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 });
     expect(isHeroUnlocked('spartan', after(299))).toBe(false);
     expect(isHeroUnlocked('spartan', after(300))).toBe(true);
   });
@@ -909,7 +909,7 @@ describe('The Disco King', () => {
   });
 
   it('is earned by landing 2,500 PERFECT hits', () => {
-    const after = (n: number) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (n: number) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 });
     expect(isHeroUnlocked('discoKing', after(2499))).toBe(false);
     expect(isHeroUnlocked('discoKing', after(2500))).toBe(true);
   });
@@ -983,7 +983,7 @@ describe('The Bride', () => {
   });
 
   it('is earned by completing 8 songs, or straight away by watching one rewarded ad', () => {
-    const after = (songs: number, ads = 0) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: songs, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (songs: number, ads = 0) => ({ enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: songs, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 });
     expect(isHeroUnlocked('bride', after(7))).toBe(false);
     expect(isHeroUnlocked('bride', after(8))).toBe(true);
     expect(isHeroUnlocked('bride', after(0, 1))).toBe(true);
@@ -1069,9 +1069,84 @@ describe('Saw Face', () => {
   });
 
   it('is earned by landing 666 PERFECT hits, with no ad shortcut', () => {
-    const after = (n: number, ads = 0) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 });
+    const after = (n: number, ads = 0) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 });
     expect(isHeroUnlocked('sawFace', after(665))).toBe(false);
     expect(isHeroUnlocked('sawFace', after(666))).toBe(true);
     expect(isHeroUnlocked('sawFace', after(0, 1))).toBe(false);
+  });
+});
+
+describe('The Scarecrow', () => {
+  const GRIP_GAP = 16;
+  const sc = getHero('scarecrow');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(sc.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => sc.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(sc.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [sc.idlePose, ...sc.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of sc.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of sc.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of sc.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('slumps in his stance, arms hanging down like empty sleeves', () => {
+    const idle = sc.idlePose;
+    expect(idle.leftHand.y).toBeGreaterThan(idle.chest.y + 10);
+    expect(idle.rightHand.y).toBeGreaterThan(idle.chest.y + 10);
+  });
+
+  it('swings his pole two-handed, and only in the pole moves', () => {
+    const poleMoves = sc.moves.filter((m) => m.sequence!.some((k) => k.prop === 'pole'));
+    expect(poleMoves.length).toBeGreaterThanOrEqual(5);
+    for (const m of poleMoves) {
+      for (const k of m.sequence!) if (k.prop === 'pole') expect(dist(k.pose.frontHand, k.pose.backHand), m.name).toBeLessThan(GRIP_GAP);
+    }
+    expect(sc.moves.find((m) => m.name === 'Floppy Jab')!.sequence!.some((k) => k.prop)).toBe(false);
+  });
+
+  it('really falls in a heap and springs back out of it', () => {
+    const pile = sc.moves.find((m) => m.name === 'Pile Up')!;
+    expect(pile.sequence![0].pose.pelvis.y).toBeGreaterThan(40);
+    expect(pile.sequence![pile.sequence!.length - 1].pose.pelvis.y).toBeLessThan(15);
+  });
+
+  it('is earned by dying in 10 songs (quitting does not count), with no ad shortcut', () => {
+    const after = (n: number, ads = 0) => ({ ...EMPTY_STATS, songsDied: n, heroAds: ads });
+    expect(isHeroUnlocked('scarecrow', after(9))).toBe(false);
+    expect(isHeroUnlocked('scarecrow', after(10))).toBe(true);
+    expect(isHeroUnlocked('scarecrow', after(0, 1))).toBe(false);
   });
 });

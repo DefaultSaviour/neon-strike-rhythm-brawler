@@ -148,7 +148,7 @@ export class GameEngine {
     // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
     // stripped from the published build (import.meta.env.DEV is false there).
     if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
-      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 1e9, backdropAds: 0, okHits: 1e9, bestClearAccuracy: 100, flawlessClears: 1e9, mostMissesCleared: 1e9 };
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 1e9, backdropAds: 0, okHits: 1e9, bestClearAccuracy: 100, flawlessClears: 1e9, mostMissesCleared: 1e9, songsDied: 1e9 };
       this.devUnlockAll = true;
     }
     this.loadSettings();
@@ -278,7 +278,7 @@ export class GameEngine {
    * died, or quit part way: the enemies you beat still count), and note any
    * heroes it unlocked.
    */
-  private countRun(cleared: boolean) {
+  private countRun(cleared: boolean, died = false) {
     if (!this.track || this.runCounted) return;
     this.runCounted = true;
     const s = this.scoreState;
@@ -291,6 +291,7 @@ export class GameEngine {
       accuracy: accuracyPercent({ perfect: s.perfectCount, good: s.goodCount, ok: s.okCount, miss: s.missCount }),
       maxCombo: s.maxCombo,
       cleared,
+      died,
       seconds: this.songTime,
       score: s.score,
     });
@@ -878,7 +879,7 @@ export class GameEngine {
   private triggerPlayerDeath(killer: Enemy) {
     this.isRunning = false;
     this.recordProgress(false);
-    this.countRun(false);
+    this.countRun(false, true);
     const report = explainDeath(
       { name: getEnemyStyle(killer.band, killer.tier).name, lane: killer.lane, targetTime: killer.targetTime },
       this.recentPresses,

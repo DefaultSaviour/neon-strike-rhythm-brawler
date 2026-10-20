@@ -41,9 +41,11 @@ export interface LifetimeStats {
   flawlessClears: number;
   /** Most misses (swings at nothing) in one song that was still finished: Drunken Master's goal */
   mostMissesCleared: number;
+  /** Songs that ended with an enemy getting through (not quitting): The Scarecrow's goal */
+  songsDied: number;
 }
 
-export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0 };
+export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 };
 
 /**
  * A song's accuracy, 0-100: PERFECT counts 100, GOOD 70, OK 40, a miss 0
@@ -78,7 +80,9 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
   bride: { stat: 'songsCleared', target: 8, label: 'Complete 8 songs', ad: true },
   kid: { stat: 'playSeconds', target: 1800, label: 'Train for 30 minutes' },
   discoKing: { stat: 'perfects', target: 2500, label: 'Land 2,500 PERFECT hits' },
-  // A meme unlock: swing wildly at thin air, and still get to the end of the song
+  // Meme unlocks: no brain? No problem. He comes to the players who keep getting knocked out
+  scarecrow: { stat: 'songsDied', target: 10, label: 'Die in 10 songs' },
+  // Swing wildly at thin air, and still get to the end of the song
   drunkenMaster: { stat: 'mostMissesCleared', target: 50, label: 'Complete a song with 50+ misses' },
   spartan: { stat: 'bestCombo', target: 300, label: 'Reach a 300 combo' },
   babaYaga: { stat: 'bestClearAccuracy', target: 98, label: 'Complete a song with 98% accuracy' },
@@ -90,7 +94,7 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
  * them this way, as a path. Play goals come first (about 1 to 10 songs),
  * then the skill goals, hardest last.
  */
-export const UNLOCK_ORDER: HeroId[] = ['striker', 'theOne', 'dragon', 'sawFace', 'drunkenMaster', 'stallion', 'proWrestler', 'bride', 'kid', 'discoKing', 'spartan', 'babaYaga', 'ballerina'];
+export const UNLOCK_ORDER: HeroId[] = ['striker', 'theOne', 'dragon', 'scarecrow', 'sawFace', 'drunkenMaster', 'stallion', 'proWrestler', 'bride', 'kid', 'discoKing', 'spartan', 'babaYaga', 'ballerina'];
 
 export function isHeroUnlocked(id: HeroId, stats: LifetimeStats): boolean {
   const goal = HERO_UNLOCKS[id];
@@ -123,6 +127,8 @@ export interface RunResult {
   misses: number;
   /** 0-100, see accuracyPercent */
   accuracy: number;
+  /** It ended with an enemy getting through (quitting doesn't count) */
+  died?: boolean;
   maxCombo: number;
   cleared: boolean;
   /** How long the song was played for */
@@ -147,6 +153,7 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     // A song you finished, with hits and not one miss
     flawlessClears: stats.flawlessClears + (run.cleared && run.misses === 0 && run.enemiesDefeated > 0 ? 1 : 0),
     mostMissesCleared: run.cleared ? Math.max(stats.mostMissesCleared, run.misses) : stats.mostMissesCleared,
+    songsDied: stats.songsDied + (run.died ? 1 : 0),
   };
 }
 
@@ -178,6 +185,7 @@ export function loadStats(store: Pick<Storage, 'getItem'> | undefined): Lifetime
       bestClearAccuracy: Math.min(100, num(parsed.bestClearAccuracy)),
       flawlessClears: num(parsed.flawlessClears),
       mostMissesCleared: num(parsed.mostMissesCleared),
+      songsDied: num(parsed.songsDied),
     };
   } catch {
     return { ...EMPTY_STATS };
