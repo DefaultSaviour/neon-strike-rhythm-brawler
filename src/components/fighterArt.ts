@@ -38,28 +38,39 @@ type Ctx = CanvasRenderingContext2D;
  * Heroes drawn bigger than the skeleton, or stood further back in a song.
  * Saw Face is a huge man, and his chainsaw reaches a long way, so in a
  * song he stands further back from the middle (like The Bride does in her poses).
+ * `topScale` is the size in the top-level form: the Lion, with his courage
+ * at last, grows into a much bigger, muscle-bound king.
  */
-export const HERO_BUILDS: Partial<Record<HeroId, { scale: number; standBack: number }>> = {
+export const HERO_BUILDS: Partial<Record<HeroId, { scale: number; standBack: number; topScale?: number }>> = {
   sawFace: { scale: 1.18, standBack: 20 },
+  lion: { scale: 1, standBack: 0, topScale: 1.28 },
 };
+
+/** How chunky the body is drawn: broad shoulders and thick limbs for the Lion in his top-level form. */
+export function bodyBulk(hero: HeroId | undefined, ascended: boolean) {
+  if (hero === 'lion' && ascended) return { shoulderHalf: 18, waistHalf: 7, limbScale: 1.5 };
+  return { shoulderHalf: 12, waistHalf: 6.5, limbScale: 1 };
+}
 
 /**
  * Size (and in a song, place) the hero by their build: scaled up from the
  * feet, then moved back away from the enemy. Callers that draw a hero's hit
  * effects themselves apply the same transform, so the slash stays on the weapon.
  */
-export function applyHeroBuild(ctx: Ctx, hero: HeroId | undefined, facing: 1 | -1, inGame = false) {
+export function applyHeroBuild(ctx: Ctx, hero: HeroId | undefined, facing: 1 | -1, inGame = false, ascended = false) {
   const build = hero ? HERO_BUILDS[hero] : undefined;
   if (!build) return;
-  if (inGame) ctx.translate(-facing * build.standBack, 0);
+  const scale = ascended && build.topScale ? build.topScale : build.scale;
+  if (inGame && build.standBack) ctx.translate(-facing * build.standBack, 0);
+  if (scale === 1) return;
   ctx.translate(0, 68);
-  ctx.scale(build.scale, build.scale);
+  ctx.scale(scale, scale);
   ctx.translate(0, -68);
 }
 
 export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
   ctx.save();
-  if (!opts.noBuild) applyHeroBuild(ctx, opts.hero, opts.facing, opts.inGame);
+  if (!opts.noBuild) applyHeroBuild(ctx, opts.hero, opts.facing, opts.inGame, opts.tier.ascended);
   drawFighterBody(ctx, skeleton, opts);
   ctx.restore();
 }
@@ -172,7 +183,7 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
       farKnee: pose.rightKnee,
       farFoot: pose.rightFoot,
     },
-    { color: tier.color, glow: tier.glow, shoulderHalf: 12, waistHalf: 6.5, limbScale: 1 }
+    { color: tier.color, glow: tier.glow, ...bodyBulk(opts.hero, tier.ascended) }
   );
   neonHead(ctx, pose.head, 9, { color: tier.color, glow: tier.glow });
 
@@ -2368,17 +2379,20 @@ function drawLionOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: numb
   ctx.ellipse(tailEnd.x, tailEnd.y, 4, 5.5, 0.4 * back, 0, Math.PI * 2);
   ctx.fill();
 
-  // Tawny fur over the body
+  // Tawny fur over the body (much broader once he's bulked up)
+  // Jacked: a big V from broad shoulders down to a narrow waist
+  const chestHalf = blazing ? 18 : 9.5;
+  const waistHalf = blazing ? 7 : 7.5;
   ctx.fillStyle = '#c98f3c';
   ctx.strokeStyle = '#05050c';
   ctx.lineWidth = 1.3;
-  ctx.shadowColor = '#e0a656';
-  ctx.shadowBlur = 6;
+  ctx.shadowColor = blazing ? '#ff9a2e' : '#e0a656';
+  ctx.shadowBlur = blazing ? 12 : 6;
   ctx.beginPath();
-  ctx.moveTo(c.x + nx * 9.5, c.y + ny * 9.5);
-  ctx.lineTo(c.x - nx * 9.5, c.y - ny * 9.5);
-  ctx.lineTo(p.x - nx * 7.5, p.y - ny * 7.5);
-  ctx.lineTo(p.x + nx * 7.5, p.y + ny * 7.5);
+  ctx.moveTo(c.x + nx * chestHalf, c.y + ny * chestHalf);
+  ctx.lineTo(c.x - nx * chestHalf, c.y - ny * chestHalf);
+  ctx.lineTo(p.x - nx * waistHalf, p.y - ny * waistHalf);
+  ctx.lineTo(p.x + nx * waistHalf, p.y + ny * waistHalf);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -2386,8 +2400,33 @@ function drawLionOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: numb
   // A paler belly
   ctx.fillStyle = '#e9c78a';
   ctx.beginPath();
-  ctx.ellipse((c.x + p.x) / 2 + nx * 2 * facing, (c.y + p.y) / 2 + ny * 2 * facing, 4, 9, Math.atan2(sy, sx) - Math.PI / 2, 0, Math.PI * 2);
+  ctx.ellipse((c.x + p.x) / 2 + nx * 2 * facing, (c.y + p.y) / 2 + ny * 2 * facing, blazing ? 5.5 : 4, 9, Math.atan2(sy, sx) - Math.PI / 2, 0, Math.PI * 2);
   ctx.fill();
+  if (blazing) {
+    // Muscles: two big pecs and a six-pack
+    const at = (t: number, side: number) => ({ x: c.x + (p.x - c.x) * t + nx * side, y: c.y + (p.y - c.y) * t + ny * side });
+    ctx.strokeStyle = '#7a4314';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      const a = at(0.12, side * 1);
+      const m = at(0.4, side * 7);
+      const b = at(0.22, side * 12);
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(m.x, m.y, b.x, b.y);
+    }
+    for (const t of [0.55, 0.7, 0.85]) {
+      const l = at(t, -4);
+      const r = at(t, 4);
+      ctx.moveTo(l.x, l.y);
+      ctx.lineTo(r.x, r.y);
+    }
+    const top = at(0.45, 0);
+    const bottom = at(0.92, 0);
+    ctx.moveTo(top.x, top.y);
+    ctx.lineTo(bottom.x, bottom.y);
+    ctx.stroke();
+  }
 
   // The mane (or, with his courage, a mane of fire)
   const h = pose.head;
@@ -2442,11 +2481,19 @@ function drawLionOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: numb
   ctx.lineTo(h.x + facing * 8, h.y + 2.6);
   ctx.closePath();
   ctx.fill();
+  // Eyes: they glow once he's found his courage
+  ctx.save();
+  if (blazing) {
+    ctx.fillStyle = '#ffe14f';
+    ctx.shadowColor = '#ffb020';
+    ctx.shadowBlur = 8;
+  }
   for (const ex of [1.5, 5.5]) {
     ctx.beginPath();
-    ctx.arc(h.x + facing * ex, h.y - 2.5, 1.1, 0, Math.PI * 2);
+    ctx.arc(h.x + facing * ex, h.y - 2.5, blazing ? 1.4 : 1.1, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.restore();
   ctx.strokeStyle = '#2a1608';
   ctx.lineWidth = 0.6;
   ctx.beginPath();
@@ -2462,22 +2509,30 @@ function drawLionOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: numb
     [pose.rightHand, pose.rightElbow],
   ] as const) {
     const a = Math.atan2(hand.y - elbow.y, hand.x - elbow.x);
+    const big = blazing ? 1.4 : 1;
     ctx.fillStyle = '#d9a24e';
     ctx.strokeStyle = '#05050c';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(hand.x, hand.y, 4.2, 0, Math.PI * 2);
+    ctx.arc(hand.x, hand.y, 4.2 * big, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.1;
+    // Claws (glowing hot in his top-level form)
+    ctx.save();
+    ctx.strokeStyle = blazing ? '#fff1b0' : '#ffffff';
+    if (blazing) {
+      ctx.shadowColor = '#ff9a2e';
+      ctx.shadowBlur = 8;
+    }
+    ctx.lineWidth = 1.1 * big;
     ctx.beginPath();
     for (const k of [-0.5, 0, 0.5]) {
       const ca = a + k;
-      ctx.moveTo(hand.x + Math.cos(ca) * 3.5, hand.y + Math.sin(ca) * 3.5);
-      ctx.lineTo(hand.x + Math.cos(ca) * 7, hand.y + Math.sin(ca) * 7);
+      ctx.moveTo(hand.x + Math.cos(ca) * 3.5 * big, hand.y + Math.sin(ca) * 3.5 * big);
+      ctx.lineTo(hand.x + Math.cos(ca) * 7.5 * big, hand.y + Math.sin(ca) * 7.5 * big);
     }
     ctx.stroke();
+    ctx.restore();
   }
 
   ctx.restore();

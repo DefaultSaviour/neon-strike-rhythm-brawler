@@ -449,7 +449,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   // Cyber ghost afterimage while attacking (Cyber Ninja tier and up)
   if (tier.ghost && engine.isAttacking) {
     ctx.save();
-    applyHeroBuild(ctx, engine.hero.id, facing, true);
+    applyHeroBuild(ctx, engine.hero.id, facing, true, tier.ascended);
     ctx.globalAlpha = 0.28;
     ctx.strokeStyle = tier.color;
     ctx.shadowColor = tier.color;
@@ -495,7 +495,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   // Blade slash, in front of the body: a glowing crescent with a white-hot edge
   if (pose.bladeSlash && engine.strikeActive) {
     ctx.save();
-    applyHeroBuild(ctx, engine.hero.id, facing, true);
+    applyHeroBuild(ctx, engine.hero.id, facing, true, tier.ascended);
     drawSlashCrescent(ctx, pose.bladeSlash);
     drawShotFlash(ctx, pose, facing);
     if (engine.hero.id === 'theOne') drawImpactRipple(ctx, pose);

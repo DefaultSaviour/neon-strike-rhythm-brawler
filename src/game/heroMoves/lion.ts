@@ -8,8 +8,10 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, headOf
  * mane, a lion's face, a swishing tail and clawed paws (drawn by
  * fighterArt). He starts out a scaredy-cat: in the low tiers every swipe
  * is followed by a cower, paws over his face. As the combo grows he gets
- * braver (pounces, claw flurries, roars), and his finishers end on a big
- * brave roar. His top-level form: his courage, as a blazing mane of fire.
+ * braver (pounces, claw flurries, roars). His top-level form is his
+ * courage: a blazing mane of fire, and he bulks up into a much bigger,
+ * jacked king (fighterArt's HERO_BUILDS and bodyBulk), his finishers
+ * ending on a roaring double-biceps flex.
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
@@ -68,6 +70,11 @@ const swipe = (extra: Partial<Key> = {}): Key => ({ ...lunge, lean: 16, frontArm
 const rearSwipe = (extra: Partial<Key> = {}): Key => ({ ...lunge, lean: 18, frontArm: { upper: 120, lower: 80 }, backArm: straight(4), trail: { from: 'backHand', reach: CLAW, curve: -26 }, ...extra });
 /** A pounce, both paws out in front. */
 const leap = (extra: Partial<Key> = {}): Key => ({ ...pounce, lean: 24, frontArm: straight(-6), backArm: straight(8), trail: { from: 'frontHand', reach: CLAW, curve: 20 }, ...extra });
+/**
+ * His top-level finish: jacked at last, he roars with a double-biceps flex,
+ * both fists up by his head, feet planted wide.
+ */
+const flex = (ms: number): Key => ({ ms, pelvis: { x: 0, y: 10 }, lean: -4, tilt: -16, frontArm: { upper: -15, lower: -100 }, backArm: { upper: -165, lower: -80 }, frontLeg: { x: 20, y: F }, backLeg: { x: -20, y: F } });
 /** The big brave roar: chest out, head up, paws spread. */
 const roar = (ms: number): Key => ({ ms, pelvis: { x: 0, y: 10 }, lean: -8, tilt: -14, frontArm: { upper: -40, lower: -70 }, backArm: { upper: -140, lower: -110 }, frontLeg: { x: 16, y: F }, backLeg: { x: -16, y: F } });
 
@@ -123,11 +130,11 @@ export const LION_MOVES: AttackMove[] = [
   combo(4, 'Roaring Swipe', 'A swipe and a real roar this time', [swipe(), roar(190)]),
 
   // ================= Tier 5: courage =================
-  combo(5, 'Courage', 'Pounce, swipe, and the bravest roar in the land', [leap(), { ms: 100, ...rearSwipe() }, roar(180)]),
-  combo(5, 'Lionheart', 'Swipe, swipe, swipe, then he stands and roars', [swipe(), { ms: 90, ...rearSwipe() }, { ms: 90, ...swipe({ frontArm: straight(-12) }) }, roar(180)]),
-  combo(5, 'King of the Forest', 'Spins, mauls and roars like a king', [
+  combo(5, 'Courage', 'Pounce, swipe, then a roaring double-biceps flex', [leap(), { ms: 100, ...rearSwipe() }, flex(180)]),
+  combo(5, 'Lionheart', 'Swipe, swipe, swipe, then he flexes and roars', [swipe(), { ms: 90, ...rearSwipe() }, { ms: 90, ...swipe({ frontArm: straight(-12) }) }, flex(180)]),
+  combo(5, 'King of the Forest', 'Spins, mauls, and flexes like the king he is', [
     { pelvis: { x: 0, y: 16 }, lean: 0, frontArm: straight(4), backArm: straight(186), frontLeg: { x: 8, y: F }, backLeg: { x: -8, y: F }, spin: true, trail: { from: 'frontHand', reach: CLAW, curve: 30 } },
     { ms: 100, pelvis: { x: 2, y: 34 }, lean: 30, frontArm: straight(44), backArm: straight(50), frontLeg: { x: 28, y: F }, backLeg: { x: -20, y: F }, trail: { from: 'frontHand', reach: CLAW, curve: 20 } },
-    roar(180),
+    flex(180),
   ]),
 ];

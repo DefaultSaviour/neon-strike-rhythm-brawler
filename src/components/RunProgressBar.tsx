@@ -236,7 +236,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
   ctx.translate(0, -68);
   drawFighter(ctx, pose, { tier, facing: 1, time: elapsed, combo: tier.minCombo, hero: hero.id });
   if (slashing && pose.bladeSlash) {
-    applyHeroBuild(ctx, hero.id, 1);
+    applyHeroBuild(ctx, hero.id, 1, false, tier.ascended);
     drawSlashCrescent(ctx, pose.bladeSlash);
   }
   ctx.restore();

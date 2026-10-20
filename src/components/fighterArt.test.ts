@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -326,6 +326,27 @@ describe("The Scarecrow's pole and brain", () => {
       expect(sparks.length).toBeLessThanOrEqual(5); // sparse
     }
     expect(scarecrowBrain(sc.idlePose, 0.4, 1).sparks[0].x).not.toBeCloseTo(scarecrowBrain(sc.idlePose, 0, 1).sparks[0].x, 1);
+  });
+});
+
+describe("The Lion's top-level form", () => {
+  it('he grows much bigger and jacked: broad shoulders and thick limbs, only in his top form', () => {
+    expect(HERO_BUILDS.lion!.topScale!).toBeGreaterThanOrEqual(1.2);
+    expect(HERO_BUILDS.lion!.scale).toBe(1);
+    const normal = bodyBulk('lion', false);
+    const jacked = bodyBulk('lion', true);
+    expect(jacked.shoulderHalf).toBeGreaterThan(normal.shoulderHalf * 1.3);
+    expect(jacked.limbScale).toBeGreaterThan(1.3);
+    expect(bodyBulk('bride', true)).toEqual(normal);
+  });
+
+  it('the build scales him up from the feet in his top form, and leaves him alone otherwise', () => {
+    const calls: string[] = [];
+    const ctx = { translate: (x: number, y: number) => calls.push(`t ${x} ${y}`), scale: (x: number) => calls.push(`s ${x}`) } as unknown as CanvasRenderingContext2D;
+    applyHeroBuild(ctx, 'lion', 1, true, false);
+    expect(calls).toEqual([]);
+    applyHeroBuild(ctx, 'lion', 1, true, true);
+    expect(calls).toEqual(['t 0 68', `s ${HERO_BUILDS.lion!.topScale}`, 't 0 -68']);
   });
 });
 

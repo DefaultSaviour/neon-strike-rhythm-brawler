@@ -1291,11 +1291,14 @@ describe('The Lion', () => {
     expect(cowering.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('finds his courage: every finisher ends on a big roar, paws up', () => {
+  it('finds his courage: every finisher ends on a roaring double-biceps flex, both fists up by his head', () => {
     for (const m of H.moves.filter((x) => x.tier === 5)) {
       const last = keyToPlayerPose(m.sequence![m.sequence!.length - 1]);
-      expect(last.leftHand.y, m.name).toBeLessThan(last.chest.y);
-      expect(last.rightHand.y, m.name).toBeLessThan(last.chest.y);
+      for (const [hand, elbow] of [[last.leftHand, last.leftElbow], [last.rightHand, last.rightElbow]] as const) {
+        expect(hand.y, m.name).toBeLessThan(last.chest.y - 10);
+        // Forearm upright, fist above the elbow: a flex, not a reach
+        expect(hand.y, m.name).toBeLessThan(elbow.y - 15);
+      }
     }
   });
 
