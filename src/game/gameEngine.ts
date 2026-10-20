@@ -148,7 +148,7 @@ export class GameEngine {
     // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
     // stripped from the published build (import.meta.env.DEV is false there).
     if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
-      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 1e9, backdropAds: 0, okHits: 1e9, bestClearAccuracy: 100, flawlessClears: 1e9 };
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 1e9, backdropAds: 0, okHits: 1e9, bestClearAccuracy: 100, flawlessClears: 1e9, mostMissesCleared: 1e9 };
       this.devUnlockAll = true;
     }
     this.loadSettings();

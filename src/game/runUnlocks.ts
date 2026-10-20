@@ -50,7 +50,7 @@ export function backdropLayerOf(id: string) {
 export function describeUnlock(u: RunUnlock): { kind: string; name: string; description: string } {
   if (u.kind === 'hero') {
     const hero = getHero(u.id as HeroId);
-    return { kind: 'New hero', name: hero.label, description: hero.description };
+    return { kind: 'New hero', name: hero.label, description: hero.tagline };
   }
   if (u.kind === 'stance') {
     const stance = ENEMY_MOTION_STYLES.find((m) => m.id === u.id);

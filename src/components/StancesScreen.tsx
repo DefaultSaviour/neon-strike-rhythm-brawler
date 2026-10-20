@@ -149,7 +149,7 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
             {notice}
           </div>
         )}
-        <div className="flex-1 min-h-0 content-start p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex-1 min-h-0 content-start p-3 sm:p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {stances.map((m, i) => {
             const unlocked = isUnlocked(m.id);
             const chosen = m.id === selected;
@@ -159,7 +159,7 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
               <div
                 key={m.id}
                 onClick={() => unlocked && onSeen?.(m.id)}
-                className={`relative rounded-xl border p-3 flex flex-col items-center text-center gap-2 ${
+                className={`relative rounded-xl border p-2 sm:p-3 flex flex-col items-center text-center gap-2 ${
                   chosen
                     ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_18px_rgba(0,243,255,0.25)]'
                     : unlocked
