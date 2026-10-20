@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, meatHooks, sawBarTip, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, HERO_BUILDS, meatHooks, sawBarTip, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -263,21 +263,54 @@ describe("Saw Face's chainsaw and meat hooks", () => {
     }
   });
 
-  it('two small enemies hang limp from meat hooks, high up and behind him, swaying', () => {
-    for (const facing of [1, -1] as const) {
-      const pose = sf.idlePose;
-      const hooks = meatHooks(pose, 0, facing);
-      expect(hooks).toHaveLength(2);
-      for (const h of hooks) {
-        // Behind him (away from the enemy he faces), and hung off the floor
-        expect((h.hook.x - pose.chest.x) * facing).toBeLessThan(-30);
-        expect(h.hook.y).toBeLessThan(pose.chest.y);
-        expect(h.hook.y + 104 * h.scale).toBeLessThan(68 - 10);
-        expect(h.scale).toBeLessThanOrEqual(0.6);
-        expect(h.chainTop.y).toBeLessThan(h.hook.y - 80);
-      }
-      expect(hooks[0].color).not.toBe(hooks[1].color);
+  it('two small enemies hang limp from meat hooks, one each side, and stay put when he turns', () => {
+    const pose = sf.idlePose;
+    const hooks = meatHooks(0);
+    expect(hooks).toHaveLength(2);
+    expect(hooks.map((h) => Math.sign(h.hook.x)).sort()).toEqual([-1, 1]);
+    for (const h of hooks) {
+      // High up, hung off the floor
+      expect(h.hook.y).toBeLessThan(pose.chest.y);
+      expect(h.hook.y + 104 * h.scale).toBeLessThan(68 - 10);
+      expect(h.scale).toBeLessThanOrEqual(0.6);
+      expect(h.chainTop.y).toBeLessThan(h.hook.y - 80);
     }
-    expect(meatHooks(sf.idlePose, 0.5, 1)[0].sway).not.toBeCloseTo(meatHooks(sf.idlePose, 0, 1)[0].sway, 3);
+    expect(hooks[0].color).not.toBe(hooks[1].color);
+    // They sway a little on their chains, but never move along
+    expect(meatHooks(0.5)[0].sway).not.toBeCloseTo(hooks[0].sway, 3);
+    expect(meatHooks(0.5)[0].hook).toEqual(hooks[0].hook);
+  });
+
+  it("his saw never reaches the hanging bodies, whichever way he faces, as he's drawn in a song", () => {
+    const { scale, standBack } = HERO_BUILDS.sawFace!;
+    const hooks = meatHooks(0);
+    for (const m of sf.moves) {
+      for (const k of m.sequence!) {
+        const tip = sawBarTip(keyToPlayerPose(k), 1);
+        for (const facing of [1, -1]) {
+          const x = facing * (tip.x * scale - standBack);
+          for (const h of hooks) expect(Math.abs(x - h.hook.x), m.name).toBeGreaterThan(10);
+        }
+      }
+    }
+  });
+});
+
+describe('hero builds', () => {
+  it('Saw Face is a big man: drawn about 15-20% bigger than the skeleton, and stood back in a song', () => {
+    const build = HERO_BUILDS.sawFace!;
+    expect(build.scale).toBeGreaterThanOrEqual(1.15);
+    expect(build.scale).toBeLessThanOrEqual(1.2);
+    expect(build.standBack).toBeGreaterThan(0);
+  });
+
+  it('the build scales from the feet and moves him back away from the enemy he faces', () => {
+    const calls: string[] = [];
+    const ctx = { translate: (x: number, y: number) => calls.push(`t ${x} ${y}`), scale: (x: number) => calls.push(`s ${x}`) } as unknown as CanvasRenderingContext2D;
+    applyHeroBuild(ctx, 'sawFace', -1, true);
+    expect(calls).toEqual([`t ${HERO_BUILDS.sawFace!.standBack} 0`, 't 0 68', `s ${HERO_BUILDS.sawFace!.scale}`, 't 0 -68']);
+    calls.length = 0;
+    applyHeroBuild(ctx, 'bride', 1, true);
+    expect(calls).toEqual([]);
   });
 });

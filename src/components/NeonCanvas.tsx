@@ -13,7 +13,7 @@ import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
 import { drawBackdropLayers } from './backdropArt';
 import { drawConveyors, drawPit } from './stageArt';
-import { drawFighter, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
+import { applyHeroBuild, drawFighter, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
@@ -440,12 +440,14 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   // Glow, colour, lightning and the top-level form all come from the combo tier (see fighterTier.ts).
   const tier = fighterTier(combo);
 
+  const facing = engine.attackDirection === 'left' ? -1 : 1;
   ctx.save();
   ctx.translate(engine.playerOffsetX, 0);
 
   // Cyber ghost afterimage while attacking (Cyber Ninja tier and up)
   if (tier.ghost && engine.isAttacking) {
     ctx.save();
+    applyHeroBuild(ctx, engine.hero.id, facing, true);
     ctx.globalAlpha = 0.28;
     ctx.strokeStyle = tier.color;
     ctx.shadowColor = tier.color;
@@ -481,17 +483,21 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   drawFighter(ctx, pose, {
     tier,
     combo,
-    facing: engine.attackDirection === 'left' ? -1 : 1,
+    facing,
     time: performance.now() / 1000,
     corePulse: audioEngine.bassMeter,
     hero: engine.hero.id,
+    inGame: true,
   });
 
   // Blade slash, in front of the body: a glowing crescent with a white-hot edge
   if (pose.bladeSlash && engine.strikeActive) {
+    ctx.save();
+    applyHeroBuild(ctx, engine.hero.id, facing, true);
     drawSlashCrescent(ctx, pose.bladeSlash);
-    drawShotFlash(ctx, pose, engine.attackDirection === 'left' ? -1 : 1);
+    drawShotFlash(ctx, pose, facing);
     if (engine.hero.id === 'theOne') drawImpactRipple(ctx, pose);
+    ctx.restore();
   }
 
   // Move & tier banner

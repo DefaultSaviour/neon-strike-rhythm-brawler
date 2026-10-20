@@ -26,11 +26,47 @@ export interface FighterDrawOptions {
   random?: () => number;
   /** Which hero's outfit to draw (default: the original Neon Striker) */
   hero?: HeroId;
+  /** In a song: also stand the hero where their build says (see HERO_BUILDS) */
+  inGame?: boolean;
+  /** Draw at the skeleton's own size, ignoring the hero's build (the Pose Studio, where the handles sit on the joints) */
+  noBuild?: boolean;
 }
 
 type Ctx = CanvasRenderingContext2D;
 
+/**
+ * Heroes drawn bigger than the skeleton, or stood further back in a song.
+ * Saw Face is a huge man, and his chainsaw reaches a long way, so in a
+ * song he stands further back from the middle (like The Bride does in her poses).
+ */
+export const HERO_BUILDS: Partial<Record<HeroId, { scale: number; standBack: number }>> = {
+  sawFace: { scale: 1.18, standBack: 20 },
+};
+
+/**
+ * Size (and in a song, place) the hero by their build: scaled up from the
+ * feet, then moved back away from the enemy. Callers that draw a hero's hit
+ * effects themselves apply the same transform, so the slash stays on the weapon.
+ */
+export function applyHeroBuild(ctx: Ctx, hero: HeroId | undefined, facing: 1 | -1, inGame = false) {
+  const build = hero ? HERO_BUILDS[hero] : undefined;
+  if (!build) return;
+  if (inGame) ctx.translate(-facing * build.standBack, 0);
+  ctx.translate(0, 68);
+  ctx.scale(build.scale, build.scale);
+  ctx.translate(0, -68);
+}
+
 export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
+  // Saw Face's meat hooks hang still in the world: they don't turn or move with him
+  if (opts.hero === 'sawFace' && opts.tier.ascended) drawMeatHooks(ctx, opts.time);
+  ctx.save();
+  if (!opts.noBuild) applyHeroBuild(ctx, opts.hero, opts.facing, opts.inGame);
+  drawFighterBody(ctx, skeleton, opts);
+  ctx.restore();
+}
+
+function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
   const { tier } = opts;
   // The White Swan is drawn with long dancer's arms (see ballerinaArms)
   const pose = opts.hero === 'ballerina' ? ballerinaArms(skeleton) : skeleton;
@@ -51,7 +87,9 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     }
     else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
     else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
-    else if (opts.hero === 'sawFace') drawMeatHooks(ctx, pose, opts.time, opts.facing);
+    else if (opts.hero === 'sawFace') {
+      /* his meat hooks are drawn first, fixed in the world (drawFighter) */
+    }
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -1516,20 +1554,19 @@ export function sawBarTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
 
 /**
  * Saw Face's top-level form: two of the enemies he's cut down hang limp
- * from meat hooks behind him, small and swaying on their chains. They're
- * plain neon enemies (no blood), hung high and well behind him so they never
- * look like an enemy coming in to fight.
+ * from meat hooks, one on each side of him, small and swaying on their
+ * chains. They're plain neon enemies (no blood), hung high, fixed in place
+ * (they don't turn round or move when he does) and out of his saw's reach.
  */
-export function meatHooks(pose: SkeletonPose, time: number, facing: 1 | -1) {
-  const back = -facing;
+export function meatHooks(time: number) {
   return [
-    { color: '#ff1744', dx: 40, hookY: -46, phase: 0 },
-    { color: '#d84dff', dx: 74, hookY: -30, phase: 2.1 },
+    { color: '#ff1744', x: -112, hookY: -46, phase: 0 },
+    { color: '#d84dff', x: 116, hookY: -34, phase: 2.1 },
   ].map((h) => ({
     color: h.color,
-    hook: { x: pose.chest.x + back * h.dx, y: h.hookY },
+    hook: { x: h.x, y: h.hookY },
     /** The chain runs up out of sight */
-    chainTop: { x: pose.chest.x + back * h.dx, y: h.hookY - 120 },
+    chainTop: { x: h.x, y: h.hookY - 120 },
     sway: Math.sin(time * 1.4 + h.phase) * 0.07,
     scale: 0.6,
   }));
@@ -1558,8 +1595,8 @@ const HUNG: BodyJoints = {
   farFoot: { x: 11, y: 104 },
 };
 
-function drawMeatHooks(ctx: Ctx, pose: SkeletonPose, time: number, facing: 1 | -1) {
-  for (const h of meatHooks(pose, time, facing)) {
+function drawMeatHooks(ctx: Ctx, time: number) {
+  for (const h of meatHooks(time)) {
     ctx.save();
     ctx.lineCap = 'round';
     // The chain, a dashed steel line up out of sight
@@ -1579,10 +1616,10 @@ function drawMeatHooks(ctx: Ctx, pose: SkeletonPose, time: number, facing: 1 | -
     ctx.beginPath();
     ctx.moveTo(0, -6);
     ctx.lineTo(0, 2);
-    ctx.quadraticCurveTo(0, 7, -facing * 4, 6);
+    ctx.quadraticCurveTo(0, 7, 4, 6);
     ctx.stroke();
-    // The body, small and limp, facing the same way he does
-    ctx.scale(h.scale * facing, h.scale);
+    // The body, small and limp
+    ctx.scale(h.scale, h.scale);
     drawNeonBody(ctx, HUNG, { color: h.color, glow: 10, shoulderHalf: 11, waistHalf: 6, limbScale: 1 });
     neonHead(ctx, HUNG.head, 9, { color: h.color, glow: 10 });
     // Cartoon X eyes: out cold
