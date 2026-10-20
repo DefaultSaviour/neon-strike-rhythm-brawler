@@ -1,7 +1,7 @@
 import { Point2D, SkeletonPose } from '../types/game';
 import { FighterTier } from '../game/fighterTier';
 import type { HeroId } from '../game/heroes';
-import { bodyFill, drawNeonBody, neonHead, neonLimb } from './neonBody';
+import { BodyJoints, bodyFill, drawNeonBody, neonHead, neonLimb } from './neonBody';
 
 /**
  * Draws the player's fighter: the hero's top-level form (god tier), lightning (overdrive),
@@ -51,6 +51,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     }
     else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
     else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
+    else if (opts.hero === 'sawFace') drawMeatHooks(ctx, pose, opts.time, opts.facing);
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
@@ -150,6 +151,7 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
   if (opts.hero === 'spartan') drawSpartanGear(ctx, pose, tier, opts.facing, tier.ascended);
   if (opts.hero === 'discoKing') drawDiscoSuit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
+  if (opts.hero === 'sawFace') drawSawFaceOutfit(ctx, pose, opts.facing, opts.time);
   if (tier.ascended && opts.hero === 'bride') {
     drawBrideHelmet(ctx, pose, opts.facing);
     drawBlossomStorm(ctx, pose, opts.time, 'front');
@@ -170,6 +172,8 @@ export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawO
     drawSleepyEyes(ctx, pose, opts.facing);
   } else if (opts.hero === 'spartan' && tier.ascended) {
     // His closed battle helmet has its own glowing eye slits
+  } else if (opts.hero === 'sawFace') {
+    // He looks out through the eye hole in his mask
   } else {
     ctx.fillStyle = tier.visorColor;
     ctx.shadowColor = tier.visorColor;
@@ -1497,6 +1501,304 @@ function drawBrideOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing
   ctx.beginPath();
   ctx.moveTo(arm.hand.x + d.x * 3 + n.x * 3.5, arm.hand.y + d.y * 3 + n.y * 3.5);
   ctx.lineTo(arm.hand.x + d.x * 3 - n.x * 3.5, arm.hand.y + d.y * 3 - n.y * 3.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Saw Face's chainsaw bar: it runs on from his lead hand (on the front handle) along the forearm. */
+const SAW_BAR = 40;
+
+/** Where the tip of Saw Face's chainsaw bar is. */
+export function sawBarTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
+  const { lead } = arms(pose, facing);
+  return weaponAt(lead.hand, lead.elbow, SAW_BAR).muzzle;
+}
+
+/**
+ * Saw Face's top-level form: two of the enemies he's cut down hang limp
+ * from meat hooks behind him, small and swaying on their chains. They're
+ * plain neon enemies (no blood), hung high and well behind him so they never
+ * look like an enemy coming in to fight.
+ */
+export function meatHooks(pose: SkeletonPose, time: number, facing: 1 | -1) {
+  const back = -facing;
+  return [
+    { color: '#ff1744', dx: 40, hookY: -46, phase: 0 },
+    { color: '#d84dff', dx: 74, hookY: -30, phase: 2.1 },
+  ].map((h) => ({
+    color: h.color,
+    hook: { x: pose.chest.x + back * h.dx, y: h.hookY },
+    /** The chain runs up out of sight */
+    chainTop: { x: pose.chest.x + back * h.dx, y: h.hookY - 120 },
+    sway: Math.sin(time * 1.4 + h.phase) * 0.07,
+    scale: 0.6,
+  }));
+}
+
+/**
+ * A body hanging from a hook by its collar, at full size with the hook at
+ * (0, 0): head slumped forward, arms and legs dangling loose. The
+ * limbs keep the fighters' lengths (arms 21 + 21, legs 31 + 32).
+ */
+const HUNG: BodyJoints = {
+  head: { x: 12, y: 0 },
+  chest: { x: 0, y: 12 },
+  pelvis: { x: 2, y: 42 },
+  nearShoulder: { x: -3, y: 13 },
+  nearElbow: { x: -9, y: 33 },
+  nearHand: { x: -11, y: 54 },
+  farShoulder: { x: 3, y: 13 },
+  farElbow: { x: 10, y: 33 },
+  farHand: { x: 12, y: 54 },
+  nearHip: { x: 2, y: 42 },
+  nearKnee: { x: -6, y: 72 },
+  nearFoot: { x: -5, y: 104 },
+  farHip: { x: 2, y: 42 },
+  farKnee: { x: 9, y: 72 },
+  farFoot: { x: 11, y: 104 },
+};
+
+function drawMeatHooks(ctx: Ctx, pose: SkeletonPose, time: number, facing: 1 | -1) {
+  for (const h of meatHooks(pose, time, facing)) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    // The chain, a dashed steel line up out of sight
+    ctx.strokeStyle = 'rgba(160, 166, 180, 0.7)';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.moveTo(h.chainTop.x, h.chainTop.y);
+    ctx.lineTo(h.hook.x, h.hook.y - 6);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.translate(h.hook.x, h.hook.y);
+    ctx.rotate(h.sway);
+    // The hook: a steel J through the back of the collar
+    ctx.strokeStyle = '#c9ced6';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(0, -6);
+    ctx.lineTo(0, 2);
+    ctx.quadraticCurveTo(0, 7, -facing * 4, 6);
+    ctx.stroke();
+    // The body, small and limp, facing the same way he does
+    ctx.scale(h.scale * facing, h.scale);
+    drawNeonBody(ctx, HUNG, { color: h.color, glow: 10, shoulderHalf: 11, waistHalf: 6, limbScale: 1 });
+    neonHead(ctx, HUNG.head, 9, { color: h.color, glow: 10 });
+    // Cartoon X eyes: out cold
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (const ex of [-1, 5]) {
+      ctx.moveTo(HUNG.head.x + ex - 2, HUNG.head.y - 3);
+      ctx.lineTo(HUNG.head.x + ex + 2, HUNG.head.y + 1);
+      ctx.moveTo(HUNG.head.x + ex + 2, HUNG.head.y - 3);
+      ctx.lineTo(HUNG.head.x + ex - 2, HUNG.head.y + 1);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/**
+ * Saw Face: a stitched-together mask with a dark eye hole and messy hair, a
+ * white shirt and a dark tie under a grimy butcher's apron, and the
+ * chainsaw in both hands: an orange engine with the rear handle, and a long
+ * steel bar with its chain running round it.
+ */
+function drawSawFaceOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const down = { x: sx / sl, y: sy / sl };
+  const nx = -down.y;
+  const ny = down.x;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // White shirt collar and a dark tie at the top of the chest
+  ctx.fillStyle = '#e9e6dc';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 7, c.y + ny * 7 - 2);
+  ctx.lineTo(c.x - nx * 7, c.y - ny * 7 - 2);
+  ctx.lineTo(c.x + down.x * 7, c.y + down.y * 7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#5a1420';
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 1.6, c.y + ny * 1.6);
+  ctx.lineTo(c.x - nx * 1.6, c.y - ny * 1.6);
+  ctx.lineTo(c.x + down.x * 13 - nx * 2.4, c.y + down.y * 13 - ny * 2.4);
+  ctx.lineTo(c.x + down.x * 16, c.y + down.y * 16);
+  ctx.lineTo(c.x + down.x * 13 + nx * 2.4, c.y + down.y * 13 + ny * 2.4);
+  ctx.closePath();
+  ctx.fill();
+  // The butcher's apron: from mid-chest down past the hips to his thighs
+  const knees = { x: (pose.leftKnee.x + pose.rightKnee.x) / 2, y: (pose.leftKnee.y + pose.rightKnee.y) / 2 };
+  const top = { x: c.x + down.x * 9, y: c.y + down.y * 9 };
+  const hem = { x: p.x + (knees.x - p.x) * 0.75, y: p.y + (knees.y - p.y) * 0.75 };
+  ctx.fillStyle = '#cbbd98';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#cbbd98';
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.moveTo(top.x + nx * 7, top.y + ny * 7);
+  ctx.lineTo(top.x - nx * 7, top.y - ny * 7);
+  ctx.lineTo(hem.x - nx * 11, hem.y - ny * 11);
+  ctx.lineTo(hem.x + nx * 11, hem.y + ny * 11);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Its strap round the neck
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#8c7d5c';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(top.x + nx * 6, top.y + ny * 6);
+  ctx.lineTo(c.x + nx * 3 - down.x * 4, c.y + ny * 3 - down.y * 4);
+  ctx.moveTo(top.x - nx * 6, top.y - ny * 6);
+  ctx.lineTo(c.x - nx * 3 - down.x * 4, c.y - ny * 3 - down.y * 4);
+  ctx.stroke();
+  // Old grime on the apron (brown, not blood)
+  ctx.fillStyle = 'rgba(92, 62, 34, 0.6)';
+  for (const [t, side, r] of [
+    [0.35, 0.4, 2.6],
+    [0.7, -0.5, 3.4],
+    [0.85, 0.3, 2],
+  ] as const) {
+    const at = { x: top.x + (hem.x - top.x) * t + nx * side * 8, y: top.y + (hem.y - top.y) * t + ny * side * 8 };
+    ctx.beginPath();
+    ctx.ellipse(at.x, at.y, r, r * 0.7, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Messy dark hair sticking out over the top and the back of the head
+  const h = pose.head;
+  ctx.fillStyle = '#3a2a1e';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const hc = { x: h.x - facing * 1.5, y: h.y - 1 };
+  for (let i = 0; i <= 8; i++) {
+    const a = Math.PI * (1 + i / 8);
+    const r = i % 2 ? 10 : 13.5;
+    ctx.lineTo(hc.x + Math.cos(a) * r, hc.y + Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // The mask: pale stitched patches of skin over his face
+  ctx.fillStyle = '#e6cda2';
+  ctx.shadowColor = '#e6cda2';
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.ellipse(h.x + facing * 2, h.y + 1, 8, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Stitches: a seam across the brow and one down the cheek, with cross ticks
+  ctx.strokeStyle = '#5a3a24';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(h.x - facing * 4, h.y - 5);
+  ctx.quadraticCurveTo(h.x + facing * 3, h.y - 7, h.x + facing * 9, h.y - 4);
+  ctx.moveTo(h.x + facing * 1, h.y - 1);
+  ctx.lineTo(h.x + facing * 2, h.y + 8);
+  for (let i = 0; i < 4; i++) {
+    const x = h.x + facing * (-2 + i * 3.4);
+    ctx.moveTo(x, h.y - 7.6);
+    ctx.lineTo(x + facing * 0.6, h.y - 3.8);
+  }
+  for (let i = 0; i < 3; i++) {
+    const y = h.y + 1 + i * 2.8;
+    ctx.moveTo(h.x, y);
+    ctx.lineTo(h.x + facing * 3, y + 0.3);
+  }
+  ctx.stroke();
+  // The eye hole and a crooked slit of a mouth
+  ctx.fillStyle = '#05050c';
+  ctx.beginPath();
+  ctx.ellipse(h.x + facing * 5.5, h.y - 1.5, 2.2, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 3, h.y + 5);
+  ctx.lineTo(h.x + facing * 5.5, h.y + 4.2);
+  ctx.lineTo(h.x + facing * 8.5, h.y + 5.2);
+  ctx.stroke();
+
+  // The chainsaw: the bar along his lead forearm, the engine behind his lead hand
+  const { lead: arm, rear } = arms(pose, facing);
+  const bar = weaponAt(arm.hand, arm.elbow, SAW_BAR);
+  const d = bar.dir;
+  const n = { x: -d.y * facing, y: d.x * facing }; // toward the saw's underside
+  const along = (t: number, side = 0) => ({ x: arm.hand.x + d.x * t + n.x * side, y: arm.hand.y + d.y * t + n.y * side });
+  // The bar: a long steel blade with a rounded nose
+  const barStart = along(3);
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 7.5;
+  ctx.beginPath();
+  ctx.moveTo(barStart.x, barStart.y);
+  ctx.lineTo(bar.muzzle.x, bar.muzzle.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#c9ced6';
+  ctx.shadowColor = '#e8eef6';
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  // The chain running round the bar
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#3a3a44';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([2, 2]);
+  ctx.lineDashOffset = -time * 60;
+  ctx.beginPath();
+  const edgeA = along(3, -3.2);
+  const edgeB = along(3, 3.2);
+  const tipA = { x: bar.muzzle.x - n.x * 3.2, y: bar.muzzle.y - n.y * 3.2 };
+  const tipB = { x: bar.muzzle.x + n.x * 3.2, y: bar.muzzle.y + n.y * 3.2 };
+  ctx.moveTo(edgeA.x, edgeA.y);
+  ctx.lineTo(tipA.x, tipA.y);
+  ctx.quadraticCurveTo(bar.muzzle.x + d.x * 4, bar.muzzle.y + d.y * 4, tipB.x, tipB.y);
+  ctx.lineTo(edgeB.x, edgeB.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // The engine: an orange block behind his lead hand, the pull-start on its side
+  const corners = [along(-15, -5), along(2, -5), along(2, 7), along(-15, 7)];
+  ctx.fillStyle = '#ff7a1a';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#ff7a1a';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  corners.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  const pull = along(-7, 2);
+  ctx.fillStyle = '#2a2a30';
+  ctx.beginPath();
+  ctx.arc(pull.x, pull.y, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  // The front handle hooped over his lead hand, and the rear handle back to his rear hand
+  ctx.strokeStyle = '#1c1c22';
+  ctx.lineWidth = 2.4;
+  const hoopA = along(-2, -5);
+  const hoopTop = along(0, -9.5);
+  const hoopB = along(2, -5);
+  ctx.beginPath();
+  ctx.moveTo(hoopA.x, hoopA.y);
+  ctx.quadraticCurveTo(hoopTop.x, hoopTop.y, hoopB.x, hoopB.y);
+  const back = along(-15, 0);
+  ctx.moveTo(back.x, back.y);
+  ctx.lineTo(rear.hand.x, rear.hand.y);
   ctx.stroke();
   ctx.restore();
 }
