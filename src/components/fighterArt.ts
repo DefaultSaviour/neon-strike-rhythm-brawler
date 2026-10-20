@@ -1550,17 +1550,23 @@ export function sawBarTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
   return weaponAt(lead.hand, lead.elbow, SAW_BAR).muzzle;
 }
 
+/** How far out from the middle Saw Face's meat hooks hang. */
+const HOOK_X = 44;
+
 /**
  * Saw Face's top-level form: two of the enemies he's cut down hang limp
- * from meat hooks behind him, small and swaying on their chains. They're
- * plain neon enemies (no blood), hung high, and part of the stage: a static
+ * from meat hooks, one each side of the middle, small and swaying on their
+ * chains: whichever way he faces, one hangs behind him. They're plain neon
+ * enemies (no blood), hung high, and part of the stage: a static
  * background, drawn behind the fight in world space, so they never turn,
- * lunge or step with him.
+ * lunge or step with him. They hang inside the strike lines (78 out), clear
+ * of the timing circles that close in on them.
  */
+
 export function meatHooks(time: number) {
   return [
-    { color: '#ff1744', x: -43, hookY: -46, phase: 0 },
-    { color: '#d84dff', x: -77, hookY: -30, phase: 2.1 },
+    { color: '#ff1744', x: -HOOK_X, hookY: -46, phase: 0 },
+    { color: '#d84dff', x: HOOK_X, hookY: -40, phase: 2.1 },
   ].map((h) => ({
     color: h.color,
     hook: { x: h.x, y: h.hookY },

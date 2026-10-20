@@ -263,13 +263,15 @@ describe("Saw Face's chainsaw and meat hooks", () => {
     }
   });
 
-  it('two small enemies hang limp from meat hooks behind him, a static part of the stage', () => {
+  it('two small enemies hang limp from meat hooks, one each side, clear of the timing circles', () => {
     const pose = sf.idlePose;
     const hooks = meatHooks(0);
     expect(hooks).toHaveLength(2);
+    expect(hooks.map((h) => Math.sign(h.hook.x)).sort()).toEqual([-1, 1]);
     for (const h of hooks) {
-      // Behind his back as he starts (facing right), high up, hung off the floor
-      expect(h.hook.x).toBeLessThan(pose.chest.x - 30);
+      // Inside the strike lines (78 out), clear of the settled timing circle (radius 22) round them
+      expect(Math.abs(h.hook.x) + 12 * h.scale).toBeLessThan(78 - 22);
+      // High up, hung off the floor
       expect(h.hook.y).toBeLessThan(pose.chest.y);
       expect(h.hook.y + 104 * h.scale).toBeLessThan(68 - 10);
       expect(h.scale).toBeLessThanOrEqual(0.6);
