@@ -11,8 +11,9 @@ const TABS: Array<{ id: UnlockTab; label: string }> = [
 
 /** The tab bar shown under the header of each unlock screen. */
 export const UnlockTabs: React.FC<{ tab: UnlockTab; onTab: (tab: UnlockTab) => void }> = ({ tab, onTab }) => (
-  <div className="px-6 py-2.5 border-b border-slate-800 bg-slate-900/30">
-    <div className="inline-flex rounded-lg border border-slate-700 overflow-hidden" role="tablist">
+  // Full width, and at least 44px tall: easy to hit with a thumb on a phone
+  <div className="px-3 md:px-6 py-2.5 border-b border-slate-800 bg-slate-900/30">
+    <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-700 bg-slate-950/60 p-1.5" role="tablist">
       {TABS.map((t) => (
         <button
           key={t.id}
@@ -20,7 +21,9 @@ export const UnlockTabs: React.FC<{ tab: UnlockTab; onTab: (tab: UnlockTab) => v
           role="tab"
           aria-selected={tab === t.id}
           onClick={() => onTab(t.id)}
-          className={`px-4 py-1.5 text-xs font-bold cursor-pointer ${tab === t.id ? 'bg-cyan-400 text-black' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+          className={`min-h-11 rounded-lg text-sm md:text-base font-black tracking-wide uppercase cursor-pointer transition-colors ${
+            tab === t.id ? 'bg-cyan-400 text-black shadow-[0_0_14px_rgba(0,243,255,0.4)]' : 'text-slate-300 hover:bg-slate-800'
+          }`}
         >
           {t.label}
         </button>

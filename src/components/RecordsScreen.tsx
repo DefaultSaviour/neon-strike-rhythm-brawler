@@ -72,7 +72,11 @@ export const RecordsScreen: React.FC<RecordsScreenProps> = ({ stats, songs, onCl
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-500 to-cyan-400">RECORDS</div>
             <div className="text-xs text-slate-400">Your best runs. Your best song score also goes on the CrazyGames leaderboard.</div>
           </div>
-          <div className="flex rounded-lg border border-slate-700 overflow-hidden" role="tablist">
+        </div>
+
+        {/* Full width, and at least 44px tall: easy to hit with a thumb on a phone */}
+        <div className="px-3 md:px-6 py-2.5 border-b border-slate-800 bg-slate-900/30">
+          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-700 bg-slate-950/60 p-1.5" role="tablist">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -80,7 +84,9 @@ export const RecordsScreen: React.FC<RecordsScreenProps> = ({ stats, songs, onCl
                 role="tab"
                 aria-selected={tab === t.id}
                 onClick={() => setTab(t.id)}
-                className={`px-3 py-1.5 text-xs font-bold cursor-pointer ${tab === t.id ? 'bg-amber-400 text-black' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+                className={`min-h-11 rounded-lg text-xs sm:text-sm md:text-base font-black tracking-wide uppercase cursor-pointer transition-colors ${
+                  tab === t.id ? 'bg-amber-400 text-black shadow-[0_0_14px_rgba(255,194,58,0.4)]' : 'text-slate-300 hover:bg-slate-800'
+                }`}
               >
                 {t.label}
               </button>

@@ -130,7 +130,7 @@ export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHer
                       type="button"
                       onClick={() => onSelect(h.id)}
                       disabled={chosen}
-                      className={`w-full py-1.5 rounded-md text-xs font-bold transition-colors ${
+                      className={`w-full min-h-11 rounded-md text-sm font-bold transition-colors ${
                         chosen ? 'bg-cyan-400 text-black cursor-default' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer'
                       }`}
                     >

@@ -111,7 +111,7 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
                     type="button"
                     onClick={() => onSelect(m.id)}
                     disabled={chosen}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold shrink-0 ${
+                    className={`min-h-11 px-4 rounded-md text-sm font-bold shrink-0 ${
                       chosen ? 'bg-cyan-400 text-black cursor-default' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer'
                     }`}
                   >
