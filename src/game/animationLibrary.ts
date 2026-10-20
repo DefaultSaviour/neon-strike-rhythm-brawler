@@ -7,6 +7,7 @@ import {
   parseLibrary,
   saveAnimations,
 } from './customAnimation';
+import { STUDIO_ENABLED } from './studioAccess';
 
 /**
  * The custom animations the game is using right now: the ones bundled with
@@ -22,7 +23,8 @@ function browserStore(): KeyValueStore | undefined {
 }
 
 const bundled = parseLibrary(BUNDLED_ANIMATIONS);
-let saved = loadSavedAnimations(browserStore());
+// The published game ignores studio edits saved in the browser (see studioAccess)
+let saved: AnimationLibrary = STUDIO_ENABLED ? loadSavedAnimations(browserStore()) : {};
 let active = mergeLibraries(bundled, saved);
 
 /** Everything the game draws with (bundled + saved). */

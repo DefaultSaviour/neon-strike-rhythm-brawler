@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Play, Lock, Sliders, Clapperboard, Trophy, Users } from 'lucide-react';
+import { STUDIO_ENABLED } from '../game/studioAccess';
 
 /**
  * The title screen: the game's name and five big choices. Works with the
@@ -24,7 +25,7 @@ interface StartScreenProps {
   notice?: string | null;
 }
 
-const CHOICES: Array<{ id: StartChoice; label: string; icon: React.ReactNode }> = [
+const ALL_CHOICES: Array<{ id: StartChoice; label: string; icon: React.ReactNode }> = [
   { id: 'newGame', label: 'New Game', icon: <Play className="w-5 h-5 fill-current" /> },
   { id: 'unlocks', label: 'Unlocks', icon: <Lock className="w-5 h-5" /> },
   { id: 'stances', label: 'Stances', icon: <Users className="w-5 h-5" /> },
@@ -32,6 +33,8 @@ const CHOICES: Array<{ id: StartChoice; label: string; icon: React.ReactNode }> 
   { id: 'options', label: 'Options', icon: <Sliders className="w-5 h-5" /> },
   { id: 'studio', label: 'Pose Studio', icon: <Clapperboard className="w-5 h-5" /> },
 ];
+// The Pose Studio is a dev-only designer tool (see studioAccess)
+const CHOICES = ALL_CHOICES.filter((c) => c.id !== 'studio' || STUDIO_ENABLED);
 
 export const StartScreen: React.FC<StartScreenProps> = ({
   onChoose,

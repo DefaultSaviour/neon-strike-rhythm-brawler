@@ -1,4 +1,5 @@
 import { HeroPoseLibrary, loadHeroPoses, saveHeroPoses } from './heroPoses';
+import { STUDIO_ENABLED } from './studioAccess';
 
 /**
  * The hero poses saved in this browser from the Pose Studio. The game
@@ -13,7 +14,8 @@ function browserStore(): Storage | undefined {
   }
 }
 
-let saved: HeroPoseLibrary = loadHeroPoses(browserStore());
+// The published game ignores studio edits saved in the browser (see studioAccess)
+let saved: HeroPoseLibrary = STUDIO_ENABLED ? loadHeroPoses(browserStore()) : {};
 
 export function getSavedHeroPoses(): HeroPoseLibrary {
   return saved;
