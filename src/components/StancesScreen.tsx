@@ -20,12 +20,14 @@ interface StancesScreenProps {
   adsOffNote?: string | null;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** The Heroes / Stances / Backdrops tab bar, shown under the header */
+  tabs?: React.ReactNode;
   onClose: () => void;
 }
 
 const ORDER: EnemyMotionStyle[] = [...FREE_STANCES, ...STANCE_UNLOCK_ORDER];
 
-export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, onClose }) => {
+export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, tabs, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose();
@@ -40,7 +42,7 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-3xl bg-[#0b0d1e] border border-pink-500/30 rounded-xl shadow-[0_0_40px_rgba(255,0,127,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
+      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-pink-500/30 rounded-xl shadow-[0_0_40px_rgba(255,0,127,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
           <div>
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-amber-300 to-cyan-400">
@@ -70,6 +72,8 @@ export const StancesScreen: React.FC<StancesScreenProps> = ({ stats, selected, i
             <div className="text-sm font-bold text-emerald-300">All stances unlocked!</div>
           )}
         </div>
+
+        {tabs}
 
         {notice && (
           <div role="status" className="px-6 py-2 text-sm font-bold text-amber-200 bg-amber-500/10 border-b border-amber-400/30">

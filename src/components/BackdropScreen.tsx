@@ -30,6 +30,8 @@ interface BackdropScreenProps {
   adsOffNote?: string | null;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
+  /** The Heroes / Stances / Backdrops tab bar, shown under the header */
+  tabs?: React.ReactNode;
   onClose: () => void;
 }
 
@@ -70,7 +72,7 @@ const BackdropCanvas: React.FC<{ pieces: Record<BackdropLayer, string>; animated
   return <canvas ref={ref} className={`${className ?? ''} ${dim ? 'opacity-30 grayscale' : ''}`} />;
 };
 
-export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, onClose }) => {
+export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected, isUnlocked, onSelect, onWatchAd, adBusy, adsOffNote, notice, tabs, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose();
@@ -113,6 +115,8 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
             <div className="text-sm font-bold text-emerald-300">Every piece unlocked!</div>
           )}
         </div>
+
+        {tabs}
 
         {notice && (
           <div role="status" className="px-6 py-2 text-sm font-bold text-amber-200 bg-amber-500/10 border-b border-amber-400/30">

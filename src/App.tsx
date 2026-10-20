@@ -9,13 +9,13 @@ import { HUD } from './components/HUD';
 import { TrackSelectModal } from './components/TrackSelectModal';
 import { AnimationStudio } from './components/AnimationStudio';
 import { GameOverModal } from './components/GameOverModal';
-import { GameOptions } from './components/GameOptions';
 import { StartChoice, StartScreen } from './components/StartScreen';
 import { UnlocksScreen } from './components/UnlocksScreen';
 import { OptionsScreen } from './components/OptionsScreen';
 import { StancesScreen } from './components/StancesScreen';
 import { RecordsScreen } from './components/RecordsScreen';
 import { BackdropScreen } from './components/BackdropScreen';
+import { UnlockTab, UnlockTabs } from './components/UnlockTabs';
 import { bestSongScore, songRecords } from './game/records';
 import {
   followMuteSetting,
@@ -31,7 +31,6 @@ import {
   showRewardedAd,
 } from './platform/crazyGames';
 import { midgameAdDue } from './game/adPacing';
-import { formatCountdown, secondsToNextStance } from './game/stanceUnlocks';
 import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
 import { getHero, HeroId, HEROES } from './game/heroes';
 
@@ -60,7 +59,9 @@ export default function App() {
   const [showTrackSelect, setShowTrackSelect] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
   /** A screen opened from the title menu */
-  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'stances' | 'backdrop' | 'records' | 'options' | null>(null);
+  const [menuScreen, setMenuScreen] = useState<'unlocks' | 'records' | 'options' | null>(null);
+  /** Which tab of the Unlocks screen is open */
+  const [unlockTab, setUnlockTab] = useState<UnlockTab>('heroes');
   /** Rewarded ads can be shown here (CrazyGames, or its local test mode) */
   const [adAvailable, setAdAvailable] = useState(false);
   const [adBusy, setAdBusy] = useState(false);
@@ -164,6 +165,8 @@ export default function App() {
   // Start playing a track
   const handleStartGame = useCallback((trackToPlay: Track = selectedTrack) => {
     setSelectedTrack(trackToPlay);
+    // Drop focus from the button that started the song, so game keys go to the game
+    (document.activeElement as HTMLElement | null)?.blur?.();
     setGameStatus('PLAYING');
     setShowTrackSelect(false);
     setSongLoading(true);
@@ -207,6 +210,14 @@ export default function App() {
       setGameStatus('PLAYING');
     }
   }, [gameStatus, engine]);
+
+  /** Leave the song (the enemies beaten so far still count) and go back to the title screen. */
+  const handleQuitToMenu = useCallback(() => {
+    engine.stop();
+    setShowTrackSelect(false);
+    setGameStatus('MENU');
+    refreshHighScores();
+  }, [engine, refreshHighScores]);
 
   const handleUpdateSettings = (newSettings: Partial<AudioSettings>) => {
     engine.saveSettings(newSettings);
@@ -355,7 +366,10 @@ export default function App() {
     if (choice === 'newGame' && engine.lifetimeStats.playSeconds === 0) handleStartGame(FIRST_SONG);
     else if (choice === 'newGame') setShowTrackSelect(true);
     else if (choice === 'studio') setShowStudio(true);
-    else setMenuScreen(choice);
+    else {
+      if (choice === 'unlocks') setUnlockTab('heroes');
+      setMenuScreen(choice);
+    }
   }, [engine, handleStartGame]);
   const closeMenuScreen = useCallback(() => setMenuScreen(null), []);
 
@@ -425,8 +439,18 @@ export default function App() {
       }
     };
 
+    // Space pauses during a song; it must never also "click" whatever button last had focus
+    // (browsers activate a focused button on Space keyup)
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && (gameStatus === 'PLAYING' || gameStatus === 'PAUSED')) e.preventDefault();
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [
     gameStatus,
     adBreak,
@@ -471,18 +495,13 @@ export default function App() {
           unlockedHeroes={HEROES.filter((h) => engine.isHeroUnlocked(h.id)).length}
           totalHeroes={HEROES.length}
           oneButtonMode={audioSettings.oneButtonMode}
-          stanceCountdown={(() => {
-            const wait = secondsToNextStance(engine.lifetimeStats);
-            return wait === null ? null : formatCountdown(wait);
-          })()}
-          onWatchAd={adAvailable ? handleWatchAd : undefined}
-          adBusy={adBusy}
           notice={menuNotice}
         />
       )}
 
-      {menuScreen === 'stances' && (
+      {menuScreen === 'unlocks' && unlockTab === 'stances' && (
         <StancesScreen
+          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
           stats={engine.lifetimeStats}
           selected={engine.enemyMotion}
           isUnlocked={(id) => engine.isStanceUnlocked(id)}
@@ -495,8 +514,9 @@ export default function App() {
         />
       )}
 
-      {menuScreen === 'unlocks' && (
+      {menuScreen === 'unlocks' && unlockTab === 'heroes' && (
         <UnlocksScreen
+          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
           stats={engine.lifetimeStats}
           selectedHero={engine.hero.id}
           isUnlocked={(id) => engine.isHeroUnlocked(id)}
@@ -508,8 +528,9 @@ export default function App() {
         />
       )}
 
-      {menuScreen === 'backdrop' && (
+      {menuScreen === 'unlocks' && unlockTab === 'backdrops' && (
         <BackdropScreen
+          tabs={<UnlockTabs tab={unlockTab} onTab={setUnlockTab} />}
           stats={engine.lifetimeStats}
           selected={engine.backdrop}
           isUnlocked={(id) => engine.isBackdropUnlocked(id)}
@@ -543,11 +564,7 @@ export default function App() {
               <div className="text-xs text-slate-400 mt-1 font-mono">Track: {selectedTrack.title}</div>
             </div>
 
-            <div className="mt-5 p-4 rounded-lg bg-slate-950/70 border border-slate-800">
-              <GameOptions settings={audioSettings} onUpdateSettings={handleUpdateSettings} lifetimeStats={engine.lifetimeStats} />
-            </div>
-
-            <div className="mt-5 w-full flex flex-col gap-3">
+            <div className="mt-6 w-full flex flex-col gap-3">
               <button
                 onClick={handleTogglePause}
                 className="w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all cursor-pointer"
@@ -555,20 +572,18 @@ export default function App() {
                 Resume ({audioSettings.oneButtonMode ? 'Esc' : 'Space'})
               </button>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={handleRestart}
-                  className="py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer"
-                >
-                  Restart Track (R)
-                </button>
-                <button
-                  onClick={() => setShowTrackSelect(true)}
-                  className="py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer"
-                >
-                  Track Library
-                </button>
-              </div>
+              <button
+                onClick={handleRestart}
+                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm transition-colors cursor-pointer"
+              >
+                Restart Song (R)
+              </button>
+              <button
+                onClick={handleQuitToMenu}
+                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm transition-colors cursor-pointer"
+              >
+                Quit to Main Menu
+              </button>
             </div>
           </div>
         </div>
@@ -597,6 +612,10 @@ export default function App() {
           onOpenSelect={() => {
             setGameStatus('MENU');
             setShowTrackSelect(true);
+          }}
+          onMainMenu={() => {
+            setShowTrackSelect(false);
+            setGameStatus('MENU');
           }}
           averageTimingErrorMs={engine.getAverageTimingErrorMs()}
           currentLatencyOffsetMs={audioSettings.latencyOffsetMs}

@@ -5,7 +5,7 @@ import type { RunProgress } from '../game/runProgress';
 import { getHero, HeroId } from '../game/heroes';
 import { HERO_UNLOCKS } from '../game/heroUnlocks';
 import { RunProgressBar } from './RunProgressBar';
-import { RotateCcw, Music, Trophy, Flame, Target } from 'lucide-react';
+import { RotateCcw, Music, Trophy, Flame, Target, Home } from 'lucide-react';
 
 interface GameOverModalProps {
   cleared: boolean;
@@ -14,6 +14,8 @@ interface GameOverModalProps {
   highScoreRecord: HighScoreRecord | null;
   onRestart: () => void;
   onOpenSelect: () => void;
+  /** Back to the title screen */
+  onMainMenu: () => void;
   /** Median press-minus-beat error in ms (positive = late), or null if no hits */
   averageTimingErrorMs?: number | null;
   /** Current latency setting (ms) */
@@ -40,6 +42,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   highScoreRecord,
   onRestart,
   onOpenSelect,
+  onMainMenu,
   averageTimingErrorMs = null,
   currentLatencyOffsetMs = 0,
   suggestedLatencyOffsetMs = null,
@@ -295,6 +298,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           >
             <Music className="w-4 h-4 text-cyan-400" />
             <span>Choose Another Track</span>
+          </button>
+
+          <button
+            onClick={onMainMenu}
+            className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Home className="w-4 h-4 text-cyan-400" />
+            <span>Main Menu</span>
           </button>
         </div>
       </div>
