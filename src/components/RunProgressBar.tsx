@@ -11,7 +11,7 @@ import { fighterTier } from '../game/fighterTier';
 import { attackChainFrame, playerVictoryPose } from '../game/motion';
 import { getMoveForCombo, getOrientedPose } from '../game/animations';
 import { getHero, HeroDefinition, HeroId } from '../game/heroes';
-import { drawFighter, drawSlashCrescent } from './fighterArt';
+import { applyHeroBuild, drawFighter, drawSlashCrescent } from './fighterArt';
 import { bodyFill } from './neonBody';
 
 /**
@@ -235,7 +235,10 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
   ctx.scale(RUNNER_SCALE, RUNNER_SCALE);
   ctx.translate(0, -68);
   drawFighter(ctx, pose, { tier, facing: 1, time: elapsed, combo: tier.minCombo, hero: hero.id });
-  if (slashing && pose.bladeSlash) drawSlashCrescent(ctx, pose.bladeSlash);
+  if (slashing && pose.bladeSlash) {
+    applyHeroBuild(ctx, hero.id, 1);
+    drawSlashCrescent(ctx, pose.bladeSlash);
+  }
   ctx.restore();
 
   // Level-up flash: a ring bursts out and the new tier name pops up as he crosses each quarter line

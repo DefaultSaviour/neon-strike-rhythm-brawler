@@ -63,7 +63,7 @@ function drawHeroAt(ctx: CanvasRenderingContext2D, view: ReturnType<typeof studi
   ctx.globalAlpha = alpha;
   ctx.translate(origin.x, origin.y);
   ctx.scale(view.scale, view.scale);
-  drawFighter(ctx, pose, { tier: fighterTier(0), facing: 1, time: performance.now() / 1000, hero, random: () => 0.5 });
+  drawFighter(ctx, pose, { tier: fighterTier(0), facing: 1, time: performance.now() / 1000, hero, random: () => 0.5, noBuild: true });
   if (effect && pose.bladeSlash) drawSlashCrescent(ctx, pose.bladeSlash);
   ctx.restore();
 }

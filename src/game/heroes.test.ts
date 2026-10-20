@@ -5,6 +5,7 @@ import { LIMB } from './enemyMotion';
 import { DEFAULT_HERO, getHero, HEROES } from './heroes';
 import { isHeroUnlocked } from './heroUnlocks';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
+import { SAW_FACE_POSE_EDITS } from './heroMoves/sawFacePoses';
 import { COMBO_SNAP_SEC, comboDuration, comboFrame } from './combo';
 import { muzzlePoint } from '../components/fighterArt';
 
@@ -980,5 +981,89 @@ describe('The Bride', () => {
     expect(isHeroUnlocked('bride', after(0, 1))).toBe(true);
     // Watching ads for enemy stances doesn't count toward her
     expect(isHeroUnlocked('bride', { ...after(0), adUnlocks: 5 })).toBe(false);
+  });
+});
+
+describe('Saw Face', () => {
+  const GRIP_GAP = 14;
+  const sf = getHero('sawFace');
+  const realPoses = (m: AttackMove) =>
+    m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
+    expect(sf.moves).toHaveLength(21);
+    const perTier = [1, 2, 3, 4, 5].map((t) => sf.moves.filter((m) => m.tier === t).length);
+    expect(perTier).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(sf.moves.map((m) => m.name)).size).toBe(21);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
+    const poses = [sf.idlePose, ...sf.moves.flatMap((m) => [m.pose, ...m.sequence!.map((k) => keyToPlayerPose(k))])];
+    for (const p of poses) {
+      expectSolidLimbs(p);
+      for (const q of [p.leftFoot, p.rightFoot, p.leftHand, p.rightHand, p.head]) {
+        expect(q.y).toBeLessThanOrEqual(68 + 1e-6);
+      }
+    }
+  });
+
+  it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
+    for (const m of sf.moves) {
+      expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      expect(m.sequence![0].trail).toBeDefined();
+      // The designer's own studio poses are taken exactly as drawn
+      if (SAW_FACE_POSE_EDITS[m.name]) continue;
+      expect(m.pose.bladeSlash!.end.x, m.name).toBeGreaterThan(m.pose.pelvis.x);
+    }
+  });
+
+  it("uses the designer's studio poses for the finishers", () => {
+    for (const [name, edit] of Object.entries(SAW_FACE_POSE_EDITS)) {
+      const m = sf.moves.find((x) => x.name === name)!;
+      const poses = m.sequence!.filter((k) => !k.hold);
+      expect(poses.length, name).toBe(edit.poses.length);
+      expect(poses[0].pose.frontHand.x, name).toBeCloseTo(edit.poses[0].frontHand.x, 0);
+    }
+  });
+
+  it('keeps every move simple and holds its poses so they read', () => {
+    for (const m of sf.moves) {
+      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      const [before, last] = m.sequence!.slice(-2);
+      expect(last.pose).toEqual(before.pose);
+      expect(last.ms).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
+    for (const m of sf.moves) {
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('holds the chainsaw in both hands in every pose: the rear hand on the rear handle behind the lead hand', () => {
+    expect(dist(sf.idlePose.leftHand, sf.idlePose.rightHand)).toBeLessThan(GRIP_GAP);
+    for (const m of sf.moves) {
+      for (const k of m.sequence!) expect(dist(k.pose.frontHand, k.pose.backHand), m.name).toBeLessThan(GRIP_GAP);
+    }
+  });
+
+  it('every finisher ends with the dance: the saw goes up over his head, and he whirls round', () => {
+    for (const m of sf.moves.filter((x) => x.tier === 5)) {
+      const after = m.sequence!.slice(1);
+      expect(after.some((k) => k.pose.frontHand.y < k.pose.head.y), m.name).toBe(true);
+      expect(m.sequence![m.sequence!.length - 1].spin, m.name).toBe(true);
+    }
+    // ...and the dance is only for the finishers
+    for (const m of sf.moves.filter((x) => x.tier < 5)) {
+      for (const k of m.sequence!) expect(k.pose.frontHand.y, m.name).toBeGreaterThan(k.pose.head.y);
+    }
+  });
+
+  it('is earned by landing 666 PERFECT hits, with no ad shortcut', () => {
+    const after = (n: number, ads = 0) => ({ enemiesDefeated: 0, perfects: n, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: ads, totalScore: 0, backdropAds: 0 });
+    expect(isHeroUnlocked('sawFace', after(665))).toBe(false);
+    expect(isHeroUnlocked('sawFace', after(666))).toBe(true);
+    expect(isHeroUnlocked('sawFace', after(0, 1))).toBe(false);
   });
 });

@@ -13,7 +13,7 @@ import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
 import { drawBackdropLayers } from './backdropArt';
 import { drawConveyors, drawPit } from './stageArt';
-import { drawFighter, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
+import { applyHeroBuild, drawFighter, drawMeatHooks, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
@@ -106,6 +106,8 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       const stage = { ctx, halfW, top: FLOOR_Y - FLOOR_BACK, front: FLOOR_Y + 22, worldBottom, pitRadius: engine.pitRadius, conveyorOffset, pulse };
       drawConveyors(stage, engine.backdrop.floor);
       drawPit(stage, engine.backdrop.floor, FLOOR_Y);
+      // Saw Face's top-level form: enemies on meat hooks, a static part of the stage behind the fight
+      if (engine.hero.id === 'sawFace' && fighterTier(engine.scoreState.combo).ascended) drawMeatHooks(ctx, performance.now() / 1000);
       drawTacticalStrikeZones(ctx, engine);
       drawFloorShadowsAndReflections(ctx, engine, halfW);
       drawDebrisPieces(ctx, engine);
@@ -440,12 +442,14 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   // Glow, colour, lightning and the top-level form all come from the combo tier (see fighterTier.ts).
   const tier = fighterTier(combo);
 
+  const facing = engine.attackDirection === 'left' ? -1 : 1;
   ctx.save();
   ctx.translate(engine.playerOffsetX, 0);
 
   // Cyber ghost afterimage while attacking (Cyber Ninja tier and up)
   if (tier.ghost && engine.isAttacking) {
     ctx.save();
+    applyHeroBuild(ctx, engine.hero.id, facing, true);
     ctx.globalAlpha = 0.28;
     ctx.strokeStyle = tier.color;
     ctx.shadowColor = tier.color;
@@ -481,17 +485,21 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   drawFighter(ctx, pose, {
     tier,
     combo,
-    facing: engine.attackDirection === 'left' ? -1 : 1,
+    facing,
     time: performance.now() / 1000,
     corePulse: audioEngine.bassMeter,
     hero: engine.hero.id,
+    inGame: true,
   });
 
   // Blade slash, in front of the body: a glowing crescent with a white-hot edge
   if (pose.bladeSlash && engine.strikeActive) {
+    ctx.save();
+    applyHeroBuild(ctx, engine.hero.id, facing, true);
     drawSlashCrescent(ctx, pose.bladeSlash);
-    drawShotFlash(ctx, pose, engine.attackDirection === 'left' ? -1 : 1);
+    drawShotFlash(ctx, pose, facing);
     if (engine.hero.id === 'theOne') drawImpactRipple(ctx, pose);
+    ctx.restore();
   }
 
   // Move & tier banner

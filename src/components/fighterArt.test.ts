@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, HERO_BUILDS, meatHooks, sawBarTip, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -234,5 +234,72 @@ describe("The Bride's katana and blossom storm", () => {
     const xs = petals.map((p) => p.x);
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(90);
     expect(blossomStorm(br.idlePose, 0.5)[0].x).not.toBeCloseTo(petals[0].x, 1);
+  });
+});
+
+describe("Saw Face's chainsaw and meat hooks", () => {
+  const sf = getHero('sawFace');
+
+  it('every saw hit lands at the tip of the bar', () => {
+    for (const m of sf.moves) {
+      for (const k of m.sequence!) {
+        if (!k.trail) continue;
+        expect(dist(sawBarTip(keyToPlayerPose(k), 1), k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+  });
+
+  it('the saw never sits on top of his mask, even with it held high in the dance', () => {
+    for (const m of sf.moves) {
+      for (const k of m.sequence!) {
+        const pose = keyToPlayerPose(k);
+        const tip = sawBarTip(pose, 1);
+        const hand = pose.leftHand;
+        const len = dist(tip, hand);
+        // The middle of the engine block, behind the lead hand
+        const engine = { x: hand.x - ((tip.x - hand.x) / len) * 6.5, y: hand.y - ((tip.y - hand.y) / len) * 6.5 };
+        expect(dist(engine, pose.head), m.name).toBeGreaterThan(10);
+      }
+    }
+  });
+
+  it('two small enemies hang limp from meat hooks, one each side, clear of the timing circles', () => {
+    const pose = sf.idlePose;
+    const hooks = meatHooks(0);
+    expect(hooks).toHaveLength(2);
+    expect(hooks.map((h) => Math.sign(h.hook.x)).sort()).toEqual([-1, 1]);
+    for (const h of hooks) {
+      // Inside the strike lines (78 out), clear of the settled timing circle (radius 22) round them
+      expect(Math.abs(h.hook.x) + 12 * h.scale).toBeLessThan(78 - 22);
+      // High up, hung off the floor
+      expect(h.hook.y).toBeLessThan(pose.chest.y);
+      expect(h.hook.y + 104 * h.scale).toBeLessThan(68 - 10);
+      expect(h.scale).toBeLessThanOrEqual(0.6);
+      expect(h.chainTop.y).toBeLessThan(h.hook.y - 80);
+    }
+    expect(hooks[0].color).not.toBe(hooks[1].color);
+    // They sway a little on their chains, but never move along
+    expect(meatHooks(0.5)[0].sway).not.toBeCloseTo(hooks[0].sway, 3);
+    expect(meatHooks(0.5)[0].hook).toEqual(hooks[0].hook);
+  });
+
+});
+
+describe('hero builds', () => {
+  it('Saw Face is a big man: drawn about 15-20% bigger than the skeleton, and stood back in a song', () => {
+    const build = HERO_BUILDS.sawFace!;
+    expect(build.scale).toBeGreaterThanOrEqual(1.15);
+    expect(build.scale).toBeLessThanOrEqual(1.2);
+    expect(build.standBack).toBeGreaterThan(0);
+  });
+
+  it('the build scales from the feet and moves him back away from the enemy he faces', () => {
+    const calls: string[] = [];
+    const ctx = { translate: (x: number, y: number) => calls.push(`t ${x} ${y}`), scale: (x: number) => calls.push(`s ${x}`) } as unknown as CanvasRenderingContext2D;
+    applyHeroBuild(ctx, 'sawFace', -1, true);
+    expect(calls).toEqual([`t ${HERO_BUILDS.sawFace!.standBack} 0`, 't 0 68', `s ${HERO_BUILDS.sawFace!.scale}`, 't 0 -68']);
+    calls.length = 0;
+    applyHeroBuild(ctx, 'bride', 1, true);
+    expect(calls).toEqual([]);
   });
 });
