@@ -38,6 +38,9 @@ interface GameOverModalProps {
    * now (the big one is the last card of the unlock popup). `done` once watched.
    */
   adOffer?: { name: string; busy: boolean; done: boolean; notice?: string | null; onWatch: () => void };
+  /** A practice run (nothing was saved), and how many hits were taken */
+  practice?: boolean;
+  practiceHits?: number;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -58,6 +61,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   newUnlocks = [],
   onPickHero,
   adOffer,
+  practice = false,
+  practiceHits = 0,
 }) => {
   const [pickedHero, setPickedHero] = React.useState<HeroId | null>(null);
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
@@ -104,7 +109,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   }
 
   const isNewHighScore =
-    highScoreRecord && scoreState.score >= highScoreRecord.highScore && scoreState.score > 0;
+    !practice && highScoreRecord && scoreState.score >= highScoreRecord.highScore && scoreState.score > 0;
 
   // Keyboard shortcut listener for fast instant retry: [R] or Space
   useEffect(() => {
@@ -136,10 +141,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 : 'text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-red-500'
             }`}
           >
-            {cleared ? 'Track Cleared' : 'Defeated'}
+            {practice ? 'Practice Run' : cleared ? 'Track Cleared' : 'Defeated'}
           </div>
           <div className="text-xs text-slate-400 mt-1">
-            {cleared ? 'Flawless rhythm execution' : 'An enemy breached your strike line!'}
+            {practice
+              ? `${practiceHits === 0 ? 'No hits taken!' : `You took ${practiceHits} hit${practiceHits === 1 ? '' : 's'} (red on the bar).`} Practice doesn't count toward unlocks or records.`
+              : cleared
+                ? 'Flawless rhythm execution'
+                : 'An enemy breached your strike line!'}
           </div>
           {!cleared && deathReport && (
             <div className="mt-3 px-3 py-2 rounded-lg bg-red-950/40 border border-red-500/40 text-sm text-slate-200">

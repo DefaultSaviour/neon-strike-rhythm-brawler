@@ -18,7 +18,7 @@ function makeTrack(notes: Array<[number, 'left' | 'right']>): Track {
   return { id: 't', title: 't', artist: 'a', bpm: 150, difficulty: 'Hard', duration: 60, description: '', notes: beatNotes };
 }
 
-async function play(notes: Array<[number, 'left' | 'right']>) {
+async function play(notes: Array<[number, 'left' | 'right']>, practice = false) {
   const judgements: TimingJudgementType[] = [];
   let gameOver = false;
   let death: DeathReport | undefined;
@@ -31,7 +31,7 @@ async function play(notes: Array<[number, 'left' | 'right']>) {
     onJudgement: (j) => judgements.push(j),
   });
   engine.settings.latencyOffsetMs = 0;
-  await engine.startSong(makeTrack(notes));
+  await engine.startSong(makeTrack(notes), practice);
   /** Advance the song clock to `t`, running frames like the real game loop. */
   const advanceTo = (t: number) => {
     while (clock < t) {
@@ -226,5 +226,46 @@ describe('earning enemy stances', () => {
     expect(g.engine.unlockStanceWithAd()).toBe('sway');
     expect(g.engine.isStanceUnlocked('sway')).toBe(true);
     expect(g.engine.isStanceUnlocked('dance')).toBe(false);
+  });
+});
+
+describe('practice mode', () => {
+  const notes: Array<[number, 'left' | 'right']> = Array.from({ length: 6 }, (_, i) => [2 + i * 0.5, 'left']);
+
+  it('enemies that get through are hits taken, not death: the song goes on', async () => {
+    const g = await play(notes, true);
+    g.press(notes[0][0], 'left');
+    g.advanceTo(6);
+    expect(g.death()).toBeUndefined();
+    expect(g.isOver()).toBe(false);
+    expect(g.engine.practiceHits).toHaveLength(5);
+    // Each one is a miss and breaks the combo
+    expect(g.engine.scoreState.missCount).toBe(5);
+    expect(g.engine.scoreState.combo).toBe(0);
+  });
+
+  it('counts for nothing: no lifetime stats, no unlocks, no best progress', async () => {
+    const g = await play(notes, true);
+    g.engine.lifetimeStats = { ...EMPTY_STATS, enemiesDefeated: 330 };
+    for (const [t, lane] of notes) g.press(t, lane);
+    g.engine.stop();
+    expect(g.engine.lifetimeStats).toEqual({ ...EMPTY_STATS, enemiesDefeated: 330 });
+    expect(g.engine.newUnlocks).toEqual([]);
+    expect(g.engine.runUnlocks).toEqual([]);
+  });
+
+  it('still runs the midgame ad clock, so practice is never an ad-free way to play', async () => {
+    const g = await play(notes, true);
+    const before = g.engine.adClockSeconds;
+    g.advanceTo(4);
+    g.engine.stop();
+    expect(g.engine.adClockSeconds).toBeGreaterThan(before + 3);
+  });
+
+  it('a normal song after a practice one is back to normal: one enemy through ends it', async () => {
+    const g = await play(notes, true);
+    await g.engine.startSong(g.engine.track!, false);
+    expect(g.engine.practice).toBe(false);
+    expect(g.engine.practiceHits).toEqual([]);
   });
 });

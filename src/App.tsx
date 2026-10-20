@@ -170,7 +170,8 @@ export default function App() {
   );
 
   // Start playing a track
-  const handleStartGame = useCallback((trackToPlay: Track = selectedTrack) => {
+  /** Start a song; `practice` plays it in practice mode (hits don't end it, nothing counts) */
+  const handleStartGame = useCallback((trackToPlay: Track = selectedTrack, practice = false) => {
     setSelectedTrack(trackToPlay);
     // Drop focus from the button that started the song, so game keys go to the game
     (document.activeElement as HTMLElement | null)?.blur?.();
@@ -178,16 +179,16 @@ export default function App() {
     setShowTrackSelect(false);
     setSongLoading(true);
     loadingStart();
-    engine.startSong(trackToPlay).finally(() => {
+    engine.startSong(trackToPlay, practice).finally(() => {
       loadingStop();
       setSongLoading(false);
     });
   }, [selectedTrack, engine]);
 
-  // Restart current track
+  // Restart current track (a practice run restarts in practice)
   const handleRestart = useCallback(() => {
-    handleStartGame(selectedTrack);
-  }, [handleStartGame, selectedTrack]);
+    handleStartGame(selectedTrack, engine.practice);
+  }, [handleStartGame, selectedTrack, engine]);
 
   // Strike input handler
   // `eventTimeStamp` is the input event's timeStamp, so presses are judged
@@ -236,7 +237,7 @@ export default function App() {
   useEffect(() => {
     initCrazyGames().then(async (live) => {
       engine.reloadProgress();
-      playSecondsAtLastAd.current = engine.lifetimeStats.playSeconds;
+      playSecondsAtLastAd.current = engine.adClockSeconds;
       bestSongAtStart.current = bestSongScore(engine.getAllHighScores());
       setAudioSettings({ ...engine.settings });
       refreshHighScores();
@@ -252,7 +253,7 @@ export default function App() {
   // Midgame ads: at the end of a song, once there's been 5 minutes of play since the last one
   // (see adPacing). The results screen waits behind the ad. Unlocking a hero makes the
   // CrazyGames site celebrate, after any ad.
-  const playSecondsAtLastAd = useRef(engine.lifetimeStats.playSeconds);
+  const playSecondsAtLastAd = useRef(engine.adClockSeconds);
   /** The best single-song score already sent to the leaderboard (or saved before this visit) */
   const bestSongAtStart = useRef(bestSongScore(engine.getAllHighScores()));
   useEffect(() => {
@@ -269,7 +270,8 @@ export default function App() {
       if (unlockedHero) happytime();
       if (engine.runUnlocks.length > 0) setFanfare({ unlocks: engine.runUnlocks, offer: adsOnRef.current ? adOffer(engine.lifetimeStats) : null });
     };
-    if (!midgameAdDue(engine.lifetimeStats.playSeconds, playSecondsAtLastAd.current, AD_TEST ? 0 : undefined)) {
+    // Practice play counts toward the next ad too (adClockSeconds)
+    if (!midgameAdDue(engine.adClockSeconds, playSecondsAtLastAd.current, AD_TEST ? 0 : undefined)) {
       celebrate();
       return;
     }
@@ -280,7 +282,7 @@ export default function App() {
       () => void ctx.resume()
     ).then((watched) => {
       // No ad played (none available, too soon for CrazyGames, ad blocker): try again after the next song
-      if (watched) playSecondsAtLastAd.current = engine.lifetimeStats.playSeconds;
+      if (watched) playSecondsAtLastAd.current = engine.adClockSeconds;
       setAdBreak(false);
       celebrate();
     });
@@ -541,6 +543,7 @@ export default function App() {
           scoreState={scoreState}
           oneButtonMode={audioSettings.oneButtonMode}
           onToggleOneButtonMode={handleToggleOneButtonMode}
+          practice={engine.practice}
           onStrike={handleStrike}
           onOneButtonStrike={handleOneButtonStrike}
           onPause={handleTogglePause}
@@ -674,6 +677,8 @@ export default function App() {
           deathReport={deathReport}
           runProgress={engine.lastRun}
           heroId={engine.hero.id}
+          practice={engine.practice}
+          practiceHits={engine.practiceHits.length}
           newUnlocks={engine.newUnlocks}
           onPickHero={(hero) => handleUpdateSettings({ hero })}
           track={selectedTrack}
@@ -693,7 +698,7 @@ export default function App() {
           suggestedLatencyOffsetMs={engine.getSuggestedLatencyOffsetMs()}
           onApplyLatencyOffset={(offsetMs) => handleUpdateSettings({ latencyOffsetMs: offsetMs })}
           adOffer={
-            endOffer && !fanfare
+            endOffer && !fanfare && !engine.practice
               ? { name: describeUnlock(endOffer).name, busy: adBusy, done: offerTaken !== null, notice: menuNotice, onWatch: () => takeOffer(endOffer) }
               : undefined
           }
@@ -733,6 +738,11 @@ export default function App() {
             setSelectedTrack(t);
             setShowTrackSelect(false);
             handleStartGame(t);
+          }}
+          onPracticeTrack={(t) => {
+            setSelectedTrack(t);
+            setShowTrackSelect(false);
+            handleStartGame(t, true);
           }}
           onTrackAdded={handleTrackAdded}
           onTrackDeleted={handleTrackDeleted}

@@ -81,8 +81,12 @@ export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run, heroId }) =
       />
       <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-[11px] font-mono text-slate-400">
         <span>
-          {run.cleared ? 'Cleared the whole song' : `Made it to ${formatSongTime(run.reachedSec)}`}{' '}
-          <span className="text-slate-200 font-bold">({Math.round(run.fraction * 100)}%)</span>
+          {run.hits
+            ? `Practice: ${run.hits.length} hit${run.hits.length === 1 ? '' : 's'} taken`
+            : run.cleared
+              ? 'Cleared the whole song'
+              : `Made it to ${formatSongTime(run.reachedSec)}`}{' '}
+          {!run.hits && <span className="text-slate-200 font-bold">({Math.round(run.fraction * 100)}%)</span>}
         </span>
         <span className={run.isNewBest && best !== null ? 'text-amber-300 font-bold' : ''}>
           {best === null
@@ -161,6 +165,25 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
   ctx.restore();
 
   drawFlag(ctx, x1 + 6, barY, run.cleared && arrived);
+
+  // Practice runs: a red tick wherever an enemy got through, showing up as the runner passes it
+  if (run.hits?.length) {
+    ctx.save();
+    ctx.strokeStyle = '#ff2a5f';
+    ctx.shadowColor = '#ff2a5f';
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const f of run.hits) {
+      if (f > pos) continue;
+      const hx = xAt(f);
+      ctx.moveTo(hx, barY - 7);
+      ctx.lineTo(hx, barY + 7);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Best attempt marker (the best BEFORE this run, so you can see if you beat it)
   if (run.previousBest !== null && run.previousBest < 0.999) {
@@ -298,7 +321,8 @@ function drawFrame(ctx: CanvasRenderingContext2D, width: number, run: RunProgres
 
   // Time reached, above the end point
   if (arrived) {
-    const label = run.cleared ? 'CLEARED!' : formatSongTime(run.reachedSec);
+    // A practice run reaches the end whatever happens, so it hasn't really cleared the song
+    const label = run.cleared ? (run.hits ? 'FINISHED' : 'CLEARED!') : formatSongTime(run.reachedSec);
     ctx.save();
     ctx.font = '900 12px "Outfit", sans-serif';
     ctx.textAlign = 'center';

@@ -18,6 +18,31 @@ export interface RunProgress {
   previousBest: number | null;
   /** True when this run went further than any earlier attempt */
   isNewBest: boolean;
+  /** Practice runs: where in the song (0..1) each enemy got through (red ticks on the bar) */
+  hits?: number[];
+}
+
+/**
+ * A practice run's progress: compared with the best attempt but never saved
+ * (practice counts for nothing), with a tick for every hit taken.
+ */
+export function practiceRunProgress(
+  trackId: string,
+  reachedSec: number,
+  durationSec: number,
+  cleared: boolean,
+  hitTimesSec: number[],
+  store: KeyValueStore | undefined
+): RunProgress {
+  return {
+    fraction: progressFraction(reachedSec, durationSec, cleared),
+    reachedSec: cleared ? durationSec : Math.min(reachedSec, durationSec),
+    durationSec,
+    cleared,
+    previousBest: loadBestProgress(trackId, store),
+    isNewBest: false,
+    hits: hitTimesSec.map((t) => progressFraction(t, durationSec, false)),
+  };
 }
 
 /** Minimal storage interface (localStorage fits), so tests can pass a fake. */

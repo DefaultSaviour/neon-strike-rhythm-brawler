@@ -26,7 +26,7 @@ import { idleBouncePose, strikeFrame } from './motion';
 import { comboDuration, comboFrame } from './combo';
 import { FLOOR_Y, SPAWN_DISTANCE } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
-import { recordRunProgress, RunProgress } from './runProgress';
+import { practiceRunProgress, recordRunProgress, RunProgress } from './runProgress';
 import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, EnemyMotionStyle } from './enemyMotion';
 import { enemyPoseFor } from './customAnimation';
 import { getActiveAnimations } from './animationLibrary';
@@ -210,6 +210,22 @@ export class GameEngine {
   public runUnlocks: RunUnlock[] = [];
   /** This song's results have already been added to the lifetime totals */
   private runCounted = false;
+  /**
+   * Practice mode: enemies that get through only count as a hit taken, and
+   * the song plays on to the end. Nothing is saved or earned: no lifetime
+   * stats or unlocks, no best progress, no high score.
+   */
+  public practice = false;
+  /** Song times (s) of the hits taken this practice run */
+  public practiceHits: number[] = [];
+  /** Seconds played in practice this visit (only for pacing midgame ads, see adClockSeconds) */
+  private practiceSeconds = 0;
+
+  /** Play time for pacing midgame ads: practice counts too, so it's never an ad-free way to play. */
+  public get adClockSeconds(): number {
+    return this.lifetimeStats.playSeconds + this.practiceSeconds;
+  }
+
   /** OK hits in a row right now, and the most this song (The Tin Man's goal) */
   private okStreak = 0;
   private bestOkStreak = 0;
@@ -284,6 +300,11 @@ export class GameEngine {
   private countRun(cleared: boolean, died = false, quit = false) {
     if (!this.track || this.runCounted) return;
     this.runCounted = true;
+    // Practice counts for nothing (only for pacing ads)
+    if (this.practice) {
+      this.practiceSeconds += this.songTime;
+      return;
+    }
     const s = this.scoreState;
     const before = this.lifetimeStats;
     this.lifetimeStats = addRun(before, {
@@ -337,9 +358,11 @@ export class GameEngine {
     } catch {}
   }
 
-  public async startSong(track: Track) {
+  public async startSong(track: Track, practice = false) {
     const session = ++this.songSession;
     this.track = track;
+    this.practice = practice;
+    this.practiceHits = [];
     this.isRunning = false;
     this.enemies = [];
     this.particles = [];
@@ -773,6 +796,10 @@ export class GameEngine {
       enemy.animPhase = beatPos * speed + (enemy.stepOffset ?? 0);
 
       if (timeRemaining < -BREACH_LATE_SEC) {
+        if (this.practice) {
+          this.takePracticeHit(enemy);
+          continue;
+        }
         this.triggerPlayerDeath(enemy);
         return;
       }
@@ -887,6 +914,44 @@ export class GameEngine {
     }
   }
 
+  /** Practice: an enemy got through. It counts as a miss and a hit taken, and the song goes on. */
+  private takePracticeHit(enemy: Enemy) {
+    enemy.defeated = true;
+    this.practiceHits.push(this.songTime);
+    this.scoreState.combo = 0;
+    this.scoreState.missCount++;
+    this.okStreak = 0;
+    this.callbacks.onScoreUpdate({ ...this.scoreState });
+    this.callbacks.onJudgement('MISS', 0);
+    this.screenShake = Math.max(this.screenShake, 6);
+    this.judgements.push({
+      id: this.nextJudgementId++,
+      text: 'MISS',
+      x: enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset,
+      y: -80,
+      color: '#ff2a5f',
+      createdAt: performance.now(),
+      scale: 1.2,
+      lane: enemy.lane,
+    });
+    for (let i = 0; i < 14; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 80 + Math.random() * 160;
+      this.particles.push({
+        x: enemy.lane === 'left' ? -20 : 20,
+        y: -10,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: '#ff2a5f',
+        size: 2 + Math.random() * 3,
+        alpha: 1.0,
+        life: 0,
+        maxLife: 0.4 + Math.random() * 0.2,
+        sparkType: 'line',
+      });
+    }
+  }
+
   private triggerPlayerDeath(killer: Enemy) {
     this.isRunning = false;
     this.recordProgress(false);
@@ -926,7 +991,9 @@ export class GameEngine {
   private recordProgress(cleared: boolean) {
     if (!this.track || this.lastRun) return;
     const duration = this.track.audioBuffer?.duration ?? this.track.duration;
-    this.lastRun = recordRunProgress(this.track.id, this.songTime, duration, cleared, progressStore());
+    this.lastRun = this.practice
+      ? practiceRunProgress(this.track.id, this.songTime, duration, cleared, this.practiceHits, progressStore())
+      : recordRunProgress(this.track.id, this.songTime, duration, cleared, progressStore());
   }
 
   private finishSong(cleared: boolean) {
@@ -940,7 +1007,7 @@ export class GameEngine {
   }
 
   private saveHighScore(cleared: boolean) {
-    if (!this.track) return;
+    if (!this.track || this.practice) return;
     const totalHits =
       this.scoreState.perfectCount +
       this.scoreState.goodCount +
