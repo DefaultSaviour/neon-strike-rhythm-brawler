@@ -32,8 +32,10 @@ import {
   showRewardedAd,
 } from './platform/crazyGames';
 import { midgameAdDue } from './game/adPacing';
-import { ENEMY_MOTION_STYLES } from './game/enemyMotion';
+import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from './game/enemyMotion';
 import { getHero, HeroId, HEROES } from './game/heroes';
+import { adOffer, backdropLayerOf, describeUnlock, RunUnlock } from './game/runUnlocks';
+import { UnlockFanfare } from './components/UnlockFanfare';
 
 /** Dev builds only: ?adTest makes a midgame ad due at the end of every song, to try the flow. */
 const AD_TEST = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('adTest');
@@ -70,6 +72,10 @@ export default function App() {
   const [adsOffNote, setAdsOffNote] = useState<string | null>(null);
   /** A midgame ad is being requested or shown at the end of a song: the results wait for it */
   const [adBreak, setAdBreak] = useState(false);
+  /** The unlock popup after a song: what it unlocked, and what an ad could unlock on top */
+  const [fanfare, setFanfare] = useState<{ unlocks: RunUnlock[]; offer: RunUnlock | null } | null>(null);
+  /** The ad offer taken after this song (unlocked and equipped) */
+  const [offerTaken, setOfferTaken] = useState<RunUnlock | null>(null);
   /** A song is being loaded (decoded and charted) before it starts */
   const [songLoading, setSongLoading] = useState(false);
   const [menuNotice, setMenuNotice] = useState<string | null>(null);
@@ -258,8 +264,13 @@ export default function App() {
       void submitLeaderboardScore(best);
     }
     const unlockedHero = engine.newUnlocks.length > 0;
-    if (!midgameAdDue(engine.lifetimeStats.playSeconds, playSecondsAtLastAd.current, AD_TEST ? 0 : undefined)) {
+    // The unlock popup, if the song unlocked anything, with an ad offer on the end where ads can play
+    const celebrate = () => {
       if (unlockedHero) happytime();
+      if (engine.runUnlocks.length > 0) setFanfare({ unlocks: engine.runUnlocks, offer: adsOnRef.current ? adOffer(engine.lifetimeStats) : null });
+    };
+    if (!midgameAdDue(engine.lifetimeStats.playSeconds, playSecondsAtLastAd.current, AD_TEST ? 0 : undefined)) {
+      celebrate();
       return;
     }
     setAdBreak(true);
@@ -271,9 +282,16 @@ export default function App() {
       // No ad played (none available, too soon for CrazyGames, ad blocker): try again after the next song
       if (watched) playSecondsAtLastAd.current = engine.lifetimeStats.playSeconds;
       setAdBreak(false);
-      if (unlockedHero) happytime();
+      celebrate();
     });
   }, [gameStatus, engine]);
+
+  // A new song: last song's popup and ad offer are done with
+  useEffect(() => {
+    if (gameStatus !== 'PLAYING') return;
+    setFanfare(null);
+    setOfferTaken(null);
+  }, [gameStatus]);
 
   // Tell CrazyGames when the player is actually in gameplay (in a song, not paused or loading).
   useEffect(() => {
@@ -325,22 +343,24 @@ export default function App() {
     [adBusy]
   );
 
-  /** Watch a rewarded ad for the next enemy stance. */
+  /** Watch a rewarded ad for the next enemy stance, and use it straight away. */
   const handleWatchAd = useCallback(() => {
     void watchRewardedAd(() => {
       const stance = engine.unlockStanceWithAd();
       const label = ENEMY_MOTION_STYLES.find((m) => m.id === stance)?.label;
-      setMenuNotice(label ? `New stance unlocked: ${label}!` : null);
+      if (stance) handleUpdateSettings({ enemyMotion: stance });
+      setMenuNotice(label ? `New stance unlocked and equipped: ${label}!` : null);
     });
-  }, [watchRewardedAd, engine]);
+  }, [watchRewardedAd, engine, handleUpdateSettings]);
 
-  /** Watch a rewarded ad for the next backdrop piece. */
+  /** Watch a rewarded ad for the next backdrop piece, and put it up straight away. */
   const handleWatchBackdropAd = useCallback(() => {
     void watchRewardedAd(() => {
       const piece = engine.unlockBackdropWithAd();
-      setMenuNotice(piece ? `New backdrop piece unlocked: ${piece.label}!` : null);
+      if (piece) handleUpdateSettings({ backdrop: { ...engine.backdrop, [piece.layer]: piece.id } });
+      setMenuNotice(piece ? `New backdrop piece unlocked and equipped: ${piece.label}!` : null);
     });
-  }, [watchRewardedAd, engine]);
+  }, [watchRewardedAd, engine, handleUpdateSettings]);
 
   /** Watch a rewarded ad to unlock an ad-only hero (The Bride), then play as her. */
   const handleWatchHeroAd = useCallback(
@@ -383,6 +403,33 @@ export default function App() {
   const markSeen = useCallback((kind: UnlockKind, id: string) => {
     if (engine.markUnlockSeen(kind, id)) setSeenTick((n) => n + 1);
   }, [engine]);
+
+  /** Use an unlock now: play as the hero, switch the enemies' stance, or put the backdrop piece up. */
+  const equipUnlock = (u: RunUnlock) => {
+    if (u.kind === 'hero') handleUpdateSettings({ hero: u.id as HeroId });
+    else if (u.kind === 'stance') handleUpdateSettings({ enemyMotion: u.id as EnemyMotionStyle });
+    else {
+      const layer = backdropLayerOf(u.id);
+      if (layer) handleUpdateSettings({ backdrop: { ...engine.backdrop, [layer]: u.id } });
+    }
+    markSeen(u.kind, u.id);
+  };
+  const isEquipped = (u: RunUnlock) =>
+    u.kind === 'hero' ? engine.hero.id === u.id : u.kind === 'stance' ? engine.enemyMotion === u.id : Object.values(engine.backdrop).includes(u.id);
+  /** Watch a rewarded ad for the after-song offer: unlocked and equipped straight away. */
+  const takeOffer = (u: RunUnlock) => {
+    void watchRewardedAd(() => {
+      if (!engine.unlockWithAd(u)) return;
+      equipUnlock(u);
+      setOfferTaken(u);
+      if (u.kind === 'hero') happytime();
+    });
+  };
+  /** Rewarded ads can play here (the end-of-song popup reads it when it opens) */
+  const adsOnRef = useRef(adAvailable);
+  adsOnRef.current = adAvailable;
+  /** The small offer on the results screen: what an ad would unlock now (or what it just did) */
+  const endOffer = offerTaken ?? (adAvailable ? adOffer(engine.lifetimeStats) : null);
   const unseen = engine.unseenUnlocks();
   const unlockTabs = (
     <UnlockTabs
@@ -647,6 +694,27 @@ export default function App() {
           currentLatencyOffsetMs={audioSettings.latencyOffsetMs}
           suggestedLatencyOffsetMs={engine.getSuggestedLatencyOffsetMs()}
           onApplyLatencyOffset={(offsetMs) => handleUpdateSettings({ latencyOffsetMs: offsetMs })}
+          adOffer={
+            endOffer && !fanfare
+              ? { name: describeUnlock(endOffer).name, busy: adBusy, done: offerTaken !== null, notice: menuNotice, onWatch: () => takeOffer(endOffer) }
+              : undefined
+          }
+        />
+      )}
+
+      {(gameStatus === 'GAME_OVER' || gameStatus === 'CLEARED') && !adBreak && fanfare && (
+        <UnlockFanfare
+          unlocks={fanfare.unlocks}
+          offer={fanfare.offer}
+          offerTaken={offerTaken !== null}
+          adBusy={adBusy}
+          notice={menuNotice}
+          stats={engine.lifetimeStats}
+          backdrop={engine.backdrop}
+          isEquipped={isEquipped}
+          onEquip={equipUnlock}
+          onWatchOffer={() => fanfare.offer && takeOffer(fanfare.offer)}
+          onClose={() => setFanfare(null)}
         />
       )}
 

@@ -50,7 +50,7 @@ const CAST: Array<[FrequencyBand, EnemyTier]> = [
 ];
 
 /** An enemy moving in a stance, on a steady beat (dark and grey when the stance is still locked). Same size as a hero portrait. */
-const StancePortrait: React.FC<{ stance: EnemyMotionStyle; band: FrequencyBand; tier: EnemyTier; locked: boolean }> = ({ stance, band, tier, locked }) => {
+export const StancePortrait: React.FC<{ stance: EnemyMotionStyle; band: FrequencyBand; tier: EnemyTier; locked: boolean }> = ({ stance, band, tier, locked }) => {
   const ref = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const canvas = ref.current;

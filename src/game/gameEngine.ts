@@ -13,6 +13,7 @@ import {
 } from '../types/game';
 import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
 import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes';
+import { RunUnlock, unlocksBetween } from './runUnlocks';
 import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
 import { isStanceUnlocked, nextStance } from './stanceUnlocks';
 import { audioEngine } from '../audio/audioEngine';
@@ -205,6 +206,8 @@ export class GameEngine {
   public lifetimeStats: LifetimeStats;
   /** Heroes the last song unlocked, for the results screen to announce */
   public newUnlocks: HeroId[] = [];
+  /** Everything the last song unlocked (heroes, stances, backdrop pieces), for the unlock popup */
+  public runUnlocks: RunUnlock[] = [];
   /** This song's results have already been added to the lifetime totals */
   private runCounted = false;
   /** Dev ?unlockAll mode: every hero open, and real progress never saved over */
@@ -255,6 +258,13 @@ export class GameEngine {
     return next;
   }
 
+  /** The player watched a rewarded ad for this offer (see adOffer): unlock it. Returns false if it was already open. */
+  public unlockWithAd(offer: RunUnlock): boolean {
+    if (offer.kind === 'hero') return this.unlockHeroWithAd(offer.id as HeroId);
+    if (offer.kind === 'stance') return this.unlockStanceWithAd() === offer.id;
+    return this.unlockBackdropWithAd()?.id === offer.id;
+  }
+
   /** The player watched a rewarded ad for an ad-only hero: unlock them. Returns false if there was nothing to unlock. */
   public unlockHeroWithAd(id: HeroId): boolean {
     if (!HERO_UNLOCKS[id]?.ad || this.isHeroUnlocked(id)) return false;
@@ -289,6 +299,7 @@ export class GameEngine {
       before,
       this.lifetimeStats
     );
+    this.runUnlocks = unlocksBetween(before, this.lifetimeStats);
     if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
   }
 
@@ -333,6 +344,7 @@ export class GameEngine {
     this.lastRun = null;
     this.runCounted = false;
     this.newUnlocks = [];
+    this.runUnlocks = [];
     this.currentMoveIndex = 0;
     this.isAttacking = false;
     this.strikeActive = false;

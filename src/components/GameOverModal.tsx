@@ -33,6 +33,11 @@ interface GameOverModalProps {
   newUnlocks?: HeroId[];
   /** Switch to a hero (from the "play as them" button) */
   onPickHero?: (id: HeroId) => void;
+  /**
+   * A small, quiet offer under the buttons: what a rewarded ad would unlock
+   * now (the big one is the last card of the unlock popup). `done` once watched.
+   */
+  adOffer?: { name: string; busy: boolean; done: boolean; notice?: string | null; onWatch: () => void };
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -52,6 +57,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   heroId,
   newUnlocks = [],
   onPickHero,
+  adOffer,
 }) => {
   const [pickedHero, setPickedHero] = React.useState<HeroId | null>(null);
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
@@ -308,6 +314,25 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <span>Main Menu</span>
           </button>
         </div>
+
+        {/* Kept small on purpose: the real offer is in the unlock popup */}
+        {adOffer && (
+          <div className="mt-3 text-[11px] text-slate-500">
+            {adOffer.done ? (
+              <span className="text-amber-300">{adOffer.name} unlocked and equipped!</span>
+            ) : (
+              <button
+                type="button"
+                onClick={adOffer.onWatch}
+                disabled={adOffer.busy}
+                className="min-h-8 px-2 text-cyan-300/80 hover:text-cyan-200 underline decoration-dotted underline-offset-2 disabled:opacity-60 cursor-pointer"
+              >
+                {adOffer.busy ? 'Loading ad…' : `▶ Watch an ad to unlock ${adOffer.name} now`}
+              </button>
+            )}
+            {adOffer.notice && !adOffer.done && <div className="text-pink-300/80">{adOffer.notice}</div>}
+          </div>
+        )}
       </div>
     </div>
   );

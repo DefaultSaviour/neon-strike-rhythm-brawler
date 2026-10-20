@@ -41,7 +41,7 @@ interface BackdropScreenProps {
 }
 
 /** Draws a backdrop onto a canvas: animated (the live preview) or a still (a piece's thumbnail). */
-const BackdropCanvas: React.FC<{ pieces: Record<BackdropLayer, string>; animated?: boolean; className?: string; dim?: boolean; closeUp?: boolean }> = ({
+export const BackdropCanvas: React.FC<{ pieces: Record<BackdropLayer, string>; animated?: boolean; className?: string; dim?: boolean; closeUp?: boolean }> = ({
   pieces,
   animated,
   className,
