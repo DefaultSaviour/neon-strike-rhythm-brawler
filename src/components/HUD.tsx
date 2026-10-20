@@ -8,6 +8,8 @@ interface HUDProps {
   scoreState: GameScoreState;
   oneButtonMode?: boolean;
   onToggleOneButtonMode?: () => void;
+  /** A practice run: shows a PRACTICE tag by the song name */
+  practice?: boolean;
   onStrike: (lane: Lane, eventTimeStamp?: number) => void;
   onOneButtonStrike?: (eventTimeStamp?: number) => void;
   onPause: () => void;
@@ -20,6 +22,7 @@ export const HUD: React.FC<HUDProps> = ({
   scoreState,
   oneButtonMode = false,
   onToggleOneButtonMode,
+  practice = false,
   onStrike,
   onOneButtonStrike,
   onPause,
@@ -128,6 +131,11 @@ export const HUD: React.FC<HUDProps> = ({
                 {track?.title || 'Track'}
               </span>
             </button>
+            {practice && (
+              <span className="px-2 py-1 rounded bg-amber-400/15 border border-amber-400/60 text-amber-300 text-[10px] font-black tracking-[0.2em]">
+                PRACTICE
+              </span>
+            )}
 
             <span className="hidden md:inline text-slate-500 font-mono text-xs">
               {track?.artist} · {track?.bpm} BPM

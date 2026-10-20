@@ -10,6 +10,8 @@ interface TrackSelectModalProps {
   customTracks: Track[];
   onSelectTrack: (track: Track) => void;
   onPlayTrack?: (track: Track) => void;
+  /** Play the song in practice mode: getting hit doesn't end it, and nothing counts */
+  onPracticeTrack?: (track: Track) => void;
   onTrackAdded: (track: Track) => void;
   onTrackDeleted: (trackId: string) => void;
   onUpdateSettings: (settings: Partial<AudioSettings>) => void;
@@ -23,6 +25,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
   customTracks,
   onSelectTrack,
   onPlayTrack,
+  onPracticeTrack,
   onTrackAdded,
   onTrackDeleted,
   onUpdateSettings,
@@ -324,6 +327,15 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
             >
               Back
             </button>
+            {onPracticeTrack && currentTrack && (
+              <button
+                onClick={() => onPracticeTrack(currentTrack)}
+                title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records"
+                className="min-h-11 px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-400/60 text-amber-300 font-bold text-sm cursor-pointer"
+              >
+                Practice
+              </button>
+            )}
             {onPlayTrack && currentTrack && (
               <button
                 onClick={() => onPlayTrack(currentTrack)}

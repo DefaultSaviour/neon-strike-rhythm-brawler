@@ -7,6 +7,7 @@ import {
   KeyValueStore,
   loadBestProgress,
   progressFraction,
+  practiceRunProgress,
   recordRunProgress,
   runnerPositionAt,
 } from './runProgress';
@@ -124,5 +125,18 @@ describe('runner levels up through 4 quarters', () => {
     expect(levelUpTimes(0.3).map((u) => u.position)).toEqual([0.25]);
     expect(levelUpTimes(0.1)).toEqual([]);
     expect(levelUpTimes(1).map((u) => u.combo)).toEqual([16, 30, 50]);
+  });
+});
+
+describe('practice runs', () => {
+  it('compare with the best attempt but never save, and mark every hit taken', () => {
+    const store = memoryStore();
+    recordRunProgress('song', 60, 200, false, store);
+    const before = JSON.stringify([...store.data]);
+    const run = practiceRunProgress('song', 200, 200, true, [20, 100, 150], store);
+    expect(JSON.stringify([...store.data])).toBe(before);
+    expect(run.previousBest).toBeCloseTo(0.3, 6);
+    expect(run.isNewBest).toBe(false);
+    expect(run.hits).toEqual([0.1, 0.5, 0.75]);
   });
 });
