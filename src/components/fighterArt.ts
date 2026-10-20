@@ -88,8 +88,8 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     else if (opts.hero === 'sawFace') {
       /* his meat hooks are part of the stage, drawn behind everything (NeonCanvas) */
     }
-    else if (opts.hero === 'scarecrow') {
-      /* his brain glows in the top of his head, drawn with his outfit */
+    else if (opts.hero === 'scarecrow' || opts.hero === 'tinMan' || opts.hero === 'lion') {
+      /* the brain, the heart and the fire mane are drawn with their outfits */
     }
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
@@ -192,6 +192,8 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   if (opts.hero === 'bride') drawBrideOutfit(ctx, pose, tier, opts.facing);
   if (opts.hero === 'sawFace') drawSawFaceOutfit(ctx, pose, opts.facing, opts.time);
   if (opts.hero === 'scarecrow') drawScarecrowOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
+  if (opts.hero === 'tinMan') drawTinManOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
+  if (opts.hero === 'lion') drawLionOutfit(ctx, pose, opts.facing, opts.time, tier.ascended);
   if (tier.ascended && opts.hero === 'bride') {
     drawBrideHelmet(ctx, pose, opts.facing);
     drawBlossomStorm(ctx, pose, opts.time, 'front');
@@ -212,8 +214,8 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     drawSleepyEyes(ctx, pose, opts.facing);
   } else if (opts.hero === 'spartan' && tier.ascended) {
     // His closed battle helmet has its own glowing eye slits
-  } else if (opts.hero === 'sawFace' || opts.hero === 'scarecrow') {
-    // They look out through their masks (Saw Face's eye hole, the Scarecrow's sack)
+  } else if (opts.hero === 'sawFace' || opts.hero === 'scarecrow' || opts.hero === 'tinMan' || opts.hero === 'lion') {
+    // Their faces are drawn with their outfits (a mask, a sack, tin, a lion's face)
   } else {
     ctx.fillStyle = tier.visorColor;
     ctx.shadowColor = tier.visorColor;
@@ -2118,6 +2120,366 @@ function drawScarecrowOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time:
   } else {
     drawScarecrowHat(ctx, hatAt, facing);
   }
+  ctx.restore();
+}
+
+/** How far The Tin Man's axe head is past his hand (matches his axe hits, see tinMan.ts). */
+const AXE_HEAD = 30;
+
+/** Where The Tin Man's axe head is: at the end of the handle, along his lead forearm. */
+export function axeHead(pose: SkeletonPose, facing: 1 | -1): Point2D {
+  const { lead } = arms(pose, facing);
+  return weaponAt(lead.hand, lead.elbow, AXE_HEAD).muzzle;
+}
+
+/** The Tin Man's top-level form: his new heart, glowing red in his chest and beating like a clock ticks. */
+export function tinHeart(pose: SkeletonPose, time: number) {
+  const beat = Math.abs(Math.sin(time * 6));
+  // Below the chest core, so the core's glow doesn't cover it
+  return { x: pose.chest.x, y: pose.chest.y + 13, size: 7.5 * (1 + beat * 0.18), glow: 0.5 + beat * 0.5 };
+}
+
+function heartPath(ctx: Ctx, x: number, y: number, s: number) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + s * 0.9);
+  ctx.bezierCurveTo(x - s * 1.4, y + s * 0.1, x - s * 0.9, y - s * 0.95, x, y - s * 0.35);
+  ctx.bezierCurveTo(x + s * 0.9, y - s * 0.95, x + s * 1.4, y + s * 0.1, x, y + s * 0.9);
+  ctx.closePath();
+}
+
+/** A rivet: a little tin dot with a dark rim. */
+function rivet(ctx: Ctx, at: Point2D, r = 1.5) {
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+/**
+ * The Tin Man: a tin face with a riveted jaw, a funnel for a hat, a tin
+ * chest plate, rivets at his elbows and knees, the axe in his lead hand,
+ * and (when he oils himself) an oil can in his rear hand. In his top-level
+ * form his new heart glows in his chest.
+ */
+function drawTinManOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number, hearty: boolean) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const tin = '#cfd8e2';
+
+  // Tin chest plate with rivets in the corners
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 6;
+  const corners = [
+    { x: c.x + nx * 9, y: c.y + ny * 9 },
+    { x: c.x - nx * 9, y: c.y - ny * 9 },
+    { x: p.x - nx * 7, y: p.y - ny * 7 },
+    { x: p.x + nx * 7, y: p.y + ny * 7 },
+  ];
+  ctx.beginPath();
+  corners.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#8b97a5';
+  ctx.lineWidth = 0.7;
+  for (const q of corners) rivet(ctx, { x: q.x + (c.x - q.x) * 0.18 + (p.x - c.x) * 0.06, y: q.y + (c.y - q.y) * 0.18 + (p.y - c.y) * 0.06 }, 1.2);
+  // Rivets at the elbows and knees
+  for (const j of [pose.leftElbow, pose.rightElbow, pose.leftKnee, pose.rightKnee]) rivet(ctx, j, 2);
+
+  // His new heart (top-level form), glowing through the chest plate
+  if (hearty) {
+    const h = tinHeart(pose, time);
+    ctx.save();
+    ctx.fillStyle = '#ff2d55';
+    ctx.shadowColor = '#ff2d55';
+    ctx.shadowBlur = 10 + h.glow * 14;
+    heartPath(ctx, h.x, h.y, h.size);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // The axe: a wooden handle along his lead forearm, a tin head on the end
+  const arm = arms(pose, facing).lead;
+  const { dir: d } = weaponAt(arm.hand, arm.elbow, AXE_HEAD);
+  const n = { x: -d.y * facing, y: d.x * facing };
+  const along = (t: number, side = 0) => ({ x: arm.hand.x + d.x * t + n.x * side, y: arm.hand.y + d.y * t + n.y * side });
+  const butt = along(-7);
+  const top = along(AXE_HEAD + 2);
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4.6;
+  ctx.beginPath();
+  ctx.moveTo(butt.x, butt.y);
+  ctx.lineTo(top.x, top.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#8a5a2b';
+  ctx.lineWidth = 2.6;
+  ctx.stroke();
+  const blade = [along(AXE_HEAD - 9, -1), along(AXE_HEAD + 1, -1), along(AXE_HEAD + 4, 10), along(AXE_HEAD - 12, 10)];
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.3;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(blade[0].x, blade[0].y);
+  ctx.lineTo(blade[1].x, blade[1].y);
+  const edgeMid = along(AXE_HEAD - 4, 13);
+  ctx.lineTo(blade[2].x, blade[2].y);
+  ctx.quadraticCurveTo(edgeMid.x, edgeMid.y, blade[3].x, blade[3].y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // The oil can, in his rear hand, spout up at his jaw
+  if (pose.prop === 'oilcan') {
+    const rear = arms(pose, facing).rear;
+    const to = { x: pose.head.x - rear.hand.x, y: pose.head.y + 6 - rear.hand.y };
+    const tl = Math.hypot(to.x, to.y) || 1;
+    const u = { x: to.x / tl, y: to.y / tl };
+    ctx.fillStyle = '#d9a441';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.ellipse(rear.hand.x - u.x * 2, rear.hand.y - u.y * 2, 4.2, 3.4, Math.atan2(u.y, u.x), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#b07f28';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(rear.hand.x + u.x * 2, rear.hand.y + u.y * 2);
+    ctx.lineTo(rear.hand.x + u.x * 9, rear.hand.y + u.y * 9);
+    ctx.stroke();
+  }
+
+  // The tin face: dark eyes, a little cone nose and a riveted hinged jaw
+  const h = pose.head;
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 9.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#10141c';
+  for (const ex of [2.5, 6.8]) {
+    ctx.beginPath();
+    ctx.arc(h.x + facing * ex, h.y - 1.5, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#9aa6b4';
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 6, h.y + 0.5);
+  ctx.lineTo(h.x + facing * 11, h.y + 2);
+  ctx.lineTo(h.x + facing * 6, h.y + 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#5d6876';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(h.x - facing * 3, h.y + 4.5);
+  ctx.lineTo(h.x + facing * 8.5, h.y + 4.5);
+  ctx.stroke();
+  ctx.fillStyle = '#8b97a5';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 0.6;
+  rivet(ctx, { x: h.x - facing * 4, y: h.y + 4.5 }, 1.1);
+
+  // The funnel for a hat: wide over his head, narrowing to a spout
+  ctx.fillStyle = tin;
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#e6eef7';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(h.x - 9, h.y - 6);
+  ctx.lineTo(h.x + 9, h.y - 6);
+  ctx.lineTo(h.x + 2, h.y - 18);
+  ctx.lineTo(h.x + 1.6, h.y - 26);
+  ctx.lineTo(h.x - 1.6, h.y - 26);
+  ctx.lineTo(h.x - 2, h.y - 18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The Lion's mane: shaggy tufts all round his head. In his top-level form
+ * (his courage) they're a blazing mane of fire, flickering and much bigger.
+ */
+export function lionMane(pose: SkeletonPose, time: number, blazing: boolean) {
+  const count = blazing ? 14 : 18;
+  return Array.from({ length: count }, (_, i) => {
+    const a = (i / count) * Math.PI * 2;
+    const flicker = blazing ? Math.sin(time * 9 + i * 1.7) * 3.5 + Math.sin(time * 13 + i) * 2.5 : 0;
+    const length = (blazing ? 23 : 17) + (i % 2 ? -2.5 : 2) * (blazing ? 1 : 0.6) + flicker;
+    return { a, length };
+  });
+}
+
+/**
+ * The Lion: a big mane round a lion's face (a muzzle, a dark nose,
+ * whiskers), tawny fur over his body, clawed paws, and a long tail with a
+ * tuft swishing behind him. In his top-level form his mane is fire.
+ */
+function drawLionOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: number, blazing: boolean) {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sx = p.x - c.x;
+  const sy = p.y - c.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const nx = -sy / sl;
+  const ny = sx / sl;
+  const back = -facing;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // The tail, swishing out behind him
+  const swish = Math.sin(time * 4) * 6;
+  const tailEnd = { x: p.x + back * 30, y: p.y - 14 + swish };
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 4.2;
+  ctx.beginPath();
+  ctx.moveTo(p.x + back * 4, p.y + 2);
+  ctx.quadraticCurveTo(p.x + back * 22, p.y + 14, tailEnd.x, tailEnd.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#c98f3c';
+  ctx.lineWidth = 2.4;
+  ctx.stroke();
+  ctx.fillStyle = blazing ? '#ff8a1e' : '#8a4a16';
+  ctx.beginPath();
+  ctx.ellipse(tailEnd.x, tailEnd.y, 4, 5.5, 0.4 * back, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tawny fur over the body
+  ctx.fillStyle = '#c98f3c';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.3;
+  ctx.shadowColor = '#e0a656';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + nx * 9.5, c.y + ny * 9.5);
+  ctx.lineTo(c.x - nx * 9.5, c.y - ny * 9.5);
+  ctx.lineTo(p.x - nx * 7.5, p.y - ny * 7.5);
+  ctx.lineTo(p.x + nx * 7.5, p.y + ny * 7.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // A paler belly
+  ctx.fillStyle = '#e9c78a';
+  ctx.beginPath();
+  ctx.ellipse((c.x + p.x) / 2 + nx * 2 * facing, (c.y + p.y) / 2 + ny * 2 * facing, 4, 9, Math.atan2(sy, sx) - Math.PI / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // The mane (or, with his courage, a mane of fire)
+  const h = pose.head;
+  const tufts = lionMane(pose, time, blazing);
+  ctx.save();
+  if (blazing) {
+    const g = ctx.createRadialGradient(h.x, h.y, 6, h.x, h.y, 28);
+    g.addColorStop(0, '#fff3a0');
+    g.addColorStop(0.45, '#ffb020');
+    g.addColorStop(1, 'rgba(255, 60, 20, 0.9)');
+    ctx.fillStyle = g;
+    ctx.shadowColor = '#ff7a1a';
+    ctx.shadowBlur = 18;
+  } else {
+    ctx.fillStyle = '#9a561d';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1;
+  }
+  ctx.beginPath();
+  tufts.forEach((t, i) => {
+    const next = tufts[(i + 1) % tufts.length];
+    const mid = (t.a + (i === tufts.length - 1 ? next.a + Math.PI * 2 : next.a)) / 2;
+    const tip = { x: h.x + Math.cos(t.a) * t.length, y: h.y + Math.sin(t.a) * t.length - (blazing ? 3 : 0) };
+    // A shaggy ring when calm (shallow gaps between tufts), deep tongues of fire when blazing
+    const dip = blazing ? 9.5 : 13.5;
+    const valley = { x: h.x + Math.cos(mid) * dip, y: h.y + Math.sin(mid) * dip };
+    if (i === 0) ctx.moveTo(tip.x, tip.y);
+    else ctx.lineTo(tip.x, tip.y);
+    ctx.lineTo(valley.x, valley.y);
+  });
+  ctx.closePath();
+  ctx.fill();
+  if (!blazing) ctx.stroke();
+  ctx.restore();
+
+  // His face: a muzzle, a dark nose, eyes and whiskers
+  ctx.fillStyle = '#e8b866';
+  ctx.strokeStyle = '#05050c';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.arc(h.x, h.y, 8.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#f6dca6';
+  ctx.beginPath();
+  ctx.ellipse(h.x + facing * 4.5, h.y + 3, 4.5, 3.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2a1608';
+  ctx.beginPath();
+  ctx.moveTo(h.x + facing * 6.5, h.y + 0.5);
+  ctx.lineTo(h.x + facing * 9.5, h.y + 0.5);
+  ctx.lineTo(h.x + facing * 8, h.y + 2.6);
+  ctx.closePath();
+  ctx.fill();
+  for (const ex of [1.5, 5.5]) {
+    ctx.beginPath();
+    ctx.arc(h.x + facing * ex, h.y - 2.5, 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#2a1608';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  for (const wy of [2.5, 4]) {
+    ctx.moveTo(h.x + facing * 7, h.y + wy);
+    ctx.lineTo(h.x + facing * 13, h.y + wy - 1 + (wy - 3));
+  }
+  ctx.stroke();
+
+  // Paws with claws, on top (so when he cowers they cover his face)
+  for (const [hand, elbow] of [
+    [pose.leftHand, pose.leftElbow],
+    [pose.rightHand, pose.rightElbow],
+  ] as const) {
+    const a = Math.atan2(hand.y - elbow.y, hand.x - elbow.x);
+    ctx.fillStyle = '#d9a24e';
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(hand.x, hand.y, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    for (const k of [-0.5, 0, 0.5]) {
+      const ca = a + k;
+      ctx.moveTo(hand.x + Math.cos(ca) * 3.5, hand.y + Math.sin(ca) * 3.5);
+      ctx.lineTo(hand.x + Math.cos(ca) * 7, hand.y + Math.sin(ca) * 7);
+    }
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 

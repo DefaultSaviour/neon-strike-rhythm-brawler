@@ -43,9 +43,13 @@ export interface LifetimeStats {
   mostMissesCleared: number;
   /** Songs that ended with an enemy getting through (not quitting): The Scarecrow's goal */
   songsDied: number;
+  /** Songs quit part way (Quit to Main Menu): The Lion's goal */
+  songsQuit: number;
+  /** Most OK hits in a row in one song (a PERFECT, GOOD or miss breaks it): The Tin Man's goal */
+  bestOkStreak: number;
 }
 
-export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0 };
+export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 };
 
 /**
  * A song's accuracy, 0-100: PERFECT counts 100, GOOD 70, OK 40, a miss 0
@@ -82,6 +86,10 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
   discoKing: { stat: 'perfects', target: 2500, label: 'Land 2,500 PERFECT hits' },
   // Meme unlocks: no brain? No problem. He comes to the players who keep getting knocked out
   scarecrow: { stat: 'songsDied', target: 10, label: 'Die in 10 songs' },
+  // The cowardly one runs away
+  lion: { stat: 'songsQuit', target: 5, label: 'Run away from 5 songs (quit part way)' },
+  // Rusty, so always a little off the beat: being perfectly bad is hard
+  tinMan: { stat: 'bestOkStreak', target: 20, label: 'Hit 20 OKs in a row' },
   // Swing wildly at thin air, and still get to the end of the song
   drunkenMaster: { stat: 'mostMissesCleared', target: 50, label: 'Complete a song with 50+ misses' },
   spartan: { stat: 'bestCombo', target: 300, label: 'Reach a 300 combo' },
@@ -94,7 +102,7 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
  * them this way, as a path. Play goals come first (about 1 to 10 songs),
  * then the skill goals, hardest last.
  */
-export const UNLOCK_ORDER: HeroId[] = ['striker', 'theOne', 'dragon', 'scarecrow', 'sawFace', 'drunkenMaster', 'stallion', 'proWrestler', 'bride', 'kid', 'discoKing', 'spartan', 'babaYaga', 'ballerina'];
+export const UNLOCK_ORDER: HeroId[] = ['striker', 'theOne', 'dragon', 'scarecrow', 'lion', 'sawFace', 'drunkenMaster', 'stallion', 'proWrestler', 'bride', 'kid', 'discoKing', 'spartan', 'tinMan', 'babaYaga', 'ballerina'];
 
 export function isHeroUnlocked(id: HeroId, stats: LifetimeStats): boolean {
   const goal = HERO_UNLOCKS[id];
@@ -129,6 +137,10 @@ export interface RunResult {
   accuracy: number;
   /** It ended with an enemy getting through (quitting doesn't count) */
   died?: boolean;
+  /** The player quit part way (Quit to Main Menu) */
+  quit?: boolean;
+  /** Most OK hits in a row in this song */
+  okStreak?: number;
   maxCombo: number;
   cleared: boolean;
   /** How long the song was played for */
@@ -154,6 +166,8 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     flawlessClears: stats.flawlessClears + (run.cleared && run.misses === 0 && run.enemiesDefeated > 0 ? 1 : 0),
     mostMissesCleared: run.cleared ? Math.max(stats.mostMissesCleared, run.misses) : stats.mostMissesCleared,
     songsDied: stats.songsDied + (run.died ? 1 : 0),
+    songsQuit: stats.songsQuit + (run.quit ? 1 : 0),
+    bestOkStreak: Math.max(stats.bestOkStreak, run.okStreak ?? 0),
   };
 }
 
@@ -186,6 +200,8 @@ export function loadStats(store: Pick<Storage, 'getItem'> | undefined): Lifetime
       flawlessClears: num(parsed.flawlessClears),
       mostMissesCleared: num(parsed.mostMissesCleared),
       songsDied: num(parsed.songsDied),
+      songsQuit: num(parsed.songsQuit),
+      bestOkStreak: num(parsed.bestOkStreak),
     };
   } catch {
     return { ...EMPTY_STATS };

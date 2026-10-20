@@ -31,7 +31,7 @@ describe('hero unlocks', () => {
   it('every other hero has a goal, and the goals mix kinds (playing, finishing, combos, perfects, OK hits, time, accuracy, no misses, lots of misses)', () => {
     for (const id of ids) if (id !== DEFAULT_HERO) expect(HERO_UNLOCKS[id], id).toBeDefined();
     const kinds = new Set(Object.values(HERO_UNLOCKS).map((g) => g!.stat));
-    expect(kinds).toEqual(new Set(['enemiesDefeated', 'songsCleared', 'bestCombo', 'perfects', 'playSeconds', 'okHits', 'bestClearAccuracy', 'flawlessClears', 'mostMissesCleared', 'songsDied']));
+    expect(kinds).toEqual(new Set(['enemiesDefeated', 'songsCleared', 'bestCombo', 'perfects', 'playSeconds', 'okHits', 'bestClearAccuracy', 'flawlessClears', 'mostMissesCleared', 'songsDied', 'songsQuit', 'bestOkStreak']));
   });
 
   it('lists every hero once in the unlock path, the free hero first', () => {
@@ -51,6 +51,8 @@ describe('hero unlocks', () => {
       kid: ['playSeconds', 1800],
       discoKing: ['perfects', 2500],
       scarecrow: ['songsDied', 10],
+      lion: ['songsQuit', 5],
+      tinMan: ['bestOkStreak', 20],
       drunkenMaster: ['mostMissesCleared', 50],
       spartan: ['bestCombo', 300],
       babaYaga: ['bestClearAccuracy', 98],
@@ -66,6 +68,13 @@ describe('hero unlocks', () => {
     s = addRun(s, { ...base, cleared: false });
     s = addRun(s, { ...base, cleared: true });
     expect(s.songsDied).toBe(1);
+  });
+
+  it('quitting counts toward The Lion, and the best OK streak of any song counts toward The Tin Man', () => {
+    const base = { enemiesDefeated: 10, perfects: 5, oks: 5, misses: 0, accuracy: 70, maxCombo: 5, seconds: 30, score: 0, cleared: false };
+    let s = addRun(EMPTY_STATS, { ...base, quit: true, okStreak: 12 });
+    s = addRun(s, { ...base, died: true, okStreak: 7 });
+    expect(s).toMatchObject({ songsQuit: 1, songsDied: 1, bestOkStreak: 12 });
   });
 
   it('one good song no longer unlocks a crowd of heroes: just The One and The Little Dragon', () => {
@@ -104,7 +113,7 @@ describe('hero unlocks', () => {
   });
 
   it('the unlock path runs from the play goals to the skill goals, flawless last', () => {
-    expect(UNLOCK_ORDER.slice(-3)).toEqual(['spartan', 'babaYaga', 'ballerina']);
+    expect(UNLOCK_ORDER.slice(-4)).toEqual(['spartan', 'tinMan', 'babaYaga', 'ballerina']);
   });
 });
 

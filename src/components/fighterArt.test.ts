@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, HERO_BUILDS, meatHooks, poleEnds, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -326,5 +326,42 @@ describe("The Scarecrow's pole and brain", () => {
       expect(sparks.length).toBeLessThanOrEqual(5); // sparse
     }
     expect(scarecrowBrain(sc.idlePose, 0.4, 1).sparks[0].x).not.toBeCloseTo(scarecrowBrain(sc.idlePose, 0, 1).sparks[0].x, 1);
+  });
+});
+
+describe("The Tin Man's axe and heart, and The Lion's mane", () => {
+  it('every axe hit lands at the axe head', () => {
+    const tm = getHero('tinMan');
+    let axeHits = 0;
+    for (const m of tm.moves) {
+      for (const k of m.sequence!) {
+        if (!k.trail) continue;
+        const p = keyToPlayerPose(k);
+        if (Math.abs(dist(k.trail.end, p.leftHand) - 30) > 3) continue; // a punch, kick or headbutt
+        axeHits++;
+        expect(dist(axeHead(p, 1), k.trail.end), m.name).toBeLessThan(6);
+      }
+    }
+    expect(axeHits).toBeGreaterThan(10);
+  });
+
+  it('his heart sits in his chest and beats', () => {
+    const pose = getHero('tinMan').idlePose;
+    const a = tinHeart(pose, 0);
+    // In his chest, just below the chest core
+    expect(a.y).toBeGreaterThan(pose.chest.y);
+    expect(dist(a, pose.chest)).toBeLessThan(16);
+    expect(tinHeart(pose, 0.25).size).not.toBeCloseTo(a.size, 2);
+  });
+
+  it("the Lion's mane rings his head; with his courage it's a bigger, flickering mane of fire", () => {
+    const pose = getHero('lion').idlePose;
+    const calm = lionMane(pose, 0, false);
+    const fire = lionMane(pose, 0, true);
+    expect(calm.length).toBeGreaterThanOrEqual(10);
+    const avg = (m: { length: number }[]) => m.reduce((s, t) => s + t.length, 0) / m.length;
+    expect(avg(fire)).toBeGreaterThan(avg(calm));
+    expect(lionMane(pose, 0.2, true)[0].length).not.toBeCloseTo(fire[0].length, 2);
+    expect(lionMane(pose, 0.2, false)[0].length).toBeCloseTo(calm[0].length, 6);
   });
 });
