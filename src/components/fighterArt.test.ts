@@ -263,13 +263,13 @@ describe("Saw Face's chainsaw and meat hooks", () => {
     }
   });
 
-  it('two small enemies hang limp from meat hooks, one each side, and stay put when he turns', () => {
+  it('two small enemies hang limp from meat hooks behind him, a static part of the stage', () => {
     const pose = sf.idlePose;
     const hooks = meatHooks(0);
     expect(hooks).toHaveLength(2);
-    expect(hooks.map((h) => Math.sign(h.hook.x)).sort()).toEqual([-1, 1]);
     for (const h of hooks) {
-      // High up, hung off the floor
+      // Behind his back as he starts (facing right), high up, hung off the floor
+      expect(h.hook.x).toBeLessThan(pose.chest.x - 30);
       expect(h.hook.y).toBeLessThan(pose.chest.y);
       expect(h.hook.y + 104 * h.scale).toBeLessThan(68 - 10);
       expect(h.scale).toBeLessThanOrEqual(0.6);
@@ -281,19 +281,6 @@ describe("Saw Face's chainsaw and meat hooks", () => {
     expect(meatHooks(0.5)[0].hook).toEqual(hooks[0].hook);
   });
 
-  it("his saw never reaches the hanging bodies, whichever way he faces, as he's drawn in a song", () => {
-    const { scale, standBack } = HERO_BUILDS.sawFace!;
-    const hooks = meatHooks(0);
-    for (const m of sf.moves) {
-      for (const k of m.sequence!) {
-        const tip = sawBarTip(keyToPlayerPose(k), 1);
-        for (const facing of [1, -1]) {
-          const x = facing * (tip.x * scale - standBack);
-          for (const h of hooks) expect(Math.abs(x - h.hook.x), m.name).toBeGreaterThan(10);
-        }
-      }
-    }
-  });
 });
 
 describe('hero builds', () => {

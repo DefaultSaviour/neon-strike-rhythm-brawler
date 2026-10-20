@@ -13,7 +13,7 @@ import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
 import { drawBackdropLayers } from './backdropArt';
 import { drawConveyors, drawPit } from './stageArt';
-import { applyHeroBuild, drawFighter, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
+import { applyHeroBuild, drawFighter, drawMeatHooks, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
 import { fighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
@@ -106,6 +106,8 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       const stage = { ctx, halfW, top: FLOOR_Y - FLOOR_BACK, front: FLOOR_Y + 22, worldBottom, pitRadius: engine.pitRadius, conveyorOffset, pulse };
       drawConveyors(stage, engine.backdrop.floor);
       drawPit(stage, engine.backdrop.floor, FLOOR_Y);
+      // Saw Face's top-level form: enemies on meat hooks, a static part of the stage behind the fight
+      if (engine.hero.id === 'sawFace' && fighterTier(engine.scoreState.combo).ascended) drawMeatHooks(ctx, performance.now() / 1000);
       drawTacticalStrikeZones(ctx, engine);
       drawFloorShadowsAndReflections(ctx, engine, halfW);
       drawDebrisPieces(ctx, engine);

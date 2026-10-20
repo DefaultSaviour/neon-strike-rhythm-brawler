@@ -58,8 +58,6 @@ export function applyHeroBuild(ctx: Ctx, hero: HeroId | undefined, facing: 1 | -
 }
 
 export function drawFighter(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOptions) {
-  // Saw Face's meat hooks hang still in the world: they don't turn or move with him
-  if (opts.hero === 'sawFace' && opts.tier.ascended) drawMeatHooks(ctx, opts.time);
   ctx.save();
   if (!opts.noBuild) applyHeroBuild(ctx, opts.hero, opts.facing, opts.inGame);
   drawFighterBody(ctx, skeleton, opts);
@@ -88,7 +86,7 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     else if (opts.hero === 'discoKing') drawDiscoFever(ctx, pose, opts.time);
     else if (opts.hero === 'bride') drawBlossomStorm(ctx, pose, opts.time, 'back');
     else if (opts.hero === 'sawFace') {
-      /* his meat hooks are drawn first, fixed in the world (drawFighter) */
+      /* his meat hooks are part of the stage, drawn behind everything (NeonCanvas) */
     }
     // The White Swan's swan tutu is part of her outfit, drawn over the body (step 5b)
     else if (opts.hero === 'ballerina') {
@@ -1554,14 +1552,15 @@ export function sawBarTip(pose: SkeletonPose, facing: 1 | -1): Point2D {
 
 /**
  * Saw Face's top-level form: two of the enemies he's cut down hang limp
- * from meat hooks, one on each side of him, small and swaying on their
- * chains. They're plain neon enemies (no blood), hung high, fixed in place
- * (they don't turn round or move when he does) and out of his saw's reach.
+ * from meat hooks behind him, small and swaying on their chains. They're
+ * plain neon enemies (no blood), hung high, and part of the stage: a static
+ * background, drawn behind the fight in world space, so they never turn,
+ * lunge or step with him.
  */
 export function meatHooks(time: number) {
   return [
-    { color: '#ff1744', x: -112, hookY: -46, phase: 0 },
-    { color: '#d84dff', x: 116, hookY: -34, phase: 2.1 },
+    { color: '#ff1744', x: -43, hookY: -46, phase: 0 },
+    { color: '#d84dff', x: -77, hookY: -30, phase: 2.1 },
   ].map((h) => ({
     color: h.color,
     hook: { x: h.x, y: h.hookY },
@@ -1595,7 +1594,7 @@ const HUNG: BodyJoints = {
   farFoot: { x: 11, y: 104 },
 };
 
-function drawMeatHooks(ctx: Ctx, time: number) {
+export function drawMeatHooks(ctx: Ctx, time: number) {
   for (const h of meatHooks(time)) {
     ctx.save();
     ctx.lineCap = 'round';
