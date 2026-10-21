@@ -5,7 +5,7 @@ import { getMoveForCombo } from '../game/animations';
 import { getEnemyStyle, resolveBandTier } from '../game/enemyStyles';
 import { audioEngine } from '../audio/audioEngine';
 import { beatPosition, beatPulse } from '../audio/beatGrid';
-import { BOSS_SCALE, bossStage } from '../game/boss';
+import { BOSS_LOOKS, BOSS_SCALE, bossFigures, BossLook } from '../game/boss';
 import { ArenaLayout, computeArenaLayout, FLOOR_Y, SPAWN_DISTANCE } from '../game/layout';
 import { HIT_WINDOWS } from '../game/timing';
 import { Enemy } from '../types/game';
@@ -399,50 +399,78 @@ function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine,
   }
 }
 
-// THE END-OF-SONG BOSS (see boss.ts): a giant Titan with a crown, throwing energy fists on the beat
-const BOSS_RED = '#ff1744';
-const BOSS_GOLD = '#ffd54a';
-const BOSS_NAME = 'TITAN KING';
-
+// THE END-OF-SONG BOSSES (see boss.ts): giant enemies throwing energy fists on the beat
 function drawBoss(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const boss = engine.boss;
   if (!boss || boss.ko || !engine.track) return;
-  const stage = bossStage(boss.plan, engine.songTime, engine.fistFlight);
-  if (!stage.visible) return;
+  const look = BOSS_LOOKS[boss.plan.kind];
+  const twins = boss.plan.kind === 'twins';
+  const beat = beatPosition(engine.songTime, engine.beatGrid);
 
-  // Faces the middle; turns round halfway through a leap.
-  const dir = stage.x < 0 ? 1 : -1;
-  // Punches as each fist leaves its hand
-  let lastThrow = -Infinity;
-  for (const e of engine.enemies) {
-    if (e.bossAttack && e.spawnTime <= engine.songTime && e.spawnTime > lastThrow) lastThrow = e.spawnTime;
+  for (const fig of bossFigures(boss.plan, engine.songTime, engine.fistFlight)) {
+    if (!fig.visible || (twins && boss.downAt[fig.side])) continue;
+
+    // Punches as each fist leaves its hand
+    let lastThrow = -Infinity;
+    for (const e of engine.enemies) {
+      if (!e.bossAttack || (twins && e.lane !== fig.side)) continue;
+      if (e.spawnTime <= engine.songTime && e.spawnTime > lastThrow) lastThrow = e.spawnTime;
+    }
+    const punch = fig.running ? 0 : Math.max(0, 1 - (engine.songTime - lastThrow) / 0.22);
+    const hurt = performance.now() - boss.hurtAt < 90 && (!twins || boss.hurtSide === fig.side);
+
+    // The Volt Runner sprints with the run cycle; otherwise the chosen enemy motion
+    const base = fig.running
+      ? enemyPoseFor('run', beat * 3, look.band, look.tier, getActiveAnimations())
+      : enemyPoseFor(engine.enemyMotion, beat, look.band, look.tier, getActiveAnimations());
+    const pose = {
+      ...base,
+      frontElbow: { x: base.frontElbow.x + 10 * punch, y: base.frontElbow.y - 4 * punch },
+      frontHand: { x: base.frontHand.x + 26 * punch, y: base.frontHand.y - 10 * punch },
+    };
+
+    ctx.save();
+    // A glow on the floor under it (fades as it lifts off)
+    const glow = ctx.createRadialGradient(fig.x, FLOOR_Y + 2, 2, fig.x, FLOOR_Y + 2, 70);
+    glow.addColorStop(0, colorWithAlpha(look.color, 0.45 * (1 - Math.min(1, fig.lift / 200))));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(fig.x, FLOOR_Y + 2, 70, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Speed trail: fading copies behind the Volt Runner while it sprints
+    if (fig.running) {
+      for (const k of [3, 2, 1]) {
+        ctx.save();
+        ctx.globalAlpha = 0.1 * (4 - k);
+        drawBossBody(ctx, fig.x - fig.facing * 26 * k, fig.lift, fig.facing, 0, pose, look, false, beat);
+        ctx.restore();
+      }
+    }
+    drawBossBody(ctx, fig.x, fig.lift, fig.facing, punch, pose, look, hurt, beat);
   }
-  const punch = Math.max(0, 1 - (engine.songTime - lastThrow) / 0.22);
-  const hurt = performance.now() - boss.hurtAt < 90;
+}
 
-  const base = enemyPoseFor(engine.enemyMotion, beatPosition(engine.songTime, engine.beatGrid), 'sub', 1, getActiveAnimations());
-  const pose = {
-    ...base,
-    frontElbow: { x: base.frontElbow.x + 10 * punch, y: base.frontElbow.y - 4 * punch },
-    frontHand: { x: base.frontHand.x + 26 * punch, y: base.frontHand.y - 10 * punch },
-  };
-  const main = hurt ? '#ffffff' : BOSS_RED;
-  const accent = hurt ? '#ffffff' : BOSS_GOLD;
-
+function drawBossBody(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  lift: number,
+  facing: 1 | -1,
+  punch: number,
+  pose: ReturnType<typeof enemyPoseFor>,
+  look: BossLook,
+  hurt: boolean,
+  beat: number
+) {
+  const main = hurt ? '#ffffff' : look.color;
+  const accent = hurt ? '#ffffff' : look.accent;
   ctx.save();
-  // A red glow on the floor under it (drawn before it lifts off)
-  const glow = ctx.createRadialGradient(stage.x, FLOOR_Y + 2, 2, stage.x, FLOOR_Y + 2, 70);
-  glow.addColorStop(0, colorWithAlpha(BOSS_RED, 0.45 * (1 - Math.min(1, stage.lift / 200))));
-  glow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.ellipse(stage.x, FLOOR_Y + 2, 70, 14, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.translate(stage.x, -stage.lift);
+  ctx.translate(x, -lift);
   ctx.translate(0, 68);
-  ctx.rotate(dir * 0.16 * punch);
-  ctx.scale(BOSS_SCALE * dir, BOSS_SCALE);
+  ctx.rotate(facing * 0.16 * punch);
+  ctx.scale(BOSS_SCALE * facing, BOSS_SCALE);
   ctx.translate(0, -68);
   ctx.strokeStyle = main;
   ctx.shadowColor = main;
@@ -450,45 +478,47 @@ function drawBoss(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.lineWidth = 3.6;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  drawEnemyArt(ctx, pose, 'sub', 1, { main, accent }, beatPosition(engine.songTime, engine.beatGrid), hurt);
+  drawEnemyArt(ctx, pose, look.band, look.tier, { main, accent }, beat, hurt);
 
-  // Crown
-  const h = pose.head;
-  ctx.fillStyle = accent;
-  ctx.shadowColor = BOSS_GOLD;
-  ctx.shadowBlur = 14;
-  ctx.beginPath();
-  ctx.moveTo(h.x - 9, h.y - 10);
-  ctx.lineTo(h.x - 10, h.y - 21);
-  ctx.lineTo(h.x - 5, h.y - 15);
-  ctx.lineTo(h.x, h.y - 24);
-  ctx.lineTo(h.x + 5, h.y - 15);
-  ctx.lineTo(h.x + 10, h.y - 21);
-  ctx.lineTo(h.x + 9, h.y - 10);
-  ctx.closePath();
-  ctx.fill();
+  if (look.crown) {
+    const h = pose.head;
+    ctx.fillStyle = accent;
+    ctx.shadowColor = look.accent;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(h.x - 9, h.y - 10);
+    ctx.lineTo(h.x - 10, h.y - 21);
+    ctx.lineTo(h.x - 5, h.y - 15);
+    ctx.lineTo(h.x, h.y - 24);
+    ctx.lineTo(h.x + 5, h.y - 15);
+    ctx.lineTo(h.x + 10, h.y - 21);
+    ctx.lineTo(h.x + 9, h.y - 10);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
 }
 
 /**
- * A fist thrown by the boss: a ball of energy that swells as it flies, red to
- * gold to white-hot, crackling at the end, and is fullest exactly on its beat,
- * like it's about to burst. That swell is the timing cue.
+ * A fist thrown by the boss: a ball of energy that swells as it flies, from the
+ * boss's colour to white-hot, crackling at the end, and is fullest exactly on
+ * its beat, like it's about to burst. That swell is the timing cue.
  */
 function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameEngine, flash: boolean, grow = 1) {
+  const look = BOSS_LOOKS[engine.boss?.plan.kind ?? 'leaper'];
   const away = enemy.x < 0 ? -1 : 1;
   const y = -6;
   // 0 when thrown, 1 on the beat
   const u = Math.min(1, Math.max(0, 1 - (enemy.targetTime - engine.songTime) / engine.fistFlight));
   const r = (5 + 12 * Math.pow(u, 1.6)) * grow;
-  const outer = flash ? '#ffffff' : heatColor(BOSS_RED, Math.max(0, u - 0.35) * 1.2);
-  const core = flash ? '#ffffff' : heatColor(BOSS_GOLD, u * u);
+  const outer = flash ? '#ffffff' : heatColor(look.color, Math.max(0, u - 0.35) * 1.2);
+  const core = flash ? '#ffffff' : heatColor(look.accent, u * u);
   ctx.save();
   ctx.lineCap = 'round';
   if (!flash) {
     const tail = ctx.createLinearGradient(enemy.x, y, enemy.x + away * 34, y);
-    tail.addColorStop(0, colorWithAlpha(BOSS_GOLD, 0.7));
-    tail.addColorStop(1, colorWithAlpha(BOSS_RED, 0));
+    tail.addColorStop(0, colorWithAlpha(look.accent, 0.7));
+    tail.addColorStop(1, colorWithAlpha(look.color, 0));
     ctx.strokeStyle = tail;
     ctx.lineWidth = r * 1.1;
     ctx.beginPath();
@@ -497,7 +527,7 @@ function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameE
     ctx.stroke();
   }
   ctx.fillStyle = outer;
-  ctx.shadowColor = flash ? '#ffffff' : BOSS_GOLD;
+  ctx.shadowColor = flash ? '#ffffff' : look.accent;
   ctx.shadowBlur = 10 + 26 * u;
   ctx.beginPath();
   ctx.arc(enemy.x, y, r, 0, Math.PI * 2);
@@ -529,56 +559,71 @@ function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameE
 function drawBossKo(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const boss = engine.boss;
   if (!boss || !boss.ko) return;
-  {
-    const age = (performance.now() - boss.koAt) / 1000;
-    if (age > 2.4) return;
-    const pop = 1 + Math.max(0, 0.6 - age * 3);
-    ctx.save();
-    ctx.translate(0, -120);
-    ctx.scale(pop, pop);
-    ctx.globalAlpha = Math.min(1, (2.4 - age) / 0.4);
-    ctx.font = '900 38px "Outfit", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = BOSS_GOLD;
-    ctx.shadowColor = BOSS_GOLD;
-    ctx.shadowBlur = 30;
-    ctx.fillText('BOSS KO!', 0, 0);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText('BOSS KO!', 0, 0);
-    ctx.restore();
-  }
+  const age = (performance.now() - boss.koAt) / 1000;
+  if (age > 2.4) return;
+  const gold = BOSS_LOOKS.leaper.accent;
+  const pop = 1 + Math.max(0, 0.6 - age * 3);
+  ctx.save();
+  ctx.translate(0, -120);
+  ctx.scale(pop, pop);
+  ctx.globalAlpha = Math.min(1, (2.4 - age) / 0.4);
+  ctx.font = '900 38px "Outfit", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = gold;
+  ctx.shadowColor = gold;
+  ctx.shadowBlur = 30;
+  ctx.fillText('BOSS KO!', 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('BOSS KO!', 0, 0);
+  ctx.restore();
 }
 
-/** The boss's name and health bar, along the bottom of the screen (clear of the HUD at the top). */
+/**
+ * The boss's name and health along the bottom of the screen (clear of the HUD
+ * at the top). The twins get a bar each, under their name.
+ */
 function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: number, height: number) {
   const boss = engine.boss;
   if (!boss || boss.ko || !engine.track) return;
-  if (!bossStage(boss.plan, engine.songTime, engine.fistFlight).visible) return;
+  if (!bossFigures(boss.plan, engine.songTime, engine.fistFlight)[0].visible) return;
+  const look = BOSS_LOOKS[boss.plan.kind];
 
   const w = Math.min(460, width * 0.5);
   const left = (width - w) / 2;
   const y = height - 26;
-  const share = boss.hp / boss.plan.maxHp;
-  const hurt = performance.now() - boss.hurtAt < 90;
+  const recentlyHurt = performance.now() - boss.hurtAt < 90;
+  const bar = (x: number, barW: number, share: number, hurt: boolean) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(x - 2, y - 2, barW + 4, 14);
+    ctx.fillStyle = hurt ? '#ffffff' : look.color;
+    ctx.shadowColor = look.color;
+    ctx.shadowBlur = 12;
+    ctx.fillRect(x, y, barW * Math.max(0, share), 10);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = colorWithAlpha(look.accent, 0.8);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 2, y - 2, barW + 4, 14);
+  };
+
   ctx.save();
   ctx.font = '900 13px "Outfit", sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillStyle = BOSS_GOLD;
-  ctx.shadowColor = BOSS_GOLD;
+  ctx.fillStyle = look.accent;
+  ctx.shadowColor = look.accent;
   ctx.shadowBlur = 10;
-  ctx.fillText(BOSS_NAME, left, y - 8);
+  ctx.fillText(look.name.toUpperCase(), left, y - 8);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = 'rgba(0,0,0,0.75)';
-  ctx.fillRect(left - 2, y - 2, w + 4, 14);
-  ctx.fillStyle = hurt ? '#ffffff' : BOSS_RED;
-  ctx.shadowColor = BOSS_RED;
-  ctx.shadowBlur = 12;
-  ctx.fillRect(left, y, w * share, 10);
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = colorWithAlpha(BOSS_GOLD, 0.8);
-  ctx.lineWidth = 1;
-  ctx.strokeRect(left - 2, y - 2, w + 4, 14);
+  if (boss.plan.kind === 'twins') {
+    const gap = 10;
+    const half = (w - gap) / 2;
+    for (const side of ['left', 'right'] as const) {
+      const full = boss.plan.sideHp[side];
+      bar(side === 'left' ? left : left + half + gap, half, full > 0 ? boss.sideHp[side] / full : 0, recentlyHurt && boss.hurtSide === side);
+    }
+  } else {
+    bar(left, w, boss.hp / boss.plan.maxHp, recentlyHurt);
+  }
   ctx.restore();
 }
 

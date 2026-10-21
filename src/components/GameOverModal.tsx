@@ -45,6 +45,8 @@ interface GameOverModalProps {
   onPlayForReal?: () => void;
   /** The end-of-song boss: knocked out, still standing, or never reached (null) */
   boss?: 'ko' | 'standing' | null;
+  /** Which boss it was ("Titan King") */
+  bossName?: string;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -69,6 +71,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   practiceHits = 0,
   onPlayForReal,
   boss = null,
+  bossName = 'boss',
 }) => {
   const forReal = practice && onPlayForReal;
   const [pickedHero, setPickedHero] = React.useState<HeroId | null>(null);
@@ -164,7 +167,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           )}
           {boss === 'standing' && cleared && (
             <div className="mt-3 px-3 py-2 rounded-lg bg-slate-900/80 border border-amber-400/50 text-sm text-slate-200">
-              <span className="font-bold text-amber-300">The Titan King is still standing.</span> PERFECT hits on its fists do the most damage.
+              <span className="font-bold text-amber-300">The {bossName} survived.</span> PERFECT hits on the fists do the most damage.
             </div>
           )}
           {!cleared && deathReport && (

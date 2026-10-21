@@ -16,7 +16,7 @@ import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes'
 import { RunUnlock, unlocksBetween } from './runUnlocks';
 import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
 import { isStanceUnlocked, nextStance } from './stanceUnlocks';
-import { audioEngine } from '../audio/audioEngine';
+import { audioEngine, PRELOADED_TRACKS } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
 import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
@@ -33,16 +33,22 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
-import { BOSS_DAMAGE, BOSS_SCALE, BOSS_STAND_X, BossPlan, bossStage, fistFlightSec, planBoss } from './boss';
+import { BOSS_DAMAGE, BOSS_LOOKS, BOSS_SCALE, BOSS_STAND_X, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, planBoss } from './boss';
 
 /** The end-of-song boss while a song is playing (see boss.ts). */
 export interface BossState {
   plan: BossPlan;
+  /** Health left (the twins: both together) */
   hp: number;
+  /** Twins: each one's health left */
+  sideHp: Record<Lane, number>;
+  /** Twins: performance.now() when each fell (0 = still standing) */
+  downAt: Record<Lane, number>;
   ko: boolean;
-  /** performance.now() of the KO, and of the last time it was hurt */
+  /** performance.now() of the KO, and of the last time it was hurt (and which twin) */
   koAt: number;
   hurtAt: number;
+  hurtSide: Lane | null;
 }
 
 export interface GameEngineCallbacks {
@@ -452,8 +458,24 @@ export class GameEngine {
     this.fistFlight = fistFlightSec(this.beatGrid.bpm, this.approachDuration);
 
     // The end-of-song boss: it takes over the last stretch, turning those notes into its fists.
-    const bossPlan = planBoss(notes, this.beatGrid.bpm);
-    this.boss = bossPlan ? { plan: bossPlan, hp: bossPlan.maxHp, ko: false, koAt: 0, hurtAt: 0 } : null;
+    const bossKind = bossKindFor(track.id, PRELOADED_TRACKS.map((t) => t.id));
+    const bossPlan = planBoss(notes, this.beatGrid.bpm, bossKind);
+    this.boss = bossPlan
+      ? {
+          plan: bossPlan,
+          hp: bossPlan.maxHp,
+          sideHp: { ...bossPlan.sideHp },
+          // A twin with no fists to throw (a one-sided chart) counts as down from the start
+          downAt: {
+            left: bossPlan.kind === 'twins' && bossPlan.sideHp.left === 0 ? -1 : 0,
+            right: bossPlan.kind === 'twins' && bossPlan.sideHp.right === 0 ? -1 : 0,
+          },
+          ko: false,
+          koAt: 0,
+          hurtAt: 0,
+          hurtSide: null,
+        }
+      : null;
     this.scoreState.totalNotes = bossPlan ? bossPlan.keep.filter(Boolean).length : notes.length;
 
     this.enemies = notes.flatMap((note, index) => {
@@ -667,7 +689,7 @@ export class GameEngine {
 
     if (enemy.bossAttack) {
       this.burstFist(enemy, judgement);
-      this.damageBoss(judgement);
+      this.damageBoss(judgement, enemy.lane);
     } else this.spawnEnemyDebrisExplosion(enemy, judgement);
     this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
@@ -688,8 +710,9 @@ export class GameEngine {
   private burstFist(enemy: Enemy, judgement: TimingJudgementType) {
     const power = (judgement === 'PERFECT' ? 1.3 : judgement === 'GOOD' ? 1.05 : 0.85) * Math.min(1.4, comboBlastPower(this.scoreState.combo));
     const count = judgement === 'PERFECT' ? 10 : judgement === 'GOOD' ? 7 : 5;
+    const look = BOSS_LOOKS[this.boss?.plan.kind ?? 'leaper'];
     this.debris.push(
-      ...burstOrb({ x: enemy.x, y: -6, color: '#ff1744', accent: '#ffd54a', power, count }, () => this.nextDebrisId++)
+      ...burstOrb({ x: enemy.x, y: -6, color: look.color, accent: look.accent, power, count }, () => this.nextDebrisId++)
     );
     trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
     this.particles.push({
@@ -697,7 +720,7 @@ export class GameEngine {
       y: -6,
       vx: 0,
       vy: 0,
-      color: '#ffd54a',
+      color: look.accent,
       size: 8,
       alpha: 1,
       life: 0,
@@ -706,36 +729,72 @@ export class GameEngine {
     });
   }
 
-  /** A fist was hit back: the boss takes damage by timing, and goes down at zero. */
-  private damageBoss(judgement: TimingJudgementType) {
+  /**
+   * A fist was hit back: the boss takes damage by timing, and goes down at zero.
+   * Each twin only takes damage from its own fists, and falls on its own.
+   */
+  private damageBoss(judgement: TimingJudgementType, lane: Lane) {
     const boss = this.boss;
     if (!boss || boss.ko) return;
-    boss.hp = Math.max(0, boss.hp - BOSS_DAMAGE[judgement]);
+    const twins = boss.plan.kind === 'twins';
+    if (twins && boss.downAt[lane]) return;
+    const damage = Math.min(BOSS_DAMAGE[judgement], twins ? boss.sideHp[lane] : boss.hp);
+    boss.hp -= damage;
+    if (twins) boss.sideHp[lane] -= damage;
     boss.hurtAt = performance.now();
-    if (boss.hp > 0) return;
+    boss.hurtSide = lane;
 
+    if (twins) {
+      if (boss.sideHp[lane] > 0) return;
+      boss.downAt[lane] = performance.now();
+      const other: Lane = lane === 'left' ? 'right' : 'left';
+      const last = !!boss.downAt[other];
+      this.freeUnthrownFists(lane);
+      this.blowUpBoss(this.bossFigure(lane), last);
+      if (last) {
+        boss.ko = true;
+        boss.koAt = performance.now();
+      }
+      return;
+    }
+
+    if (boss.hp > 0) return;
     boss.ko = true;
     boss.koAt = performance.now();
-    // Fists it hadn't thrown yet come as ordinary enemies instead.
+    this.freeUnthrownFists(null);
+    this.blowUpBoss(this.bossFigure(null), true);
+  }
+
+  /** Where a boss figure is right now (the twin on `lane`, or the single boss). */
+  private bossFigure(lane: Lane | null): BossFigure {
+    const figures = bossFigures(this.boss!.plan, this.songTime, this.fistFlight);
+    return figures.find((f) => f.side === lane) ?? figures[0];
+  }
+
+  /** A fallen boss's fists that it hadn't thrown yet come as ordinary enemies instead. */
+  private freeUnthrownFists(lane: Lane | null) {
     for (const e of this.enemies) {
+      if (lane && e.lane !== lane) continue;
       if (e.bossAttack && !e.defeated && e.targetTime - this.approachDuration > this.songTime) {
         e.bossAttack = false;
         e.spawnTime = e.targetTime - this.approachDuration;
       }
     }
+  }
 
-    // It blows apart into big pieces, with a long freeze, a heavy shake and the crowd pop.
-    const stage = bossStage(boss.plan, this.songTime, this.fistFlight);
+  /** A boss blows apart into big pieces; the final KO also gets a long freeze, a heavy shake and the crowd pop. */
+  private blowUpBoss(figure: BossFigure, final: boolean) {
+    const look = BOSS_LOOKS[this.boss!.plan.kind];
     const pieces = shatterEnemy(
       {
-        x: stage.x,
-        pose: enemyPoseFor(this.settings.enemyMotion, beatPosition(this.songTime, this.beatGrid), 'sub', 1, getActiveAnimations()),
-        facing: stage.side === 'left' ? 1 : -1,
+        x: figure.x,
+        pose: enemyPoseFor(this.settings.enemyMotion, beatPosition(this.songTime, this.beatGrid), look.band, look.tier, getActiveAnimations()),
+        facing: figure.facing,
         scale: BOSS_SCALE,
-        color: '#ff1744',
-        accent: '#ffd54a',
-        limbScale: 1.3,
-        hasBlade: false,
+        color: look.color,
+        accent: look.accent,
+        limbScale: getEnemyStyle(look.band, look.tier).limbScale,
+        hasBlade: look.band !== 'sub',
         power: 2.4,
         extraShards: 14,
       },
@@ -746,11 +805,11 @@ export class GameEngine {
 
     const shakeMode = this.settings.screenShake || 'subtle';
     const shakeAmount = shakeMode === 'none' ? 0 : shakeMode === 'subtle' ? 0.5 : 1;
-    this.screenShake = Math.max(this.screenShake, 14 * shakeAmount);
-    if (shakeAmount > 0) this.crowdPop = 1;
-    this.hitStopRemaining = 0.32;
+    this.screenShake = Math.max(this.screenShake, (final ? 14 : 9) * shakeAmount);
+    if (final && shakeAmount > 0) this.crowdPop = 1;
+    this.hitStopRemaining = final ? 0.32 : 0.18;
     audioEngine.playHitSound('PERFECT', 'sub', 55, this.settings.hitSound);
-    this.spawnHitParticles(stage.x, -60, stage.side, 'PERFECT', '#ffd54a');
+    this.spawnHitParticles(figure.x, -60, figure.side, 'PERFECT', look.accent);
   }
 
   /** Begin a strike animation from wherever the fighter currently is. */
@@ -1100,7 +1159,7 @@ export class GameEngine {
     this.countRun(false, true);
     const report = explainDeath(
       {
-        name: killer.bossAttack ? "Titan King's fist" : getEnemyStyle(killer.band, killer.tier).name,
+        name: killer.bossAttack ? 'boss fist' : getEnemyStyle(killer.band, killer.tier).name,
         lane: killer.lane,
         targetTime: killer.targetTime,
       },

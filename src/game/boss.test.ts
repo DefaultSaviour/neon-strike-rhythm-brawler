@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Lane } from '../types/game';
-import { BOSS_SECONDS, BOSS_STAND_X, bossSideAt, bossStage, HP_PER_ATTACK, planBoss } from './boss';
+import { BOSS_ORDER, BOSS_SECONDS, BOSS_STAND_X, bossFigures, bossKindFor, bossSideAt, bossStage, HP_PER_ATTACK, OFF_SCREEN_X, planBoss } from './boss';
 
 /** A 2-minute chart at 120 BPM: a note every half beat, alternating sides. */
 function chart(seconds = 120) {
@@ -92,5 +92,48 @@ describe('the end-of-song boss', () => {
     expect(Math.abs(leaping.x)).toBeLessThan(BOSS_STAND_X / 2);
     expect(leaping.lift).toBeGreaterThan(100);
     expect(bossStage(plan, plan.start - approach + plan.switchSec + 0.5, approach).x).toBe(-BOSS_STAND_X);
+  });
+});
+
+describe('the three bosses', () => {
+  it('take turns down the soundtrack, and an imported song always gets the same one', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e'];
+    expect(ids.map((id) => bossKindFor(id, ids))).toEqual(['leaper', 'runner', 'twins', 'leaper', 'runner']);
+    const imported = bossKindFor('custom_123', ids);
+    expect(BOSS_ORDER).toContain(imported);
+    expect(bossKindFor('custom_123', ids)).toBe(imported);
+  });
+
+  it('the Volt Runner runs off its own edge, then comes back in from the other, facing the way it runs', () => {
+    const plan = planBoss(chart(), 120, 'runner')!;
+    const flight = 1;
+    const switchAt = plan.start - flight + plan.switchSec; // its fists change side here
+    const out = bossStage(plan, switchAt - 0.4, flight);
+    expect(out.running).toBe(true);
+    expect(out.x).toBeGreaterThan(BOSS_STAND_X); // off past its own (right) side
+    expect(out.facing).toBe(1);
+    const back = bossStage(plan, switchAt - 0.1, flight);
+    expect(back.x).toBeLessThan(-BOSS_STAND_X); // coming in from the left edge
+    expect(back.x).toBeGreaterThan(-OFF_SCREEN_X);
+    expect(back.facing).toBe(1);
+    expect(bossStage(plan, switchAt + 0.2, flight)).toMatchObject({ x: -BOSS_STAND_X, running: false });
+  });
+
+  it('the twins stand one on each side, throw from their own side, and each has its own health', () => {
+    const notes = chart();
+    const plan = planBoss(notes, 120, 'twins')!;
+    notes.forEach((n, i) => {
+      if (n.time < plan.start || !plan.keep[i]) return;
+      expect(plan.attack[i]).toBe(true);
+      expect(plan.lanes[i]).toBe(n.lane); // never moved
+    });
+    expect(plan.sideHp.left).toBeGreaterThan(0);
+    expect(plan.sideHp.right).toBeGreaterThan(0);
+    expect(plan.sideHp.left + plan.sideHp.right).toBe(plan.maxHp);
+    const figures = bossFigures(plan, plan.start, 1);
+    expect(figures.map((f) => [f.side, f.x])).toEqual([
+      ['left', -BOSS_STAND_X],
+      ['right', BOSS_STAND_X],
+    ]);
   });
 });
