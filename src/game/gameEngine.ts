@@ -59,6 +59,13 @@ export const SLAM_SHAKE = 1.8;
 /** How long the crowd-pop flash at the screen edges lasts after a slam (seconds). */
 export const CROWD_POP_SEC = 0.3;
 
+/**
+ * Dev builds only: ?short ends every song at 2:00, to try out 2-minute songs
+ * (and reach the boss) before the real ones are made. The boss moves to the new end.
+ */
+const SHORT_TEST_SEC =
+  import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('short') ? 120 : 0;
+
 /** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
 const HIT_STOP: Record<TimingJudgementType, number> = { PERFECT: 0.06, GOOD: 0.04, OK: 0.025, MISS: 0 };
 
@@ -229,6 +236,8 @@ export class GameEngine {
   public practice = false;
   /** The end-of-song boss for this song, or null when the song has none */
   public boss: BossState | null = null;
+  /** Song time the song is cut off at (only with the dev ?short switch) */
+  private songEndAt = Infinity;
   /** Song times (s) of the hits taken this practice run */
   public practiceHits: number[] = [];
   /** Seconds played in practice this visit (only for pacing midgame ads, see adClockSeconds) */
@@ -375,6 +384,7 @@ export class GameEngine {
     const session = ++this.songSession;
     this.track = track;
     this.boss = null;
+    this.songEndAt = Infinity;
     this.practice = practice;
     this.practiceHits = [];
     this.isRunning = false;
@@ -408,6 +418,13 @@ export class GameEngine {
     if (session !== this.songSession) return;
     this.isRunning = true;
 
+    // Dev ?short: drop the notes after 2:00 and end the song there.
+    let notes = track.notes;
+    if (SHORT_TEST_SEC && notes.length > 0 && notes[notes.length - 1].time > SHORT_TEST_SEC) {
+      notes = notes.filter((n) => n.time <= SHORT_TEST_SEC - 1.5);
+      this.songEndAt = SHORT_TEST_SEC;
+    }
+
     this.scoreState = {
       score: 0,
       combo: 0,
@@ -416,7 +433,7 @@ export class GameEngine {
       goodCount: 0,
       okCount: 0,
       missCount: 0,
-      totalNotes: track.notes.length,
+      totalNotes: notes.length,
     };
     this.callbacks.onScoreUpdate(this.scoreState);
 
@@ -428,10 +445,10 @@ export class GameEngine {
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
 
     // The end-of-song boss: it takes over the last stretch, moving those notes to its side.
-    const bossPlan = planBoss(track.notes, this.beatGrid.bpm);
+    const bossPlan = planBoss(notes, this.beatGrid.bpm);
     this.boss = bossPlan ? { plan: bossPlan, hp: bossPlan.maxHp, ko: false, koAt: 0, hurtAt: 0 } : null;
 
-    this.enemies = track.notes.map((note, index) => {
+    this.enemies = notes.map((note, index) => {
       const { band, tier } = resolveBandTier(note);
       const color = getEnemyStyle(band, tier).color;
       const lane = bossPlan ? bossPlan.lanes[index] : note.lane;
@@ -843,6 +860,10 @@ export class GameEngine {
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
     this.songTime = effectiveTime;
+    if (effectiveTime >= this.songEndAt) {
+      this.finishSong(true);
+      return;
+    }
     const beatPos = beatPosition(effectiveTime, this.beatGrid);
 
     // 1. ENEMIES: position comes straight from the song clock, so they always
@@ -1067,7 +1088,7 @@ export class GameEngine {
   /** Save how far this run got, and compare it with the best attempt on this song. */
   private recordProgress(cleared: boolean) {
     if (!this.track || this.lastRun) return;
-    const duration = this.track.audioBuffer?.duration ?? this.track.duration;
+    const duration = Math.min(this.track.audioBuffer?.duration ?? this.track.duration, this.songEndAt);
     this.lastRun = this.practice
       ? practiceRunProgress(this.track.id, this.songTime, duration, cleared, this.practiceHits, progressStore())
       : recordRunProgress(this.track.id, this.songTime, duration, cleared, progressStore());
