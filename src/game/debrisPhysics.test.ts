@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, massProperties, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
+import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, massProperties, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { enemyPose } from './enemyMotion';
+
+describe('a boss fist bursting', () => {
+  it('flies apart away from the player and upward, into the asked number of shards', () => {
+    let id = 0;
+    for (const x of [-60, 60]) {
+      const shards = burstOrb({ x, y: -6, color: '#ff1744', accent: '#ffd54a', power: 1.3, count: 10 }, () => ++id);
+      expect(shards).toHaveLength(10);
+      for (const s of shards) {
+        expect(s.shape).toBe('shard');
+        expect(Math.sign(s.vx)).toBe(Math.sign(x));
+        expect(s.vy).toBeLessThan(0);
+      }
+    }
+  });
+});
 
 const world: DebrisWorld = { floorY: 68, pitHalfWidth: 40, beltSpeed: 0, gravity: 1500 };
 

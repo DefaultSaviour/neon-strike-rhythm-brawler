@@ -33,6 +33,7 @@ import {
   progressStore,
 } from './platform/crazyGames';
 import { markFirstSongDone, needsFirstSong } from './game/firstSong';
+import { BOSS_LOOKS } from './game/boss';
 import { midgameAdDue } from './game/adPacing';
 import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from './game/enemyMotion';
 import { getHero, HeroId } from './game/heroes';
@@ -685,6 +686,8 @@ export default function App() {
           practice={engine.practice}
           practiceHits={engine.practiceHits.length}
           onPlayForReal={() => handleStartGame(selectedTrack, false)}
+          boss={engine.bossResult()}
+          bossName={engine.boss ? BOSS_LOOKS[engine.boss.plan.kind].name : undefined}
           newUnlocks={engine.newUnlocks}
           onPickHero={(hero) => handleUpdateSettings({ hero })}
           track={selectedTrack}

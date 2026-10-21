@@ -16,10 +16,10 @@ import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes'
 import { RunUnlock, unlocksBetween } from './runUnlocks';
 import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
 import { isStanceUnlocked, nextStance } from './stanceUnlocks';
-import { audioEngine } from '../audio/audioEngine';
+import { audioEngine, PRELOADED_TRACKS } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
-import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
+import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
@@ -33,6 +33,23 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
+import { BOSS_DAMAGE, BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, planBoss, standX } from './boss';
+
+/** The end-of-song boss while a song is playing (see boss.ts). */
+export interface BossState {
+  plan: BossPlan;
+  /** Health left (the twins: both together) */
+  hp: number;
+  /** Twins: each one's health left */
+  sideHp: Record<Lane, number>;
+  /** Twins: performance.now() when each fell (0 = still standing) */
+  downAt: Record<Lane, number>;
+  ko: boolean;
+  /** performance.now() of the KO, and of the last time it was hurt (and which twin) */
+  koAt: number;
+  hurtAt: number;
+  hurtSide: Lane | null;
+}
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -47,6 +64,17 @@ const LUNGE_DISTANCE = 16;
 export const SLAM_SHAKE = 1.8;
 /** How long the crowd-pop flash at the screen edges lasts after a slam (seconds). */
 export const CROWD_POP_SEC = 0.3;
+
+/**
+ * Dev builds only: ?short ends every song at 2:00, to try out 2-minute songs
+ * (and reach the boss) before the real ones are made. The boss moves to the new end.
+ */
+const SHORT_TEST_SEC =
+  import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('short') ? 120 : 0;
+
+/** Dev builds only: ?boss starts every song a few seconds before its boss. */
+const BOSS_TEST =
+  import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('boss');
 
 /** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
 const HIT_STOP: Record<TimingJudgementType, number> = { PERFECT: 0.06, GOOD: 0.04, OK: 0.025, MISS: 0 };
@@ -93,6 +121,8 @@ export class GameEngine {
   public beatGrid: BeatGrid = { bpm: 120, offset: 0, strength: 0 };
   /** Seconds an enemy takes to walk from the screen edge to the strike line */
   public approachDuration: number = 1.35;
+  /** Seconds a boss fist is in the air (shorter than the walk, see boss.ts) */
+  public fistFlight: number = 0.8;
   /** Press-minus-beat timing error (s) of every successful hit this song */
   public hitOffsets: number[] = [];
   /** The player's last few presses, used to explain a death */
@@ -216,6 +246,10 @@ export class GameEngine {
    * stats or unlocks, no best progress, no high score.
    */
   public practice = false;
+  /** The end-of-song boss for this song, or null when the song has none */
+  public boss: BossState | null = null;
+  /** Song time the song is cut off at (only with the dev ?short switch) */
+  private songEndAt = Infinity;
   /** Song times (s) of the hits taken this practice run */
   public practiceHits: number[] = [];
   /** Seconds played in practice this visit (only for pacing midgame ads, see adClockSeconds) */
@@ -300,8 +334,8 @@ export class GameEngine {
   private countRun(cleared: boolean, died = false, quit = false) {
     if (!this.track || this.runCounted) return;
     this.runCounted = true;
-    // Practice counts for nothing (only for pacing ads)
-    if (this.practice) {
+    // Practice counts for nothing (only for pacing ads), and neither does a dev ?boss run
+    if (this.practice || BOSS_TEST) {
       this.practiceSeconds += this.songTime;
       return;
     }
@@ -361,6 +395,8 @@ export class GameEngine {
   public async startSong(track: Track, practice = false) {
     const session = ++this.songSession;
     this.track = track;
+    this.boss = null;
+    this.songEndAt = Infinity;
     this.practice = practice;
     this.practiceHits = [];
     this.isRunning = false;
@@ -394,6 +430,13 @@ export class GameEngine {
     if (session !== this.songSession) return;
     this.isRunning = true;
 
+    // Dev ?short: drop the notes after 2:00 and end the song there.
+    let notes = track.notes;
+    if (SHORT_TEST_SEC && notes.length > 0 && notes[notes.length - 1].time > SHORT_TEST_SEC) {
+      notes = notes.filter((n) => n.time <= SHORT_TEST_SEC - 1.5);
+      this.songEndAt = SHORT_TEST_SEC;
+    }
+
     this.scoreState = {
       score: 0,
       combo: 0,
@@ -402,7 +445,7 @@ export class GameEngine {
       goodCount: 0,
       okCount: 0,
       missCount: 0,
-      totalNotes: track.notes.length,
+      totalNotes: notes.length,
     };
     this.callbacks.onScoreUpdate(this.scoreState);
 
@@ -412,18 +455,43 @@ export class GameEngine {
 
     const beatSec = 60 / this.beatGrid.bpm;
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
+    this.fistFlight = fistFlightSec(this.beatGrid.bpm, this.approachDuration);
 
-    this.enemies = track.notes.map((note, index) => {
+    // The end-of-song boss: it takes over the last stretch, turning those notes into its fists.
+    const bossKind = bossKindFor(track.id, PRELOADED_TRACKS.map((t) => t.id));
+    const bossPlan = planBoss(notes, this.beatGrid.bpm, bossKind);
+    this.boss = bossPlan
+      ? {
+          plan: bossPlan,
+          hp: bossPlan.maxHp,
+          sideHp: { ...bossPlan.sideHp },
+          // A twin with no fists to throw (a one-sided chart) counts as down from the start
+          downAt: {
+            left: bossPlan.kind === 'twins' && bossPlan.sideHp.left === 0 ? -1 : 0,
+            right: bossPlan.kind === 'twins' && bossPlan.sideHp.right === 0 ? -1 : 0,
+          },
+          ko: false,
+          koAt: 0,
+          hurtAt: 0,
+          hurtSide: null,
+        }
+      : null;
+    this.scoreState.totalNotes = bossPlan ? bossPlan.keep.filter(Boolean).length : notes.length;
+
+    this.enemies = notes.flatMap((note, index) => {
+      if (bossPlan && !bossPlan.keep[index]) return [];
       const { band, tier } = resolveBandTier(note);
       const color = getEnemyStyle(band, tier).color;
+      const lane = bossPlan ? bossPlan.lanes[index] : note.lane;
 
       return {
         id: `enemy_${index}_${note.time}`,
-        lane: note.lane,
+        lane,
+        bossAttack: bossPlan?.attack[index] ?? false,
         targetTime: note.time,
-        spawnTime: Math.max(0, note.time - this.approachDuration),
+        spawnTime: Math.max(0, note.time - (bossPlan?.attack[index] ? this.fistFlight : this.approachDuration)),
         speed: 1.0,
-        x: note.lane === 'left' ? -9999 : 9999,
+        x: lane === 'left' ? -9999 : 9999,
         y: 0,
         color,
         enemyType: note.enemyType,
@@ -436,11 +504,23 @@ export class GameEngine {
         stepOffset: index % 2,
         pitchHz: note.pitchHz,
       };
-    });
+    }) as Enemy[];
 
-    audioEngine.startTrack(track, () => {
-      this.finishSong(true);
-    });
+    // Dev ?boss: skip straight to a few seconds before the boss arrives.
+    let startAt = 0;
+    if (BOSS_TEST && bossPlan) {
+      startAt = Math.max(0, bossPlan.start - this.fistFlight - 3);
+      this.enemies = this.enemies.filter((e) => e.targetTime > startAt + this.approachDuration);
+      this.scoreState.totalNotes = this.enemies.length;
+    }
+
+    audioEngine.startTrack(
+      track,
+      () => {
+        this.finishSong(true);
+      },
+      startAt
+    );
   }
 
   public stop() {
@@ -607,13 +687,129 @@ export class GameEngine {
       detail: judgement === 'PERFECT' ? undefined : offsetSec < 0 ? 'EARLY' : 'LATE',
     });
 
-    this.spawnEnemyDebrisExplosion(enemy, judgement);
+    if (enemy.bossAttack) {
+      this.burstFist(enemy, judgement);
+      this.damageBoss(judgement, enemy.lane);
+    } else this.spawnEnemyDebrisExplosion(enemy, judgement);
     this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
     const remaining = this.enemies.filter((e) => !e.defeated);
     if (remaining.length === 0) {
       setTimeout(() => this.finishSong(true), 600);
     }
+  }
+
+  /** How the boss fight went: null when the song has no boss or the run ended before it arrived. */
+  public bossResult(): 'ko' | 'standing' | null {
+    if (!this.boss) return null;
+    if (this.boss.ko) return 'ko';
+    return this.songTime >= this.boss.plan.start - this.fistFlight ? 'standing' : null;
+  }
+
+  /** A boss fist smashed back: it bursts into hot shards and a ring of light. Better timing, bigger burst. */
+  private burstFist(enemy: Enemy, judgement: TimingJudgementType) {
+    const power = (judgement === 'PERFECT' ? 1.3 : judgement === 'GOOD' ? 1.05 : 0.85) * Math.min(1.4, comboBlastPower(this.scoreState.combo));
+    const count = judgement === 'PERFECT' ? 10 : judgement === 'GOOD' ? 7 : 5;
+    const look = BOSS_LOOKS[this.boss?.plan.kind ?? 'leaper'];
+    this.debris.push(
+      ...burstOrb({ x: enemy.x, y: -6, color: look.color, accent: look.accent, power, count }, () => this.nextDebrisId++)
+    );
+    trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
+    this.particles.push({
+      x: enemy.x,
+      y: -6,
+      vx: 0,
+      vy: 0,
+      color: look.accent,
+      size: 8,
+      alpha: 1,
+      life: 0,
+      maxLife: judgement === 'PERFECT' ? 0.35 : 0.25,
+      sparkType: 'ring',
+    });
+  }
+
+  /**
+   * A fist was hit back: the boss takes damage by timing, and goes down at zero.
+   * Each twin only takes damage from its own fists, and falls on its own.
+   */
+  private damageBoss(judgement: TimingJudgementType, lane: Lane) {
+    const boss = this.boss;
+    if (!boss || boss.ko) return;
+    const twins = boss.plan.kind === 'twins';
+    if (twins && boss.downAt[lane]) return;
+    const damage = Math.min(BOSS_DAMAGE[judgement], twins ? boss.sideHp[lane] : boss.hp);
+    boss.hp -= damage;
+    if (twins) boss.sideHp[lane] -= damage;
+    boss.hurtAt = performance.now();
+    boss.hurtSide = lane;
+
+    if (twins) {
+      if (boss.sideHp[lane] > 0) return;
+      boss.downAt[lane] = performance.now();
+      const other: Lane = lane === 'left' ? 'right' : 'left';
+      const last = !!boss.downAt[other];
+      this.freeUnthrownFists(lane);
+      this.blowUpBoss(this.bossFigure(lane), last);
+      if (last) {
+        boss.ko = true;
+        boss.koAt = performance.now();
+      }
+      return;
+    }
+
+    if (boss.hp > 0) return;
+    boss.ko = true;
+    boss.koAt = performance.now();
+    this.freeUnthrownFists(null);
+    this.blowUpBoss(this.bossFigure(null), true);
+  }
+
+  /** Where a boss figure is right now (the twin on `lane`, or the single boss). */
+  private bossFigure(lane: Lane | null): BossFigure {
+    const figures = bossFigures(this.boss!.plan, this.songTime, this.fistFlight);
+    return figures.find((f) => f.side === lane) ?? figures[0];
+  }
+
+  /** A fallen boss's fists that it hadn't thrown yet come as ordinary enemies instead. */
+  private freeUnthrownFists(lane: Lane | null) {
+    for (const e of this.enemies) {
+      if (lane && e.lane !== lane) continue;
+      if (e.bossAttack && !e.defeated && e.targetTime - this.approachDuration > this.songTime) {
+        e.bossAttack = false;
+        e.spawnTime = e.targetTime - this.approachDuration;
+      }
+    }
+  }
+
+  /** A boss blows apart into big pieces; the final KO also gets a long freeze, a heavy shake and the crowd pop. */
+  private blowUpBoss(figure: BossFigure, final: boolean) {
+    const look = BOSS_LOOKS[this.boss!.plan.kind];
+    const pieces = shatterEnemy(
+      {
+        x: figure.x,
+        pose: enemyPoseFor(this.settings.enemyMotion, beatPosition(this.songTime, this.beatGrid), look.band, look.tier, getActiveAnimations()),
+        facing: figure.facing,
+        scale: BOSS_SCALE,
+        color: look.color,
+        accent: look.accent,
+        limbScale: getEnemyStyle(look.band, look.tier).limbScale,
+        hasBlade: look.band !== 'sub',
+        power: 2.4,
+        extraShards: 14,
+      },
+      () => this.nextDebrisId++
+    );
+    this.debris.push(...pieces);
+    trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
+
+    const shakeMode = this.settings.screenShake || 'subtle';
+    const shakeAmount = shakeMode === 'none' ? 0 : shakeMode === 'subtle' ? 0.5 : 1;
+    this.screenShake = Math.max(this.screenShake, (final ? 14 : 9) * shakeAmount);
+    if (final && shakeAmount > 0) this.crowdPop = 1;
+    this.hitStopRemaining = final ? 0.32 : 0.18;
+    audioEngine.playHitSound('PERFECT', 'sub', 55, this.settings.hitSound);
+    this.spawnHitParticles(figure.x, -60, figure.side, 'PERFECT', look.accent);
   }
 
   /** Begin a strike animation from wherever the fighter currently is. */
@@ -771,6 +967,10 @@ export class GameEngine {
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
     this.songTime = effectiveTime;
+    if (effectiveTime >= this.songEndAt) {
+      this.finishSong(true);
+      return;
+    }
     const beatPos = beatPosition(effectiveTime, this.beatGrid);
 
     // 1. ENEMIES: position comes straight from the song clock, so they always
@@ -780,11 +980,12 @@ export class GameEngine {
       if (enemy.defeated) continue;
 
       const timeRemaining = enemy.targetTime - effectiveTime;
-      const t = timeRemaining / this.approachDuration;
+      const t = timeRemaining / (enemy.bossAttack ? this.fistFlight : this.approachDuration);
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      // Every screen: the same start point and speed (see SPAWN_DISTANCE)
-      const spawnX = enemy.lane === 'left' ? -SPAWN_DISTANCE : SPAWN_DISTANCE;
+      // Every screen: the same start point and speed (see SPAWN_DISTANCE). Boss fists start at the boss.
+      const spawnDistance = enemy.bossAttack && this.boss ? standX(this.boss.plan.kind) : SPAWN_DISTANCE;
+      const spawnX = enemy.lane === 'left' ? -spawnDistance : spawnDistance;
 
       enemy.x = hitX + (spawnX - hitX) * t;
       // Late enemies press in but never walk through the player.
@@ -957,7 +1158,11 @@ export class GameEngine {
     this.recordProgress(false);
     this.countRun(false, true);
     const report = explainDeath(
-      { name: getEnemyStyle(killer.band, killer.tier).name, lane: killer.lane, targetTime: killer.targetTime },
+      {
+        name: killer.bossAttack ? 'boss fist' : getEnemyStyle(killer.band, killer.tier).name,
+        lane: killer.lane,
+        targetTime: killer.targetTime,
+      },
       this.recentPresses,
       this.settings.oneButtonMode
     );
@@ -990,8 +1195,8 @@ export class GameEngine {
   /** Save how far this run got, and compare it with the best attempt on this song. */
   private recordProgress(cleared: boolean) {
     if (!this.track || this.lastRun) return;
-    const duration = this.track.audioBuffer?.duration ?? this.track.duration;
-    this.lastRun = this.practice
+    const duration = Math.min(this.track.audioBuffer?.duration ?? this.track.duration, this.songEndAt);
+    this.lastRun = this.practice || BOSS_TEST
       ? practiceRunProgress(this.track.id, this.songTime, duration, cleared, this.practiceHits, progressStore())
       : recordRunProgress(this.track.id, this.songTime, duration, cleared, progressStore());
   }
@@ -1007,7 +1212,7 @@ export class GameEngine {
   }
 
   private saveHighScore(cleared: boolean) {
-    if (!this.track || this.practice) return;
+    if (!this.track || this.practice || BOSS_TEST) return;
     const totalHits =
       this.scoreState.perfectCount +
       this.scoreState.goodCount +

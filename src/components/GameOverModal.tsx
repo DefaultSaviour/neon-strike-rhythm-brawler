@@ -43,6 +43,10 @@ interface GameOverModalProps {
   practiceHits?: number;
   /** After practice: play the same song for real (the main button then) */
   onPlayForReal?: () => void;
+  /** The end-of-song boss: knocked out, still standing, or never reached (null) */
+  boss?: 'ko' | 'standing' | null;
+  /** Which boss it was ("Titan King") */
+  bossName?: string;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -66,6 +70,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   practice = false,
   practiceHits = 0,
   onPlayForReal,
+  boss = null,
+  bossName = 'boss',
 }) => {
   const forReal = practice && onPlayForReal;
   const [pickedHero, setPickedHero] = React.useState<HeroId | null>(null);
@@ -154,6 +160,16 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 ? 'Flawless rhythm execution'
                 : 'An enemy breached your strike line!'}
           </div>
+          {boss === 'ko' && (
+            <div className="mt-3 px-4 py-1.5 rounded-lg bg-amber-400 text-black text-sm font-black tracking-[0.2em] shadow-[0_0_18px_rgba(255,213,74,0.6)]">
+              BOSS KO!
+            </div>
+          )}
+          {boss === 'standing' && cleared && (
+            <div className="mt-3 px-3 py-2 rounded-lg bg-slate-900/80 border border-amber-400/50 text-sm text-slate-200">
+              <span className="font-bold text-amber-300">The {bossName} survived.</span> PERFECT hits on the fists do the most damage.
+            </div>
+          )}
           {!cleared && deathReport && (
             <div className="mt-3 px-3 py-2 rounded-lg bg-red-950/40 border border-red-500/40 text-sm text-slate-200">
               <div className="font-bold text-red-300">

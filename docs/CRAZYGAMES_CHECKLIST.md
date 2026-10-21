@@ -50,5 +50,5 @@ Launch (ads and revenue only start then).
 ## Left to do
 
 1. Song rights (Suno, terms effective 3 September 2026): songs made on the **free** plan are for personal, non-commercial use only, and an ad-funded game is commercial. Songs made on **Pro or Premier** can be used commercially, but only after being downloaded from Suno. Subscribing later doesn't clearly cover songs made earlier on the free plan. Don't strip Suno's watermark or metadata from the files.
-2. Run the build through the QA tool on the CrazyGames Developer Portal, and try Safari.
+2. Run the build through the QA tool on the CrazyGames Developer Portal, and try Safari. While there, test Import Audio inside their page: does the file picker open, and is an imported song still there after closing and reopening the game? (Imported songs live in the browser's own storage, not the CrazyGames account, so they stay on that one device and browser.)
 3. Submission form: description, controls, cover images and video, and the Progress Save toggle.

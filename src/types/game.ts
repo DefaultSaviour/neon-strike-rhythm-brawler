@@ -77,6 +77,8 @@ export interface Enemy {
   stepOffset?: number;
   /** Pitch (Hz) of the musical note this enemy was charted from */
   pitchHz?: number;
+  /** A fist thrown by the end-of-song boss (see boss.ts), not a walking enemy */
+  bossAttack?: boolean;
 }
 
 export interface Particle {
