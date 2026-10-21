@@ -1,6 +1,7 @@
 import { Track, BeatNote, Lane, TimingJudgementType, FrequencyBand, HitSoundMode } from '../types/game';
 import { audioStorage } from '../utils/audioStorage';
 import { BeatGrid, gridForNotes, onEighthNote } from './beatGrid';
+import { gridFit, MIN_GRID_FIT, snapToBeats, trackBeatFrames } from './beatSnap';
 import { computeHeardSongTime } from './songClock';
 import { foldIntoOctave, peakHzInBand } from './hitTone';
 
@@ -400,7 +401,8 @@ class AudioEngine {
     const p = (async () => {
       const buffer = await this.preloadTrackAudio(track);
       if (buffer && track.notes.length === 0) {
-        const result = this.analyzeAudioBuffer(buffer);
+        // Our own songs come with their real tempo: slow, swung beats can fool the guess
+        const result = this.analyzeAudioBuffer(buffer, undefined, track.isCustom ? undefined : track.bpm);
         track.bpm = result.bpm;
         track.notes = result.notes;
       }
@@ -884,9 +886,11 @@ class AudioEngine {
     noise.stop(time + 0.45);
   }
 
+  /** `bpmHint`: the song's real tempo when known (our own soundtrack); otherwise it's estimated. */
   public analyzeAudioBuffer(
     audioBuffer: AudioBuffer,
-    progressCallback?: (progress: number) => void
+    progressCallback?: (progress: number) => void,
+    bpmHint?: number
   ): { bpm: number; notes: BeatNote[]; description: string } {
     const sr = audioBuffer.sampleRate;
     const duration = audioBuffer.duration;
@@ -1029,9 +1033,10 @@ class AudioEngine {
       }
     }
 
-    const beatFrames = bestLag;
-    const beatSec = beatFrames * frameDt;
-    const estimatedBpm = Math.min(200, Math.max(90, Math.round(60 / beatSec)));
+    const hinted = bpmHint && bpmHint > 0 ? bpmHint : 0;
+    const beatFrames = hinted ? Math.round(60 / hinted / frameDt) : bestLag;
+    const beatSec = hinted ? 60 / hinted : beatFrames * frameDt;
+    const estimatedBpm = hinted || Math.min(200, Math.max(90, Math.round(60 / beatSec)));
 
     const locLowMean = computeMovingMean(lowOnset, 24);
     const locHighMean = computeMovingMean(highN, 24);
@@ -1257,6 +1262,27 @@ class AudioEngine {
     }
     lockedBeats.sort((a, b) => a.time - b.time);
 
+    // 5c. Snap every note onto the beat (see beatSnap.ts). Soft sounds (8-bit square-wave
+    // bass, chip kicks) start smeared, so notes landed up to ~60ms either side of the beat,
+    // which made timing feel random. Follow the beat through the song (it can drift), then
+    // put each note on the nearest beat or half beat (quarter beat in slow songs).
+    const beatOnset = new Float32Array(nFrames);
+    for (let i = 0; i < nFrames; i++) beatOnset[i] = lowOnset[i] + 0.5 * highN[i];
+    const trackedBeats = trackBeatFrames(beatOnset, beatSec / frameDt).map(
+      (f) => (f * hop + win / 2) / srLow - LOW_BAND_DETECTOR_LAG_SEC
+    );
+    const slotsPerBeat = estimatedBpm <= SLOW_SONG_MAX_BPM ? 4 : 2;
+    const rawTimes = lockedBeats.map((b) => b.time);
+    // Only when the notes really follow that grid: a wrong tempo would drag them off the beat
+    if (gridFit(rawTimes, trackedBeats, slotsPerBeat) >= MIN_GRID_FIT) {
+      const snapped = snapToBeats(rawTimes, trackedBeats, slotsPerBeat);
+      lockedBeats.forEach((b, i) => (b.time = Math.max(0, snapped.times[i])));
+      const onGrid = lockedBeats.filter((_, i) => snapped.keep[i]);
+      lockedBeats.length = 0;
+      lockedBeats.push(...onGrid);
+      lockedBeats.sort((a, b) => a.time - b.time);
+    }
+
     // 6. Acoustic & Phrase-Aware Lane Choreography
     const notes: BeatNote[] = [];
     let sameLaneStreak = 0;
@@ -1398,17 +1424,6 @@ export const PRELOADED_TRACKS: Track[] = [
     audioUrl: 'audio/menace.mp3',
   },
   {
-    id: 'track_night_prowl',
-    title: 'Night Prowl',
-    artist: 'defaultsaviour',
-    bpm: 98,
-    difficulty: 'Easy',
-    duration: 115,
-    description: 'Slow, heavy chiptune phonk with big gaps between hits.',
-    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
-    audioUrl: 'audio/night-prowl.mp3',
-  },
-  {
     id: 'track_blitz',
     title: 'Blitz',
     artist: 'defaultsaviour',
@@ -1440,6 +1455,17 @@ export const PRELOADED_TRACKS: Track[] = [
     description: 'Hard-driving 8-bit techno march.',
     notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
     audioUrl: 'audio/assault.mp3',
+  },
+  {
+    id: 'track_night_prowl',
+    title: 'Night Prowl',
+    artist: 'defaultsaviour',
+    bpm: 143, // measured; the beat is swung, which fools the tempo guess into 98
+    difficulty: 'Medium',
+    duration: 115,
+    description: 'Swung chiptune phonk: the beat bounces, so listen to the drums.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/night-prowl.mp3',
   },
   {
     id: 'track_hellbound',

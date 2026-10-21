@@ -91,10 +91,10 @@ npm test
 | Track | BPM | Difficulty | Duration | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Menace** | 141 | Easy | 1:05 | A short, stomping 8-bit warm-up: one minute to find the beat. |
-| **Night Prowl** | 98 | Easy | 1:55 | Slow, heavy chiptune phonk with big gaps between hits. |
 | **Blitz** | 153 | Medium | 1:40 | Fast 8-bit rock that never lets up. |
 | **Shock Trooper** | 153 | Medium | 1:40 | Three tracks smashed into one 8-bit rock assault. |
 | **Assault** | 150 | Medium | 1:42 | Hard-driving 8-bit techno march. |
+| **Night Prowl** | 143 | Medium | 1:55 | Swung chiptune phonk: the beat bounces, so listen to the drums. |
 | **Hellbound** | 141 | Medium | 2:09 | Dark, grinding chiptune heading straight down. |
 | **Hellfire** | 140 | Medium | 2:09 | Hellbound, burning hotter: more hits, same descent. |
 | **Overload** | 144 | Hard | 2:14 | Heavy 8-bit rock with the volume past the limit. |
