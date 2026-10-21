@@ -33,7 +33,7 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
-import { BOSS_DAMAGE, BOSS_SCALE, BOSS_STAND_X, BossPlan, bossStage, planBoss } from './boss';
+import { BOSS_DAMAGE, BOSS_SCALE, BOSS_STAND_X, BossPlan, bossStage, fistFlightSec, planBoss } from './boss';
 
 /** The end-of-song boss while a song is playing (see boss.ts). */
 export interface BossState {
@@ -115,6 +115,8 @@ export class GameEngine {
   public beatGrid: BeatGrid = { bpm: 120, offset: 0, strength: 0 };
   /** Seconds an enemy takes to walk from the screen edge to the strike line */
   public approachDuration: number = 1.35;
+  /** Seconds a boss fist is in the air (shorter than the walk, see boss.ts) */
+  public fistFlight: number = 0.8;
   /** Press-minus-beat timing error (s) of every successful hit this song */
   public hitOffsets: number[] = [];
   /** The player's last few presses, used to explain a death */
@@ -447,6 +449,7 @@ export class GameEngine {
 
     const beatSec = 60 / this.beatGrid.bpm;
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
+    this.fistFlight = fistFlightSec(this.beatGrid.bpm, this.approachDuration);
 
     // The end-of-song boss: it takes over the last stretch, turning those notes into its fists.
     const bossPlan = planBoss(notes, this.beatGrid.bpm);
@@ -464,7 +467,7 @@ export class GameEngine {
         lane,
         bossAttack: bossPlan?.attack[index] ?? false,
         targetTime: note.time,
-        spawnTime: Math.max(0, note.time - this.approachDuration),
+        spawnTime: Math.max(0, note.time - (bossPlan?.attack[index] ? this.fistFlight : this.approachDuration)),
         speed: 1.0,
         x: lane === 'left' ? -9999 : 9999,
         y: 0,
@@ -484,7 +487,7 @@ export class GameEngine {
     // Dev ?boss: skip straight to a few seconds before the boss arrives.
     let startAt = 0;
     if (BOSS_TEST && bossPlan) {
-      startAt = Math.max(0, bossPlan.start - this.approachDuration - 3);
+      startAt = Math.max(0, bossPlan.start - this.fistFlight - 3);
       this.enemies = this.enemies.filter((e) => e.targetTime > startAt + this.approachDuration);
       this.scoreState.totalNotes = this.enemies.length;
     }
@@ -676,7 +679,7 @@ export class GameEngine {
   public bossResult(): 'ko' | 'standing' | null {
     if (!this.boss) return null;
     if (this.boss.ko) return 'ko';
-    return this.songTime >= this.boss.plan.start - this.approachDuration ? 'standing' : null;
+    return this.songTime >= this.boss.plan.start - this.fistFlight ? 'standing' : null;
   }
 
   /** A fist was hit back: the boss takes damage by timing, and goes down at zero. */
@@ -691,11 +694,14 @@ export class GameEngine {
     boss.koAt = performance.now();
     // Fists it hadn't thrown yet come as ordinary enemies instead.
     for (const e of this.enemies) {
-      if (e.bossAttack && !e.defeated && e.spawnTime > this.songTime) e.bossAttack = false;
+      if (e.bossAttack && !e.defeated && e.targetTime - this.approachDuration > this.songTime) {
+        e.bossAttack = false;
+        e.spawnTime = e.targetTime - this.approachDuration;
+      }
     }
 
     // It blows apart into big pieces, with a long freeze, a heavy shake and the crowd pop.
-    const stage = bossStage(boss.plan, this.songTime, this.approachDuration);
+    const stage = bossStage(boss.plan, this.songTime, this.fistFlight);
     const pieces = shatterEnemy(
       {
         x: stage.x,
@@ -891,7 +897,7 @@ export class GameEngine {
       if (enemy.defeated) continue;
 
       const timeRemaining = enemy.targetTime - effectiveTime;
-      const t = timeRemaining / this.approachDuration;
+      const t = timeRemaining / (enemy.bossAttack ? this.fistFlight : this.approachDuration);
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
       // Every screen: the same start point and speed (see SPAWN_DISTANCE). Boss fists start at the boss.

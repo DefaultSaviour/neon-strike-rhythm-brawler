@@ -372,7 +372,7 @@ function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine,
         const t = age / HIT_FLASH_MS;
         ctx.save();
         ctx.globalAlpha = 1 - t;
-        if (enemy.bossAttack) drawBossFist(ctx, enemy, true, 1 + t * 0.8);
+        if (enemy.bossAttack) drawBossFist(ctx, enemy, engine, true, 1 + t * 0.8);
         else drawEnemyFigure(ctx, enemy, engine, { flash: true, grow: 1 + t * 0.18 });
         ctx.restore();
       }
@@ -390,7 +390,7 @@ function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine,
         continue;
       }
       ctx.globalAlpha = isNext ? 1 : 0.6;
-      drawBossFist(ctx, enemy, false);
+      drawBossFist(ctx, enemy, engine, false);
     } else {
       ctx.globalAlpha = (isNext ? 1 : 0.42) * fadeIn;
       drawEnemyFigure(ctx, enemy, engine, {});
@@ -407,7 +407,7 @@ const BOSS_NAME = 'TITAN KING';
 function drawBoss(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const boss = engine.boss;
   if (!boss || boss.ko || !engine.track) return;
-  const stage = bossStage(boss.plan, engine.songTime, engine.approachDuration);
+  const stage = bossStage(boss.plan, engine.songTime, engine.fistFlight);
   if (!stage.visible) return;
 
   // Faces the middle; turns round halfway through a leap.
@@ -470,33 +470,58 @@ function drawBoss(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.restore();
 }
 
-/** A fist thrown by the boss: a glowing ball with a tail back toward the boss. */
-function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, flash: boolean, grow = 1) {
+/**
+ * A fist thrown by the boss: a ball of energy that swells as it flies, red to
+ * gold to white-hot, crackling at the end, and is fullest exactly on its beat,
+ * like it's about to burst. That swell is the timing cue.
+ */
+function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameEngine, flash: boolean, grow = 1) {
   const away = enemy.x < 0 ? -1 : 1;
   const y = -6;
+  // 0 when thrown, 1 on the beat
+  const u = Math.min(1, Math.max(0, 1 - (enemy.targetTime - engine.songTime) / engine.fistFlight));
+  const r = (5 + 12 * Math.pow(u, 1.6)) * grow;
+  const outer = flash ? '#ffffff' : heatColor(BOSS_RED, Math.max(0, u - 0.35) * 1.2);
+  const core = flash ? '#ffffff' : heatColor(BOSS_GOLD, u * u);
   ctx.save();
   ctx.lineCap = 'round';
   if (!flash) {
-    const tail = ctx.createLinearGradient(enemy.x, y, enemy.x + away * 46, y);
-    tail.addColorStop(0, colorWithAlpha(BOSS_GOLD, 0.8));
+    const tail = ctx.createLinearGradient(enemy.x, y, enemy.x + away * 34, y);
+    tail.addColorStop(0, colorWithAlpha(BOSS_GOLD, 0.7));
     tail.addColorStop(1, colorWithAlpha(BOSS_RED, 0));
     ctx.strokeStyle = tail;
-    ctx.lineWidth = 12;
+    ctx.lineWidth = r * 1.1;
     ctx.beginPath();
     ctx.moveTo(enemy.x, y);
-    ctx.lineTo(enemy.x + away * 46, y);
+    ctx.lineTo(enemy.x + away * 34, y);
     ctx.stroke();
   }
-  ctx.fillStyle = flash ? '#ffffff' : BOSS_RED;
+  ctx.fillStyle = outer;
   ctx.shadowColor = flash ? '#ffffff' : BOSS_GOLD;
-  ctx.shadowBlur = 22;
+  ctx.shadowBlur = 10 + 26 * u;
   ctx.beginPath();
-  ctx.arc(enemy.x, y, 11 * grow, 0, Math.PI * 2);
+  ctx.arc(enemy.x, y, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = flash ? '#ffffff' : BOSS_GOLD;
+  ctx.fillStyle = core;
   ctx.beginPath();
-  ctx.arc(enemy.x, y, 5.5 * grow, 0, Math.PI * 2);
+  ctx.arc(enemy.x, y, r * 0.5, 0, Math.PI * 2);
   ctx.fill();
+  // Crackling sparks over the last stretch: it's about to go
+  if (!flash && u > 0.7) {
+    const k = (u - 0.7) / 0.3;
+    const spin = engine.songTime * 9 + enemy.targetTime * 3;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = spin + (i * Math.PI) / 3;
+      ctx.moveTo(enemy.x + Math.cos(a) * r, y + Math.sin(a) * r);
+      ctx.lineTo(enemy.x + Math.cos(a) * r * (1 + 0.7 * k), y + Math.sin(a) * r * (1 + 0.7 * k));
+    }
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -529,7 +554,7 @@ function drawBossKo(ctx: CanvasRenderingContext2D, engine: GameEngine) {
 function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: number, height: number) {
   const boss = engine.boss;
   if (!boss || boss.ko || !engine.track) return;
-  if (!bossStage(boss.plan, engine.songTime, engine.approachDuration).visible) return;
+  if (!bossStage(boss.plan, engine.songTime, engine.fistFlight).visible) return;
 
   const w = Math.min(460, width * 0.5);
   const left = (width - w) / 2;

@@ -86,6 +86,14 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number): Bo
   return plan;
 }
 
+/** Fists fly for 2 beats (normal enemies walk for 4), so they don't bunch up on the short trip. */
+export const FIST_FLIGHT_BEATS = 2;
+
+/** How long a fist is in the air (seconds), never longer than a normal enemy's walk. */
+export function fistFlightSec(bpm: number, approachSec: number): number {
+  return Math.min(approachSec, (FIST_FLIGHT_BEATS * 60) / bpm);
+}
+
 /** How big the boss is drawn, next to a normal enemy. */
 export const BOSS_SCALE = 1.7;
 /** World x where the boss stands (it throws its fists from here). */
