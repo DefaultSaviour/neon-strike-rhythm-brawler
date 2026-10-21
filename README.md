@@ -90,11 +90,20 @@ npm test
 
 | Track | BPM | Difficulty | Duration | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **Eargasm** | 150 | Hard | 3:10 | Heavy thumping kicks and rolling 16th-note sub-bass groove. |
-| **Eargasm 2** | 150 | Hard | 3:40 | Relentless driving rhythm with melodic synth breakdowns. |
-| **Eargasm 3** | 155 | Hard | 3:09 | Dark electro industrial rhythm with rapid syncopated basslines. |
-| **Eargasm 4** | 199 | Hard | 3:15 | High-speed 200 BPM frantic speedcore rush testing reflex limits. |
-| **Eargasm 5** | 104 | Medium | 3:19 | Deep bouncy groove with rhythmic acoustic accents. |
+| **Menace** | 141 | Easy | 1:05 | A short, stomping 8-bit warm-up: one minute to find the beat. |
+| **Night Prowl** | 98 | Easy | 1:55 | Slow, heavy chiptune phonk with big gaps between hits. |
+| **Blitz** | 153 | Medium | 1:40 | Fast 8-bit rock that never lets up. |
+| **Shock Trooper** | 153 | Medium | 1:40 | Three tracks smashed into one 8-bit rock assault. |
+| **Assault** | 150 | Medium | 1:42 | Hard-driving 8-bit techno march. |
+| **Hellbound** | 141 | Medium | 2:09 | Dark, grinding chiptune heading straight down. |
+| **Hellfire** | 140 | Medium | 2:09 | Hellbound, burning hotter: more hits, same descent. |
+| **Overload** | 144 | Hard | 2:14 | Heavy 8-bit rock with the volume past the limit. |
+| **Riot Engine** | 143 | Hard | 2:14 | Chiptune mash-up of Eargasm and Hellbound. |
+| **Eargasm** | 147 | Hard | 2:16 | The original Neon Strike anthem, rebuilt in 8-bit rock. |
+| **Afterburn** | 146 | Hard | 2:14 | Eargasm at full burn: the densest of the 2-minute songs. |
+| **Inferno** | 188 | Hard | 2:40 | Breakneck 8-bit gabber. Keep up or burn. |
+| **Brimstone** | 200 | Hard | 2:40 | 200 BPM 8-bit hardcore. The fastest song in the game. |
+| **Doomsday** | 197 | Hard | 3:15 | Over three minutes of 200 BPM techno. The final test. |
 
 ---
 

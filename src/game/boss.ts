@@ -62,8 +62,8 @@ export const HP_PER_ATTACK = 2.2;
 export const MIN_GAP_BEATS = 0.5;
 /** Of the beats charted on the far side, every this-many-th stays a small enemy. */
 export const MINION_EVERY = 3;
-/** Songs shorter than this (or with fewer notes) get no boss. */
-const MIN_SONG_SEC = 60;
+/** Songs shorter than this (or with fewer notes) get no boss. 50 s lets the 1-minute opener have one. */
+const MIN_SONG_SEC = 50;
 const MIN_NOTES = 40;
 
 export interface BossPlan {

@@ -1380,66 +1380,165 @@ class AudioEngine {
 export const audioEngine = new AudioEngine();
 
 
+/**
+ * The soundtrack, easiest first (one hit ends a run, so more enemies = harder).
+ * Made by defaultsaviour on Suno Pro and downloaded from Suno as MP3s, unconverted.
+ * Bosses take turns down this list (see boss.ts).
+ */
 export const PRELOADED_TRACKS: Track[] = [
+  {
+    id: 'track_menace',
+    title: 'Menace',
+    artist: 'defaultsaviour',
+    bpm: 141,
+    difficulty: 'Easy',
+    duration: 65,
+    description: 'A short, stomping 8-bit warm-up: one minute to find the beat.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/menace.mp3',
+  },
+  {
+    id: 'track_night_prowl',
+    title: 'Night Prowl',
+    artist: 'defaultsaviour',
+    bpm: 98,
+    difficulty: 'Easy',
+    duration: 115,
+    description: 'Slow, heavy chiptune phonk with big gaps between hits.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/night-prowl.mp3',
+  },
+  {
+    id: 'track_blitz',
+    title: 'Blitz',
+    artist: 'defaultsaviour',
+    bpm: 153,
+    difficulty: 'Medium',
+    duration: 100,
+    description: 'Fast 8-bit rock that never lets up.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/blitz.mp3',
+  },
+  {
+    id: 'track_shock_trooper',
+    title: 'Shock Trooper',
+    artist: 'defaultsaviour',
+    bpm: 153,
+    difficulty: 'Medium',
+    duration: 100,
+    description: 'Three tracks smashed into one 8-bit rock assault.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/shock-trooper.mp3',
+  },
+  {
+    id: 'track_assault',
+    title: 'Assault',
+    artist: 'defaultsaviour',
+    bpm: 150,
+    difficulty: 'Medium',
+    duration: 102,
+    description: 'Hard-driving 8-bit techno march.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/assault.mp3',
+  },
+  {
+    id: 'track_hellbound',
+    title: 'Hellbound',
+    artist: 'defaultsaviour',
+    bpm: 141,
+    difficulty: 'Medium',
+    duration: 129,
+    description: 'Dark, grinding chiptune heading straight down.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/hellbound.mp3',
+  },
+  {
+    id: 'track_hellfire',
+    title: 'Hellfire',
+    artist: 'defaultsaviour',
+    bpm: 140,
+    difficulty: 'Medium',
+    duration: 129,
+    description: 'Hellbound, burning hotter: more hits, same descent.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/hellfire.mp3',
+  },
+  {
+    id: 'track_overload',
+    title: 'Overload',
+    artist: 'defaultsaviour',
+    bpm: 144,
+    difficulty: 'Hard',
+    duration: 134,
+    description: 'Heavy 8-bit rock with the volume past the limit.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/overload.mp3',
+  },
+  {
+    id: 'track_riot_engine',
+    title: 'Riot Engine',
+    artist: 'defaultsaviour',
+    bpm: 143,
+    difficulty: 'Hard',
+    duration: 134,
+    description: 'Chiptune mash-up of Eargasm and Hellbound.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/riot-engine.mp3',
+  },
   {
     id: 'track_eargasm',
     title: 'Eargasm',
     artist: 'defaultsaviour',
-    bpm: 150,
+    bpm: 147,
     difficulty: 'Hard',
-    duration: 190,
-    description:
-      'Hard-thumping 150 BPM techno anthem! Heavy 4-on-the-floor kick drops with dynamic evolving basslines.',
+    duration: 136,
+    description: 'The original Neon Strike anthem, rebuilt in 8-bit rock.',
     notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
-    audioUrl: 'audio/Eargasm.mp3',
+    audioUrl: 'audio/eargasm.mp3',
   },
   {
-    id: 'track_eargasm_2',
-    title: 'Eargasm 2',
+    id: 'track_afterburn',
+    title: 'Afterburn',
     artist: 'defaultsaviour',
-    bpm: 150,
+    bpm: 146,
     difficulty: 'Hard',
-    duration: 220,
-    description:
-      'Extended 220s techno powerhouse with relentless sub-bass pressure, rolling groove changes, and surging leads.',
-    notes: [],
-    audioUrl: 'audio/Eargasm2.mp3',
+    duration: 134,
+    description: 'Eargasm at full burn: the densest of the 2-minute songs.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/afterburn.mp3',
   },
   {
-    id: 'track_eargasm_3',
-    title: 'Eargasm 3',
+    id: 'track_inferno',
+    title: 'Inferno',
     artist: 'defaultsaviour',
-    bpm: 150,
+    bpm: 188,
     difficulty: 'Hard',
-    duration: 189,
-    description:
-      'Driving peak-time energy packed with syncopated bassline runs and razor-sharp high percussive accents.',
-    notes: [],
-    audioUrl: 'audio/Eargasm3.mp3',
+    duration: 160,
+    description: 'Breakneck 8-bit gabber. Keep up or burn.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/inferno.mp3',
   },
   {
-    id: 'track_eargasm_4',
-    title: 'Eargasm 4',
+    id: 'track_brimstone',
+    title: 'Brimstone',
     artist: 'defaultsaviour',
     bpm: 200,
     difficulty: 'Hard',
-    duration: 195,
-    description:
-      'Blistering 200 BPM high-speed techno overdrive! Fast-paced rhythm streams test reflexes and combo mastery.',
-    notes: [],
-    audioUrl: 'audio/Eargasm4.mp3',
+    duration: 160,
+    description: '200 BPM 8-bit hardcore. The fastest song in the game.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/brimstone.mp3',
   },
   {
-    id: 'track_eargasm_5',
-    title: 'Eargasm 5',
+    id: 'track_doomsday',
+    title: 'Doomsday',
     artist: 'defaultsaviour',
-    bpm: 104,
-    difficulty: 'Medium',
-    duration: 199,
-    description:
-      'Hypnotic 104 BPM deep techno groove with deep resonant sub kicks and spacious atmospheric sweeps.',
-    notes: [],
-    audioUrl: 'audio/Eargasm5.mp3',
+    bpm: 197,
+    difficulty: 'Hard',
+    duration: 195,
+    description: 'Over three minutes of 200 BPM techno. The final test.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/doomsday.mp3',
   },
 ];
 

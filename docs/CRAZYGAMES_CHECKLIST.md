@@ -32,7 +32,7 @@ Launch (ads and revenue only start then).
 | No custom fullscreen button, no cross-promotion or external links | Basic | Done |
 | PEGI 12 | Basic | Fine: neon stick-figure fighting, enemies shatter into shards, no blood |
 | Original names and assets | Basic | Heroes are inspired-by with our own names and no quotes. **Songs: made with Suno, so they're only usable if made on a paid plan and downloaded from Suno (see below)** |
-| New players land in gameplay with at most 1 click | Full | Done: a brand-new player's New Game starts the easiest song (Eargasm 5) straight away |
+| New players land in gameplay with at most 1 click | Full | Done: a brand-new player's New Game starts the easiest song (Menace) straight away |
 
 ## Ads
 
