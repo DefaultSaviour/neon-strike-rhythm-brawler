@@ -444,11 +444,13 @@ export class GameEngine {
     const beatSec = 60 / this.beatGrid.bpm;
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
 
-    // The end-of-song boss: it takes over the last stretch, moving those notes to its side.
+    // The end-of-song boss: it takes over the last stretch, turning those notes into its fists.
     const bossPlan = planBoss(notes, this.beatGrid.bpm);
     this.boss = bossPlan ? { plan: bossPlan, hp: bossPlan.maxHp, ko: false, koAt: 0, hurtAt: 0 } : null;
+    this.scoreState.totalNotes = bossPlan ? bossPlan.keep.filter(Boolean).length : notes.length;
 
-    this.enemies = notes.map((note, index) => {
+    this.enemies = notes.flatMap((note, index) => {
+      if (bossPlan && !bossPlan.keep[index]) return [];
       const { band, tier } = resolveBandTier(note);
       const color = getEnemyStyle(band, tier).color;
       const lane = bossPlan ? bossPlan.lanes[index] : note.lane;
@@ -473,7 +475,7 @@ export class GameEngine {
         stepOffset: index % 2,
         pitchHz: note.pitchHz,
       };
-    });
+    }) as Enemy[];
 
     audioEngine.startTrack(track, () => {
       this.finishSong(true);

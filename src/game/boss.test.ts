@@ -22,20 +22,22 @@ describe('the end-of-song boss', () => {
     });
   });
 
-  it('throws its fists from the side it stands on, and still sends some small enemies from the other', () => {
+  it('fights alone: every note it keeps is a fist from the side it stands on', () => {
     const notes = chart();
     const plan = planBoss(notes, 120)!;
-    let minions = 0;
     notes.forEach((n, i) => {
-      if (n.time < plan.start) return;
-      const side = bossSideAt(plan, n.time);
-      if (plan.attack[i]) expect(plan.lanes[i]).toBe(side);
-      else {
-        expect(plan.lanes[i]).not.toBe(side);
-        minions++;
-      }
+      if (n.time < plan.start || !plan.keep[i]) return;
+      expect(plan.attack[i]).toBe(true);
+      expect(plan.lanes[i]).toBe(bossSideAt(plan, n.time));
     });
-    expect(minions).toBeGreaterThan(0);
+  });
+
+  it('keeps every note before it arrives', () => {
+    const notes = chart();
+    const plan = planBoss(notes, 120)!;
+    notes.forEach((n, i) => {
+      if (n.time < plan.start) expect(plan.keep[i]).toBe(true);
+    });
   });
 
   it('switches sides every 8 beats', () => {
@@ -45,11 +47,14 @@ describe('the end-of-song boss', () => {
     expect(bossSideAt(plan, plan.start + 8.1)).toBe('right');
   });
 
-  it('never stacks two fists on top of each other', () => {
+  it('throws its fists at least half a beat apart, dropping notes in between', () => {
     const notes = chart();
     const plan = planBoss(notes, 120)!;
     const fists = notes.filter((_, i) => plan.attack[i]).map((n) => n.time);
-    for (let i = 1; i < fists.length; i++) expect(fists[i] - fists[i - 1]).toBeGreaterThanOrEqual(0.12);
+    for (let i = 1; i < fists.length; i++) expect(fists[i] - fists[i - 1]).toBeGreaterThanOrEqual(0.25 - 0.011);
+    // The test chart has a note every quarter second = half a beat at 120 BPM, so none are dropped
+    expect(plan.keep.every(Boolean)).toBe(true);
+    expect(planBoss(notes, 60)!.keep.some((k) => !k)).toBe(true);
   });
 
   it('has more health than all-GOOD hits can take, so the KO needs PERFECTs', () => {

@@ -4,7 +4,7 @@
  * Over the last stretch of a song a big boss stands on one side and throws
  * punches (energy fists) on the beat. Hitting a fist on time damages the boss:
  * PERFECTs hurt most. Every few bars it leaps over the player to the other side.
- * Small enemies still come from the opposite side now and then.
+ * It fights alone: once it arrives, every beat is a fist from its side.
  *
  * Letting a fist through is the same as letting any enemy through, so surviving
  * isn't enough to win: the KO needs good timing.
@@ -19,10 +19,8 @@ export const SWITCH_BEATS = 8;
 export const BOSS_DAMAGE: Record<TimingJudgementType, number> = { PERFECT: 3, GOOD: 2, OK: 1, MISS: 0 };
 /** Boss health per fist it throws: all GOODs fall short, so the KO needs some PERFECTs. */
 export const HP_PER_ATTACK = 2.2;
-/** Of the notes charted on the far side, every this-many-th stays as a small enemy. */
-export const MINION_EVERY = 3;
-/** Two fists can't land closer together than this on one side (seconds). */
-const MIN_GAP_SEC = 0.12;
+/** Fists land at least this many beats apart (so no frantic runs on one key). */
+export const MIN_GAP_BEATS = 0.5;
 /** Songs shorter than this (or with fewer notes) get no boss. */
 const MIN_SONG_SEC = 60;
 const MIN_NOTES = 40;
@@ -40,6 +38,8 @@ export interface BossPlan {
   lanes: Lane[];
   /** Per note: true when the boss throws it */
   attack: boolean[];
+  /** Per note: false when the boss section drops it (too close to the fist before) */
+  keep: boolean[];
 }
 
 /** Which side the boss's fists land on at song time `time`. */
@@ -64,23 +64,21 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number): Bo
     maxHp: 0,
     lanes: notes.map((n) => n.lane),
     attack: notes.map(() => false),
+    keep: notes.map(() => true),
   };
 
-  let farSide = 0;
-  const lastOnSide: Record<Lane, number> = { left: -Infinity, right: -Infinity };
+  // Every note becomes a fist from the boss's side, except ones too close to the fist before.
+  const minGap = (MIN_GAP_BEATS * 60) / bpm - 0.01;
+  let lastFist = -Infinity;
   for (let i = firstIndex; i < notes.length; i++) {
-    const { time, lane } = notes[i];
-    const side = bossSideAt(plan, time);
-    let goesTo = lane;
-    if (lane !== side) {
-      // Most far-side notes become fists too; some stay as small enemies, and
-      // so does any that would land on top of the fist before it.
-      const keep = farSide++ % MINION_EVERY === 0 || time - lastOnSide[side] < MIN_GAP_SEC;
-      if (!keep) goesTo = side;
+    const { time } = notes[i];
+    if (time - lastFist < minGap) {
+      plan.keep[i] = false;
+      continue;
     }
-    plan.lanes[i] = goesTo;
-    plan.attack[i] = goesTo === side;
-    lastOnSide[goesTo] = time;
+    plan.lanes[i] = bossSideAt(plan, time);
+    plan.attack[i] = true;
+    lastFist = time;
   }
 
   const attacks = plan.attack.filter(Boolean).length;
