@@ -509,6 +509,61 @@ export function shatterEnemy(opts: ShatterOptions, nextId: () => number): Debris
   return pieces;
 }
 
+export interface BurstOptions {
+  /** Where the orb was hit (world units) */
+  x: number;
+  y: number;
+  color: string;
+  accent: string;
+  /** 1 = an ordinary hit; bigger = harder (timing and combo) */
+  power: number;
+  count: number;
+  random?: () => number;
+  maxLife?: number;
+}
+
+/**
+ * A boss fist smashed back: it bursts into white-hot shards that fly away from
+ * the player (back toward the boss) and up, then land on the belts like any
+ * other debris.
+ */
+export function burstOrb(opts: BurstOptions, nextId: () => number): DebrisPiece[] {
+  const rnd = opts.random ?? Math.random;
+  const away = opts.x < 0 ? -1 : 1;
+  const pieces: DebrisPiece[] = [];
+  for (let i = 0; i < opts.count; i++) {
+    const halfLength = 3 + rnd() * 4;
+    const { mass, inertia } = massProperties('shard', halfLength, 1);
+    // A fan that opens away from the player, mostly upward
+    const a = (rnd() - 0.5) * Math.PI * 0.9;
+    const speed = (260 + rnd() * 260) * opts.power;
+    const vx = away * Math.cos(a) * speed;
+    pieces.push({
+      id: nextId(),
+      shape: 'shard',
+      role: 'shard',
+      x: opts.x + (rnd() - 0.5) * 8,
+      y: opts.y + (rnd() - 0.5) * 8,
+      vx: Math.max(-MAX_LAUNCH_VX, Math.min(MAX_LAUNCH_VX, vx)),
+      vy: -Math.abs(Math.sin(a)) * speed - 180 - rnd() * 160,
+      angle: rnd() * Math.PI * 2,
+      vAngle: (rnd() - 0.5) * 24,
+      halfLength,
+      radius: 1,
+      mass,
+      inertia,
+      color: i % 2 ? opts.accent : opts.color,
+      accent: opts.accent,
+      heat: 1,
+      life: 0,
+      maxLife: (opts.maxLife ?? 2.2) + rnd(),
+      alpha: 1,
+      inPit: false,
+    });
+  }
+  return pieces;
+}
+
 /** Fire a piece almost straight up, spinning hard. */
 export function launchStraightUp(p: DebrisPiece, power: number, rnd: () => number) {
   const strength = Math.min(1.25, 0.85 + 0.15 * power);

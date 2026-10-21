@@ -19,7 +19,7 @@ import { isStanceUnlocked, nextStance } from './stanceUnlocks';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
-import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
+import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame } from './motion';
@@ -665,8 +665,10 @@ export class GameEngine {
       detail: judgement === 'PERFECT' ? undefined : offsetSec < 0 ? 'EARLY' : 'LATE',
     });
 
-    if (enemy.bossAttack) this.damageBoss(judgement);
-    else this.spawnEnemyDebrisExplosion(enemy, judgement);
+    if (enemy.bossAttack) {
+      this.burstFist(enemy, judgement);
+      this.damageBoss(judgement);
+    } else this.spawnEnemyDebrisExplosion(enemy, judgement);
     this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
     const remaining = this.enemies.filter((e) => !e.defeated);
@@ -680,6 +682,28 @@ export class GameEngine {
     if (!this.boss) return null;
     if (this.boss.ko) return 'ko';
     return this.songTime >= this.boss.plan.start - this.fistFlight ? 'standing' : null;
+  }
+
+  /** A boss fist smashed back: it bursts into hot shards and a ring of light. Better timing, bigger burst. */
+  private burstFist(enemy: Enemy, judgement: TimingJudgementType) {
+    const power = (judgement === 'PERFECT' ? 1.3 : judgement === 'GOOD' ? 1.05 : 0.85) * Math.min(1.4, comboBlastPower(this.scoreState.combo));
+    const count = judgement === 'PERFECT' ? 10 : judgement === 'GOOD' ? 7 : 5;
+    this.debris.push(
+      ...burstOrb({ x: enemy.x, y: -6, color: '#ff1744', accent: '#ffd54a', power, count }, () => this.nextDebrisId++)
+    );
+    trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
+    this.particles.push({
+      x: enemy.x,
+      y: -6,
+      vx: 0,
+      vy: 0,
+      color: '#ffd54a',
+      size: 8,
+      alpha: 1,
+      life: 0,
+      maxLife: judgement === 'PERFECT' ? 0.35 : 0.25,
+      sparkType: 'ring',
+    });
   }
 
   /** A fist was hit back: the boss takes damage by timing, and goes down at zero. */
