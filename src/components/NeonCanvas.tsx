@@ -238,7 +238,9 @@ function drawTacticalStrikeZones(ctx: CanvasRenderingContext2D, engine: GameEngi
  */
 function drawTimingRings(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const now = engine.songTime;
-  const lead = Math.min(0.6, engine.approachDuration * 0.45);
+  // Players read "a circle appeared" as "hit now", so it only shows while a press can
+  // land (the OK window), shrinking onto the target ring at the PERFECT moment.
+  const lead = HIT_WINDOWS.OK;
 
   ctx.save();
   for (const lane of ['left', 'right'] as const) {
@@ -253,13 +255,13 @@ function drawTimingRings(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     const cy = -2;
     const baseR = 22;
     const progress = Math.max(0, remaining / lead);
-    const r = baseR + progress * 70;
+    const r = baseR + progress * 36;
     const color = lane === 'left' ? '#00f3ff' : '#ff007f';
 
-    ctx.strokeStyle = colorWithAlpha(color, 0.25 + (1 - progress) * 0.7);
+    ctx.strokeStyle = colorWithAlpha(color, 0.75 + (1 - progress) * 0.25);
     ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
-    ctx.lineWidth = 1.5 + (1 - progress) * 1.5;
+    ctx.shadowBlur = 14;
+    ctx.lineWidth = 2.5 + (1 - progress) * 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
