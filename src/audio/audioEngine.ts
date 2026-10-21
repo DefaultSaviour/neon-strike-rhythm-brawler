@@ -434,7 +434,8 @@ class AudioEngine {
     }
   }
 
-  public async startTrack(track: Track, onComplete?: () => void) {
+  /** `startAt` (seconds) starts part way into the song (dev boss test); song time still counts from 0. */
+  public async startTrack(track: Track, onComplete?: () => void, startAt = 0) {
     this.initContext();
     this.stop();
     const session = ++this.playSessionId;
@@ -460,8 +461,9 @@ class AudioEngine {
         }
       };
       // Start a touch in the future so the first sample lands exactly on startTime.
-      this.startTime = this.ctx!.currentTime + 0.05;
-      source.start(this.startTime);
+      const at = this.ctx!.currentTime + 0.05;
+      source.start(at, startAt);
+      this.startTime = at - startAt;
       this.currentSource = source;
     } else {
       // Procedural Web Audio synthesizer fallback

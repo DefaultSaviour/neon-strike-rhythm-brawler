@@ -66,6 +66,10 @@ export const CROWD_POP_SEC = 0.3;
 const SHORT_TEST_SEC =
   import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('short') ? 120 : 0;
 
+/** Dev builds only: ?boss starts every song a few seconds before its boss. */
+const BOSS_TEST =
+  import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('boss');
+
 /** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
 const HIT_STOP: Record<TimingJudgementType, number> = { PERFECT: 0.06, GOOD: 0.04, OK: 0.025, MISS: 0 };
 
@@ -322,8 +326,8 @@ export class GameEngine {
   private countRun(cleared: boolean, died = false, quit = false) {
     if (!this.track || this.runCounted) return;
     this.runCounted = true;
-    // Practice counts for nothing (only for pacing ads)
-    if (this.practice) {
+    // Practice counts for nothing (only for pacing ads), and neither does a dev ?boss run
+    if (this.practice || BOSS_TEST) {
       this.practiceSeconds += this.songTime;
       return;
     }
@@ -477,9 +481,21 @@ export class GameEngine {
       };
     }) as Enemy[];
 
-    audioEngine.startTrack(track, () => {
-      this.finishSong(true);
-    });
+    // Dev ?boss: skip straight to a few seconds before the boss arrives.
+    let startAt = 0;
+    if (BOSS_TEST && bossPlan) {
+      startAt = Math.max(0, bossPlan.start - this.approachDuration - 3);
+      this.enemies = this.enemies.filter((e) => e.targetTime > startAt + this.approachDuration);
+      this.scoreState.totalNotes = this.enemies.length;
+    }
+
+    audioEngine.startTrack(
+      track,
+      () => {
+        this.finishSong(true);
+      },
+      startAt
+    );
   }
 
   public stop() {
@@ -1091,7 +1107,7 @@ export class GameEngine {
   private recordProgress(cleared: boolean) {
     if (!this.track || this.lastRun) return;
     const duration = Math.min(this.track.audioBuffer?.duration ?? this.track.duration, this.songEndAt);
-    this.lastRun = this.practice
+    this.lastRun = this.practice || BOSS_TEST
       ? practiceRunProgress(this.track.id, this.songTime, duration, cleared, this.practiceHits, progressStore())
       : recordRunProgress(this.track.id, this.songTime, duration, cleared, progressStore());
   }
@@ -1107,7 +1123,7 @@ export class GameEngine {
   }
 
   private saveHighScore(cleared: boolean) {
-    if (!this.track || this.practice) return;
+    if (!this.track || this.practice || BOSS_TEST) return;
     const totalHits =
       this.scoreState.perfectCount +
       this.scoreState.goodCount +
