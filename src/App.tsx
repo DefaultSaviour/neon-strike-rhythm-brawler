@@ -685,6 +685,7 @@ export default function App() {
           practice={engine.practice}
           practiceHits={engine.practiceHits.length}
           onPlayForReal={() => handleStartGame(selectedTrack, false)}
+          boss={engine.bossResult()}
           newUnlocks={engine.newUnlocks}
           onPickHero={(hero) => handleUpdateSettings({ hero })}
           track={selectedTrack}

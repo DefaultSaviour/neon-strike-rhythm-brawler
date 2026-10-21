@@ -33,6 +33,17 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
+import { BOSS_DAMAGE, BOSS_SCALE, BOSS_STAND_X, BossPlan, bossStage, planBoss } from './boss';
+
+/** The end-of-song boss while a song is playing (see boss.ts). */
+export interface BossState {
+  plan: BossPlan;
+  hp: number;
+  ko: boolean;
+  /** performance.now() of the KO, and of the last time it was hurt */
+  koAt: number;
+  hurtAt: number;
+}
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -216,6 +227,8 @@ export class GameEngine {
    * stats or unlocks, no best progress, no high score.
    */
   public practice = false;
+  /** The end-of-song boss for this song, or null when the song has none */
+  public boss: BossState | null = null;
   /** Song times (s) of the hits taken this practice run */
   public practiceHits: number[] = [];
   /** Seconds played in practice this visit (only for pacing midgame ads, see adClockSeconds) */
@@ -361,6 +374,7 @@ export class GameEngine {
   public async startSong(track: Track, practice = false) {
     const session = ++this.songSession;
     this.track = track;
+    this.boss = null;
     this.practice = practice;
     this.practiceHits = [];
     this.isRunning = false;
@@ -413,17 +427,23 @@ export class GameEngine {
     const beatSec = 60 / this.beatGrid.bpm;
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
 
+    // The end-of-song boss: it takes over the last stretch, moving those notes to its side.
+    const bossPlan = planBoss(track.notes, this.beatGrid.bpm);
+    this.boss = bossPlan ? { plan: bossPlan, hp: bossPlan.maxHp, ko: false, koAt: 0, hurtAt: 0 } : null;
+
     this.enemies = track.notes.map((note, index) => {
       const { band, tier } = resolveBandTier(note);
       const color = getEnemyStyle(band, tier).color;
+      const lane = bossPlan ? bossPlan.lanes[index] : note.lane;
 
       return {
         id: `enemy_${index}_${note.time}`,
-        lane: note.lane,
+        lane,
+        bossAttack: bossPlan?.attack[index] ?? false,
         targetTime: note.time,
         spawnTime: Math.max(0, note.time - this.approachDuration),
         speed: 1.0,
-        x: note.lane === 'left' ? -9999 : 9999,
+        x: lane === 'left' ? -9999 : 9999,
         y: 0,
         color,
         enemyType: note.enemyType,
@@ -607,13 +627,65 @@ export class GameEngine {
       detail: judgement === 'PERFECT' ? undefined : offsetSec < 0 ? 'EARLY' : 'LATE',
     });
 
-    this.spawnEnemyDebrisExplosion(enemy, judgement);
+    if (enemy.bossAttack) this.damageBoss(judgement);
+    else this.spawnEnemyDebrisExplosion(enemy, judgement);
     this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
     const remaining = this.enemies.filter((e) => !e.defeated);
     if (remaining.length === 0) {
       setTimeout(() => this.finishSong(true), 600);
     }
+  }
+
+  /** How the boss fight went: null when the song has no boss or the run ended before it arrived. */
+  public bossResult(): 'ko' | 'standing' | null {
+    if (!this.boss) return null;
+    if (this.boss.ko) return 'ko';
+    return this.songTime >= this.boss.plan.start - this.approachDuration ? 'standing' : null;
+  }
+
+  /** A fist was hit back: the boss takes damage by timing, and goes down at zero. */
+  private damageBoss(judgement: TimingJudgementType) {
+    const boss = this.boss;
+    if (!boss || boss.ko) return;
+    boss.hp = Math.max(0, boss.hp - BOSS_DAMAGE[judgement]);
+    boss.hurtAt = performance.now();
+    if (boss.hp > 0) return;
+
+    boss.ko = true;
+    boss.koAt = performance.now();
+    // Fists it hadn't thrown yet come as ordinary enemies instead.
+    for (const e of this.enemies) {
+      if (e.bossAttack && !e.defeated && e.spawnTime > this.songTime) e.bossAttack = false;
+    }
+
+    // It blows apart into big pieces, with a long freeze, a heavy shake and the crowd pop.
+    const stage = bossStage(boss.plan, this.songTime, this.approachDuration);
+    const pieces = shatterEnemy(
+      {
+        x: stage.x,
+        pose: enemyPoseFor(this.settings.enemyMotion, beatPosition(this.songTime, this.beatGrid), 'sub', 1, getActiveAnimations()),
+        facing: stage.side === 'left' ? 1 : -1,
+        scale: BOSS_SCALE,
+        color: '#ff1744',
+        accent: '#ffd54a',
+        limbScale: 1.3,
+        hasBlade: false,
+        power: 2.4,
+        extraShards: 14,
+      },
+      () => this.nextDebrisId++
+    );
+    this.debris.push(...pieces);
+    trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
+
+    const shakeMode = this.settings.screenShake || 'subtle';
+    const shakeAmount = shakeMode === 'none' ? 0 : shakeMode === 'subtle' ? 0.5 : 1;
+    this.screenShake = Math.max(this.screenShake, 14 * shakeAmount);
+    if (shakeAmount > 0) this.crowdPop = 1;
+    this.hitStopRemaining = 0.32;
+    audioEngine.playHitSound('PERFECT', 'sub', 55, this.settings.hitSound);
+    this.spawnHitParticles(stage.x, -60, stage.side, 'PERFECT', '#ffd54a');
   }
 
   /** Begin a strike animation from wherever the fighter currently is. */
@@ -783,8 +855,9 @@ export class GameEngine {
       const t = timeRemaining / this.approachDuration;
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      // Every screen: the same start point and speed (see SPAWN_DISTANCE)
-      const spawnX = enemy.lane === 'left' ? -SPAWN_DISTANCE : SPAWN_DISTANCE;
+      // Every screen: the same start point and speed (see SPAWN_DISTANCE). Boss fists start at the boss.
+      const spawnDistance = enemy.bossAttack ? BOSS_STAND_X : SPAWN_DISTANCE;
+      const spawnX = enemy.lane === 'left' ? -spawnDistance : spawnDistance;
 
       enemy.x = hitX + (spawnX - hitX) * t;
       // Late enemies press in but never walk through the player.
@@ -957,7 +1030,11 @@ export class GameEngine {
     this.recordProgress(false);
     this.countRun(false, true);
     const report = explainDeath(
-      { name: getEnemyStyle(killer.band, killer.tier).name, lane: killer.lane, targetTime: killer.targetTime },
+      {
+        name: killer.bossAttack ? "Titan King's fist" : getEnemyStyle(killer.band, killer.tier).name,
+        lane: killer.lane,
+        targetTime: killer.targetTime,
+      },
       this.recentPresses,
       this.settings.oneButtonMode
     );
