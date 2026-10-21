@@ -22,19 +22,20 @@ describe('the end-of-song boss', () => {
     });
   });
 
-  it('fights alone: every note it keeps is a fist from the side it stands on', () => {
+  it('throws its fists from the side it stands on; anything else comes from the other side', () => {
     const notes = chart();
     const plan = planBoss(notes, 120)!;
     notes.forEach((n, i) => {
       if (n.time < plan.start || !plan.keep[i]) return;
-      expect(plan.attack[i]).toBe(true);
-      expect(plan.lanes[i]).toBe(bossSideAt(plan, n.time));
+      const side = bossSideAt(plan, n.time);
+      if (plan.attack[i]) expect(plan.lanes[i]).toBe(side);
+      else expect(plan.lanes[i]).not.toBe(side);
     });
   });
 
-  it('with small enemies on, keeps some coming from the far side, spaced out', () => {
+  it('still sends a few small enemies from the far side', () => {
     const notes = chart();
-    const plan = planBoss(notes, 120, true)!;
+    const plan = planBoss(notes, 120)!;
     const minions = notes.filter((n, i) => n.time >= plan.start && plan.keep[i] && !plan.attack[i]);
     expect(minions.length).toBeGreaterThan(0);
     minions.forEach((n) => expect(n.lane).not.toBe(bossSideAt(plan, n.time)));
