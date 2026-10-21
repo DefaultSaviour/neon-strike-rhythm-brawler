@@ -32,6 +32,16 @@ describe('the end-of-song boss', () => {
     });
   });
 
+  it('with small enemies on, keeps some coming from the far side, spaced out', () => {
+    const notes = chart();
+    const plan = planBoss(notes, 120, true)!;
+    const minions = notes.filter((n, i) => n.time >= plan.start && plan.keep[i] && !plan.attack[i]);
+    expect(minions.length).toBeGreaterThan(0);
+    minions.forEach((n) => expect(n.lane).not.toBe(bossSideAt(plan, n.time)));
+    const fists = plan.attack.filter(Boolean).length;
+    expect(minions.length).toBeLessThan(fists / 3);
+  });
+
   it('keeps every note before it arrives', () => {
     const notes = chart();
     const plan = planBoss(notes, 120)!;

@@ -49,8 +49,14 @@ export function bossSideAt(plan: Pick<BossPlan, 'start' | 'switchSec' | 'firstSi
   return segment % 2 === 0 ? plan.firstSide : other;
 }
 
-/** Plan the boss section for a chart, or null when the song is too short for one. */
-export function planBoss(notes: { time: number; lane: Lane }[], bpm: number): BossPlan | null {
+/** With small enemies on: of the beats charted on the far side, every this-many-th stays a small enemy. */
+export const MINION_EVERY = 3;
+
+/**
+ * Plan the boss section for a chart, or null when the song is too short for one.
+ * `withMinions` keeps some small enemies coming from the other side (being tried out).
+ */
+export function planBoss(notes: { time: number; lane: Lane }[], bpm: number, withMinions = false): BossPlan | null {
   if (notes.length < MIN_NOTES) return null;
   const end = notes[notes.length - 1].time;
   if (end - notes[0].time < MIN_SONG_SEC) return null;
@@ -67,11 +73,18 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number): Bo
     keep: notes.map(() => true),
   };
 
-  // Every note becomes a fist from the boss's side, except ones too close to the fist before.
+  // Every note becomes a fist from the boss's side, except ones too close to the fist before
+  // (and, with small enemies on, every third far-side beat, which stays a small enemy).
   const minGap = (MIN_GAP_BEATS * 60) / bpm - 0.01;
   let lastFist = -Infinity;
+  let lastMinion = -Infinity;
+  let farSide = 0;
   for (let i = firstIndex; i < notes.length; i++) {
-    const { time } = notes[i];
+    const { time, lane } = notes[i];
+    if (withMinions && lane !== bossSideAt(plan, time) && farSide++ % MINION_EVERY === 0 && time - lastMinion >= minGap) {
+      lastMinion = time;
+      continue;
+    }
     if (time - lastFist < minGap) {
       plan.keep[i] = false;
       continue;

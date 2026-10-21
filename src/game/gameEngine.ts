@@ -66,6 +66,10 @@ export const CROWD_POP_SEC = 0.3;
 const SHORT_TEST_SEC =
   import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('short') ? 120 : 0;
 
+/** Dev builds only: ?minions keeps some small enemies coming during the boss (being tried out). */
+const BOSS_MINIONS =
+  import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('minions');
+
 /** Dev builds only: ?boss starts every song a few seconds before its boss. */
 const BOSS_TEST =
   import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('boss');
@@ -452,7 +456,7 @@ export class GameEngine {
     this.fistFlight = fistFlightSec(this.beatGrid.bpm, this.approachDuration);
 
     // The end-of-song boss: it takes over the last stretch, turning those notes into its fists.
-    const bossPlan = planBoss(notes, this.beatGrid.bpm);
+    const bossPlan = planBoss(notes, this.beatGrid.bpm, BOSS_MINIONS);
     this.boss = bossPlan ? { plan: bossPlan, hp: bossPlan.maxHp, ko: false, koAt: 0, hurtAt: 0 } : null;
     this.scoreState.totalNotes = bossPlan ? bossPlan.keep.filter(Boolean).length : notes.length;
 
