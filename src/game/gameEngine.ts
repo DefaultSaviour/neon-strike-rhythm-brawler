@@ -33,7 +33,7 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
-import { BOSS_DAMAGE, BOSS_LOOKS, BOSS_SCALE, BOSS_STAND_X, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, planBoss } from './boss';
+import { BOSS_DAMAGE, BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, planBoss, standX } from './boss';
 
 /** The end-of-song boss while a song is playing (see boss.ts). */
 export interface BossState {
@@ -984,7 +984,7 @@ export class GameEngine {
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
       // Every screen: the same start point and speed (see SPAWN_DISTANCE). Boss fists start at the boss.
-      const spawnDistance = enemy.bossAttack ? BOSS_STAND_X : SPAWN_DISTANCE;
+      const spawnDistance = enemy.bossAttack && this.boss ? standX(this.boss.plan.kind) : SPAWN_DISTANCE;
       const spawnX = enemy.lane === 'left' ? -spawnDistance : spawnDistance;
 
       enemy.x = hitX + (spawnX - hitX) * t;

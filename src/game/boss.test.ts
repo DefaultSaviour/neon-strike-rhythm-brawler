@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Lane } from '../types/game';
-import { BOSS_ORDER, BOSS_SECONDS, BOSS_STAND_X, bossFigures, bossKindFor, bossSideAt, bossStage, HP_PER_ATTACK, OFF_SCREEN_X, planBoss } from './boss';
+import { BOSS_ORDER, BOSS_SECONDS, BOSS_STAND_X, TWINS_STAND_X, bossFigures, bossKindFor, bossSideAt, bossStage, HP_PER_ATTACK, OFF_SCREEN_X, planBoss } from './boss';
 
 /** A 2-minute chart at 120 BPM: a note every half beat, alternating sides. */
 function chart(seconds = 120) {
@@ -132,8 +132,8 @@ describe('the three bosses', () => {
     expect(plan.sideHp.left + plan.sideHp.right).toBe(plan.maxHp);
     const figures = bossFigures(plan, plan.start, 1);
     expect(figures.map((f) => [f.side, f.x])).toEqual([
-      ['left', -BOSS_STAND_X],
-      ['right', BOSS_STAND_X],
+      ['left', -TWINS_STAND_X],
+      ['right', TWINS_STAND_X],
     ]);
   });
 });

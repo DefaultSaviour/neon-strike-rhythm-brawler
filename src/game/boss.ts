@@ -169,6 +169,13 @@ export function fistFlightSec(bpm: number, approachSec: number): number {
 export const BOSS_SCALE = 1.7;
 /** World x where a boss stands (it throws its fists from here). */
 export const BOSS_STAND_X = 235;
+/** The twins stand further out, so their swords stay clear of the strike rings. */
+export const TWINS_STAND_X = 300;
+
+/** Where this kind of boss stands, and throws its fists from. */
+export function standX(kind: BossKind): number {
+  return kind === 'twins' ? TWINS_STAND_X : BOSS_STAND_X;
+}
 /** How long the Titan King's leap over the player takes (seconds). */
 export const LEAP_SEC = 0.55;
 /** How long the Volt Runner takes to run off one side and back in the other (seconds). */
@@ -247,7 +254,7 @@ export function bossFigures(plan: BossPlan, time: number, flight: number): BossF
   const u = Math.min(1, Math.max(0, (time - (arrive - ENTRANCE_SEC)) / ENTRANCE_SEC));
   const lift = 320 * (1 - u) * (1 - u);
   return (['left', 'right'] as Lane[]).map((side) => {
-    const x = (side === 'left' ? -1 : 1) * BOSS_STAND_X;
+    const x = (side === 'left' ? -1 : 1) * TWINS_STAND_X;
     return { x, lift, side, facing: faceMiddle(x), visible, running: false };
   });
 }
