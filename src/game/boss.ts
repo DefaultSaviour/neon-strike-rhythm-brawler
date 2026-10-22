@@ -165,6 +165,7 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number, kin
  *    so no enemy is hidden behind it.
  *  - No ordinary enemy lands within a beat of a fist on the same side, so a fist never
  *    flies out from behind one (one press only takes the first).
+ *  - Nothing comes after the last fist: it's the killing blow.
  * Fists themselves are never dropped.
  */
 function clearAroundFists(plan: BossPlan, notes: { time: number; lane: Lane }[], bpm: number, landingSides: Lane[]) {
@@ -173,12 +174,14 @@ function clearAroundFists(plan: BossPlan, notes: { time: number; lane: Lane }[],
   const flight = fistFlightSec(bpm, Math.max(1.1, Math.min(2.2, beatSec * 4)));
   const landingFrom = plan.start - flight - ENTRANCE_SEC;
   const fists = notes.map((n, i) => ({ time: n.time, lane: plan.lanes[i], i })).filter(({ i }) => plan.attack[i]);
+  // The last fist is the killing blow, so it's the last thing to hit: nothing after it
+  const lastFist = Math.max(...fists.map((f) => f.time));
   notes.forEach((n, i) => {
     if (plan.attack[i] || !plan.keep[i]) return;
     const lane = plan.lanes[i];
     const landing = n.time >= landingFrom && n.time < plan.start && landingSides.includes(lane);
     const tooClose = fists.some((f) => f.lane === lane && Math.abs(f.time - n.time) < beatSec);
-    if (landing || tooClose) plan.keep[i] = false;
+    if (landing || tooClose || n.time > lastFist) plan.keep[i] = false;
   });
 }
 

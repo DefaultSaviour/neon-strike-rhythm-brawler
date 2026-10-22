@@ -58,6 +58,15 @@ describe('the end-of-song boss', () => {
     expect(cleared).toBeGreaterThan(0);
   });
 
+  it('ends on a fist: the killing blow is the last thing to hit', () => {
+    for (const kind of ['leaper', 'runner', 'twins'] as const) {
+      const notes = chart();
+      const plan = planBoss(notes, 120, kind)!;
+      const lastKept = notes.map((_, i) => i).filter((i) => plan.keep[i]).pop()!;
+      expect(plan.attack[lastKept], kind).toBe(true);
+    }
+  });
+
   it('never lands an ordinary enemy within a beat of a fist on the same side', () => {
     for (const kind of ['leaper', 'runner', 'twins'] as const) {
       const notes = chart();
