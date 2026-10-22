@@ -8,7 +8,8 @@ import { backdropsAfterRun, milestonesFor } from './backdrops';
  * The goals mix kinds on purpose: some reward simply playing, some reward
  * finishing a song, some reward skill (big combos, PERFECT hits, a song
  * finished at 98% accuracy or with no misses at all). One hero (The Bride)
- * can also be unlocked straight away by watching a rewarded ad.
+ * can also be unlocked straight away by watching a rewarded ad, and the
+ * after-song ad offer can open the next locked hero early (see adOffer).
  *
  * The numbers were set with the user on 2026-10-20, one hero at a time,
  * after one song (about 500 enemies) unlocked five or more heroes at once.
@@ -30,6 +31,8 @@ export interface LifetimeStats {
   adUnlocks: number;
   /** Rewarded ads watched to unlock the ad hero (The Bride) early */
   heroAds: number;
+  /** Other heroes opened early by the after-song ad offer: one bit per hero, see AD_HERO_BITS */
+  adHeroes: number;
   /** Every song's score added together (the Records screen's Total Score); also unlocks backdrops */
   totalScore: number;
   /** Backdrop pieces unlocked early by watching a rewarded ad (see backdrops) */
@@ -52,7 +55,7 @@ export interface LifetimeStats {
   bestOkStreak: number;
 }
 
-export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, backdropsUnlocked: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 };
+export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, adHeroes: 0, totalScore: 0, backdropAds: 0, backdropsUnlocked: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 };
 
 /**
  * A song's accuracy, 0-100: PERFECT counts 100, GOOD 70, OK 40, a miss 0
@@ -107,9 +110,33 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
  */
 export const UNLOCK_ORDER: HeroId[] = ['striker', 'theOne', 'dragon', 'scarecrow', 'lion', 'sawFace', 'drunkenMaster', 'stallion', 'proWrestler', 'bride', 'kid', 'discoKing', 'spartan', 'tinMan', 'babaYaga', 'ballerina'];
 
+/**
+ * Each hero's bit in `adHeroes` (saved in players' totals). Only ever add to
+ * the end: moving a hero would hand their saved bit to someone else.
+ */
+export const AD_HERO_BITS: HeroId[] = ['theOne', 'dragon', 'scarecrow', 'lion', 'sawFace', 'drunkenMaster', 'stallion', 'proWrestler', 'kid', 'discoKing', 'spartan', 'tinMan', 'babaYaga', 'ballerina'];
+
+/** The hero was opened early by an ad (not counting The Bride's own ad). */
+export function heroOpenedByAd(id: HeroId, stats: LifetimeStats): boolean {
+  const bit = AD_HERO_BITS.indexOf(id);
+  return bit >= 0 && Math.floor(stats.adHeroes / 2 ** bit) % 2 === 1;
+}
+
+/** Totals with this hero marked as opened by an ad. */
+export function withAdHero(stats: LifetimeStats, id: HeroId): LifetimeStats {
+  const bit = AD_HERO_BITS.indexOf(id);
+  if (bit < 0 || heroOpenedByAd(id, stats)) return stats;
+  return { ...stats, adHeroes: stats.adHeroes + 2 ** bit };
+}
+
+/** How many heroes the after-song offer has opened early (not counting The Bride). */
+export function heroesOpenedByAd(stats: LifetimeStats): number {
+  return AD_HERO_BITS.filter((id) => heroOpenedByAd(id, stats)).length;
+}
+
 export function isHeroUnlocked(id: HeroId, stats: LifetimeStats): boolean {
   const goal = HERO_UNLOCKS[id];
-  return !goal || stats[goal.stat] >= goal.target || (!!goal.ad && stats.heroAds > 0);
+  return !goal || stats[goal.stat] >= goal.target || (!!goal.ad && stats.heroAds > 0) || heroOpenedByAd(id, stats);
 }
 
 /** How far the player is toward a locked hero (null for free heroes). */
@@ -161,6 +188,7 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     playSeconds: stats.playSeconds + Math.max(0, run.seconds),
     adUnlocks: stats.adUnlocks,
     heroAds: stats.heroAds,
+    adHeroes: stats.adHeroes,
     totalScore: stats.totalScore + Math.max(0, run.score),
     backdropAds: stats.backdropAds,
     backdropsUnlocked: backdropsAfterRun(stats.backdropsUnlocked, stats.totalScore + Math.max(0, run.score)),
@@ -197,6 +225,7 @@ export function loadStats(store: Pick<Storage, 'getItem'> | undefined): Lifetime
       playSeconds: num(parsed.playSeconds),
       adUnlocks: num(parsed.adUnlocks),
       heroAds: num(parsed.heroAds),
+      adHeroes: Math.floor(num(parsed.adHeroes)),
       totalScore: num(parsed.totalScore),
       backdropAds: num(parsed.backdropAds),
       // Saves from before this count existed keep every piece their score had opened

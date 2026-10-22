@@ -14,7 +14,7 @@ import {
 import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
 import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes';
 import { RunUnlock, unlocksBetween } from './runUnlocks';
-import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats } from './heroUnlocks';
+import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats, withAdHero } from './heroUnlocks';
 import { isStanceUnlocked, nextStance } from './stanceUnlocks';
 import { audioEngine, PRELOADED_TRACKS } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
@@ -198,7 +198,7 @@ export class GameEngine {
     // Dev builds only: open the game with ?unlockAll to try every hero. Not saved, and
     // stripped from the published build (import.meta.env.DEV is false there).
     if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) {
-      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, totalScore: 1e9, backdropAds: 0, backdropsUnlocked: 1e9, okHits: 1e9, bestClearAccuracy: 100, flawlessClears: 1e9, mostMissesCleared: 1e9, songsDied: 1e9, songsQuit: 1e9, bestOkStreak: 1e9 };
+      this.lifetimeStats = { enemiesDefeated: 1e9, perfects: 1e9, bestCombo: 1e9, songsCleared: 1e9, playSeconds: 1e9, adUnlocks: 0, heroAds: 1e9, adHeroes: 0, totalScore: 1e9, backdropAds: 0, backdropsUnlocked: 1e9, okHits: 1e9, bestClearAccuracy: 100, flawlessClears: 1e9, mostMissesCleared: 1e9, songsDied: 1e9, songsQuit: 1e9, bestOkStreak: 1e9 };
       this.devUnlockAll = true;
     }
     this.loadSettings();
@@ -340,10 +340,17 @@ export class GameEngine {
     return this.unlockBackdropWithAd()?.id === offer.id;
   }
 
-  /** The player watched a rewarded ad for an ad-only hero: unlock them. Returns false if there was nothing to unlock. */
+  /**
+   * The player watched a rewarded ad for a locked hero: unlock them. The Bride
+   * is the ad hero; any other comes from the after-song offer (see adOffer).
+   * Returns false if there was nothing to unlock.
+   */
   public unlockHeroWithAd(id: HeroId): boolean {
-    if (!HERO_UNLOCKS[id]?.ad || this.isHeroUnlocked(id)) return false;
-    this.lifetimeStats = { ...this.lifetimeStats, heroAds: this.lifetimeStats.heroAds + 1 };
+    const goal = HERO_UNLOCKS[id];
+    if (!goal || this.isHeroUnlocked(id)) return false;
+    this.lifetimeStats = goal.ad
+      ? { ...this.lifetimeStats, heroAds: this.lifetimeStats.heroAds + 1 }
+      : withAdHero(this.lifetimeStats, id);
     if (!this.devUnlockAll) saveStats(safeStorage(), this.lifetimeStats);
     return true;
   }
