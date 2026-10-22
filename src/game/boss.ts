@@ -2,8 +2,9 @@
  * The end-of-song bosses.
  *
  * Over the last stretch of a song a big boss throws punches (energy fists) on
- * the beat. Hitting a fist on time damages it: PERFECTs hurt most. There are
- * three, and songs take turns:
+ * the beat. Every fist hit back takes off the same chunk of its health, so the
+ * bar empties exactly on its last fist: the killing blow. There are three, and
+ * songs take turns:
  *  - Titan King (leaper): stands on one side and every few bars leaps over the
  *    player to the other side.
  *  - Volt Runner (runner): sprints off the edge of the screen and bursts back
@@ -13,10 +14,11 @@
  * With the single bosses, every third beat charted on the far side still brings
  * a small enemy from there.
  *
- * Letting a fist through is the same as letting any enemy through, so surviving
- * isn't enough to win: the KO needs good timing.
+ * Letting a fist through is the same as letting any enemy through, so in a real
+ * run getting through the boss alive is the KO. (In practice a fist that gets
+ * through leaves it standing.)
  */
-import { EnemyTier, FrequencyBand, Lane, TimingJudgementType } from '../types/game';
+import { EnemyTier, FrequencyBand, Lane } from '../types/game';
 
 export type BossKind = 'leaper' | 'runner' | 'twins';
 
@@ -54,10 +56,8 @@ export function bossKindFor(trackId: string, soundtrackIds: string[]): BossKind 
 export const BOSS_SECONDS = 24;
 /** Beats a single boss stays on one side before moving to the other. */
 export const SWITCH_BEATS = 8;
-/** Damage a fist does to the boss when hit, by timing. */
-export const BOSS_DAMAGE: Record<TimingJudgementType, number> = { PERFECT: 3, GOOD: 2, OK: 1, MISS: 0 };
-/** Boss health per fist it throws: all GOODs fall short, so the KO needs some PERFECTs. */
-export const HP_PER_ATTACK = 2.2;
+/** Boss health per fist it throws: every fist hit back does the same damage, whatever the timing. */
+export const HP_PER_ATTACK = 1;
 /** Fists land at least this many beats apart on one side (so no frantic runs on one key). */
 export const MIN_GAP_BEATS = 0.5;
 /** Of the beats charted on the far side, every this-many-th stays a small enemy. */
@@ -127,6 +127,7 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number, kin
       lastFist[lane] = time;
       plan.sideHp[lane] += HP_PER_ATTACK;
     }
+    clearAroundFists(plan, notes, bpm, ['left', 'right']);
     plan.sideHp = { left: Math.round(plan.sideHp.left), right: Math.round(plan.sideHp.right) };
     plan.maxHp = plan.sideHp.left + plan.sideHp.right;
     return plan;
@@ -151,10 +152,37 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number, kin
     plan.attack[i] = true;
     lastFist = time;
   }
+  clearAroundFists(plan, notes, bpm, [plan.firstSide]);
 
   const attacks = plan.attack.filter(Boolean).length;
   plan.maxHp = Math.round(attacks * HP_PER_ATTACK);
   return plan;
+}
+
+/**
+ * Keep enemies from hiding behind the boss and its fists (players died to both):
+ *  - While the boss crashes down, nothing new walks in on the side(s) it lands on,
+ *    so no enemy is hidden behind it.
+ *  - No ordinary enemy lands within a beat of a fist on the same side, so a fist never
+ *    flies out from behind one (one press only takes the first).
+ *  - Nothing comes after the last fist: it's the killing blow.
+ * Fists themselves are never dropped.
+ */
+function clearAroundFists(plan: BossPlan, notes: { time: number; lane: Lane }[], bpm: number, landingSides: Lane[]) {
+  const beatSec = 60 / bpm;
+  // Same timings the game uses: enemies walk for 4 beats (1.1-2.2 s), fists fly for 2
+  const flight = fistFlightSec(bpm, Math.max(1.1, Math.min(2.2, beatSec * 4)));
+  const landingFrom = plan.start - flight - ENTRANCE_SEC;
+  const fists = notes.map((n, i) => ({ time: n.time, lane: plan.lanes[i], i })).filter(({ i }) => plan.attack[i]);
+  // The last fist is the killing blow, so it's the last thing to hit: nothing after it
+  const lastFist = Math.max(...fists.map((f) => f.time));
+  notes.forEach((n, i) => {
+    if (plan.attack[i] || !plan.keep[i]) return;
+    const lane = plan.lanes[i];
+    const landing = n.time >= landingFrom && n.time < plan.start && landingSides.includes(lane);
+    const tooClose = fists.some((f) => f.lane === lane && Math.abs(f.time - n.time) < beatSec);
+    if (landing || tooClose || n.time > lastFist) plan.keep[i] = false;
+  });
 }
 
 /** Fists fly for 2 beats (normal enemies walk for 4), so they don't bunch up on the short trip. */

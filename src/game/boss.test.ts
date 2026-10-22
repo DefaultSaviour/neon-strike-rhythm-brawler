@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Lane } from '../types/game';
-import { BOSS_ORDER, BOSS_SECONDS, BOSS_STAND_X, TWINS_STAND_X, bossFigures, bossKindFor, bossSideAt, bossStage, HP_PER_ATTACK, OFF_SCREEN_X, planBoss } from './boss';
+import { BOSS_ORDER, BOSS_SECONDS, BOSS_STAND_X, ENTRANCE_SEC, TWINS_STAND_X, bossFigures, bossKindFor, bossSideAt, bossStage, fistFlightSec, HP_PER_ATTACK, OFF_SCREEN_X, planBoss } from './boss';
 
 /** A 2-minute chart at 120 BPM: a note every half beat, alternating sides. */
 function chart(seconds = 120) {
@@ -43,12 +43,41 @@ describe('the end-of-song boss', () => {
     expect(minions.length).toBeLessThan(fists / 3);
   });
 
-  it('keeps every note before it arrives', () => {
+  it('keeps every note before it arrives, except on the side it lands on while it crashes down', () => {
     const notes = chart();
     const plan = planBoss(notes, 120)!;
+    // At 120 BPM enemies walk 2 s (4 beats), fists fly 1 s (2 beats)
+    const landingFrom = plan.start - fistFlightSec(120, 2) - ENTRANCE_SEC;
+    let cleared = 0;
     notes.forEach((n, i) => {
-      if (n.time < plan.start) expect(plan.keep[i]).toBe(true);
+      if (n.time >= plan.start) return;
+      const landing = n.time >= landingFrom && n.lane === plan.firstSide;
+      if (landing) cleared++;
+      expect(plan.keep[i]).toBe(!landing);
     });
+    expect(cleared).toBeGreaterThan(0);
+  });
+
+  it('ends on a fist: the killing blow is the last thing to hit', () => {
+    for (const kind of ['leaper', 'runner', 'twins'] as const) {
+      const notes = chart();
+      const plan = planBoss(notes, 120, kind)!;
+      const lastKept = notes.map((_, i) => i).filter((i) => plan.keep[i]).pop()!;
+      expect(plan.attack[lastKept], kind).toBe(true);
+    }
+  });
+
+  it('never lands an ordinary enemy within a beat of a fist on the same side', () => {
+    for (const kind of ['leaper', 'runner', 'twins'] as const) {
+      const notes = chart();
+      const plan = planBoss(notes, 120, kind)!;
+      const kept = notes.map((n, i) => ({ time: n.time, lane: plan.lanes[i], i })).filter(({ i }) => plan.keep[i]);
+      for (const e of kept.filter(({ i }) => !plan.attack[i])) {
+        for (const f of kept.filter(({ i }) => plan.attack[i] && plan.lanes[i] === e.lane)) {
+          expect(Math.abs(f.time - e.time), kind).toBeGreaterThanOrEqual(0.5); // a beat at 120 BPM
+        }
+      }
+    }
   });
 
   it('switches sides every 8 beats', () => {
@@ -63,17 +92,22 @@ describe('the end-of-song boss', () => {
     const plan = planBoss(notes, 120)!;
     const fists = notes.filter((_, i) => plan.attack[i]).map((n) => n.time);
     for (let i = 1; i < fists.length; i++) expect(fists[i] - fists[i - 1]).toBeGreaterThanOrEqual(0.25 - 0.011);
-    // The test chart has a note every quarter second = half a beat at 120 BPM, so none are dropped
-    expect(plan.keep.every(Boolean)).toBe(true);
+    // The test chart has a note every quarter second = half a beat at 120 BPM: no fist is dropped
+    // for spacing (only ordinary enemies too close to a fist, or where the boss lands)
+    notes.forEach((n, i) => {
+      if (n.time >= plan.start && !plan.keep[i]) expect(n.lane).not.toBe(bossSideAt(plan, n.time));
+    });
     expect(planBoss(notes, 60)!.keep.some((k) => !k)).toBe(true);
   });
 
-  it('has more health than all-GOOD hits can take, so the KO needs PERFECTs', () => {
+  it('has one chunk of health per fist, so the bar empties exactly on the last fist', () => {
     const plan = planBoss(chart(), 120)!;
-    const fists = plan.attack.filter(Boolean).length;
-    expect(plan.maxHp).toBe(Math.round(fists * HP_PER_ATTACK));
-    expect(fists * 2).toBeLessThan(plan.maxHp);
-    expect(fists * 3).toBeGreaterThan(plan.maxHp);
+    expect(plan.maxHp).toBe(plan.attack.filter(Boolean).length * HP_PER_ATTACK);
+    const twins = planBoss(chart(), 120, 'twins')!;
+    const notes = chart();
+    for (const side of ['left', 'right'] as const) {
+      expect(twins.sideHp[side]).toBe(notes.filter((_, i) => twins.attack[i] && twins.lanes[i] === side).length);
+    }
   });
 
   it('skips short songs', () => {

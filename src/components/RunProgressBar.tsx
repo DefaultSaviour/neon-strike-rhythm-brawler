@@ -48,25 +48,47 @@ export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run, heroId }) =
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth || 400;
-    canvas.width = width * dpr;
-    canvas.height = HEIGHT * dpr;
+    let dpr = 1;
+    let width = 0;
+    // Match the canvas to its on-screen width (it spans the screen, so it changes on resize or rotation)
+    const fit = () => {
+      dpr = window.devicePixelRatio || 1;
+      width = canvas.clientWidth || 400;
+      canvas.width = width * dpr;
+      canvas.height = HEIGHT * dpr;
+    };
+    fit();
 
     const reduced = prefersReducedMotion();
     const start = performance.now();
     // Animate the dash, the landing, and a little of the end pose, then stop.
     const animLength = dashDuration(run.fraction) + 1.6;
     let frame = 0;
+    let done = false;
 
-    const draw = (now: number) => {
-      const elapsed = reduced ? animLength : (now - start) / 1000;
+    const paint = (elapsed: number) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawFrame(ctx, width, run, elapsed, getHero(heroId));
+    };
+    const draw = (now: number) => {
+      const elapsed = reduced ? animLength : (now - start) / 1000;
+      paint(elapsed);
       if (elapsed < animLength) frame = requestAnimationFrame(draw);
+      else done = true;
     };
     frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
+
+    // Redraw at the new size (the finished picture, if the animation is over)
+    const resized = new ResizeObserver(() => {
+      if (canvas.clientWidth === width) return;
+      fit();
+      if (done) paint(animLength);
+    });
+    resized.observe(canvas);
+    return () => {
+      cancelAnimationFrame(frame);
+      resized.disconnect();
+    };
   }, [run, heroId]);
 
   const best = run.previousBest;

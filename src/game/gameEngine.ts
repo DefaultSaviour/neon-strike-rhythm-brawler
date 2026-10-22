@@ -33,7 +33,7 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
-import { BOSS_DAMAGE, BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, planBoss, standX } from './boss';
+import { BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, HP_PER_ATTACK, planBoss, standX } from './boss';
 
 /** The end-of-song boss while a song is playing (see boss.ts). */
 export interface BossState {
@@ -49,6 +49,9 @@ export interface BossState {
   koAt: number;
   hurtAt: number;
   hurtSide: Lane | null;
+  /** Beat time of the last fist (each twin's own, and overall): hitting it is the killing blow */
+  finalFist: Record<Lane, number>;
+  finalFistAll: number;
 }
 
 export interface GameEngineCallbacks {
@@ -474,6 +477,8 @@ export class GameEngine {
           koAt: 0,
           hurtAt: 0,
           hurtSide: null,
+          finalFist: { left: -1, right: -1 },
+          finalFistAll: -1,
         }
       : null;
     this.scoreState.totalNotes = bossPlan ? bossPlan.keep.filter(Boolean).length : notes.length;
@@ -512,6 +517,15 @@ export class GameEngine {
       startAt = Math.max(0, bossPlan.start - this.fistFlight - 3);
       this.enemies = this.enemies.filter((e) => e.targetTime > startAt + this.approachDuration);
       this.scoreState.totalNotes = this.enemies.length;
+    }
+
+    // Which fists are the last ones (the killing blows): each side's, and the very last
+    if (this.boss) {
+      for (const e of this.enemies) {
+        if (!e.bossAttack) continue;
+        this.boss.finalFist[e.lane] = Math.max(this.boss.finalFist[e.lane], e.targetTime);
+        this.boss.finalFistAll = Math.max(this.boss.finalFistAll, e.targetTime);
+      }
     }
 
     audioEngine.startTrack(
@@ -689,7 +703,7 @@ export class GameEngine {
 
     if (enemy.bossAttack) {
       this.burstFist(enemy, judgement);
-      this.damageBoss(judgement, enemy.lane);
+      this.damageBoss(enemy.lane, enemy.targetTime);
     } else this.spawnEnemyDebrisExplosion(enemy, judgement);
     this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
@@ -734,26 +748,26 @@ export class GameEngine {
   }
 
   /**
-   * A fist was hit back: the boss takes damage by timing, and goes down at zero.
-   * Each twin only takes damage from its own fists, and falls on its own.
+   * A fist was hit back: every fist takes the same chunk of health, so the boss goes down
+   * on its last fist (the last thing to hit in the song). One that got through in practice
+   * leaves it standing. Each twin takes damage from its own fists and falls on its own last.
    */
-  private damageBoss(judgement: TimingJudgementType, lane: Lane) {
+  private damageBoss(lane: Lane, fistTime: number) {
     const boss = this.boss;
     if (!boss || boss.ko) return;
     const twins = boss.plan.kind === 'twins';
     if (twins && boss.downAt[lane]) return;
-    const damage = Math.min(BOSS_DAMAGE[judgement], twins ? boss.sideHp[lane] : boss.hp);
+    const damage = Math.min(HP_PER_ATTACK, twins ? boss.sideHp[lane] : boss.hp);
     boss.hp -= damage;
     if (twins) boss.sideHp[lane] -= damage;
     boss.hurtAt = performance.now();
     boss.hurtSide = lane;
 
     if (twins) {
-      if (boss.sideHp[lane] > 0) return;
+      if (fistTime < boss.finalFist[lane] || boss.sideHp[lane] > 0) return;
       boss.downAt[lane] = performance.now();
       const other: Lane = lane === 'left' ? 'right' : 'left';
       const last = !!boss.downAt[other];
-      this.freeUnthrownFists(lane);
       this.blowUpBoss(this.bossFigure(lane), last);
       if (last) {
         boss.ko = true;
@@ -762,10 +776,9 @@ export class GameEngine {
       return;
     }
 
-    if (boss.hp > 0) return;
+    if (fistTime < boss.finalFistAll || boss.hp > 0) return;
     boss.ko = true;
     boss.koAt = performance.now();
-    this.freeUnthrownFists(null);
     this.blowUpBoss(this.bossFigure(null), true);
   }
 
@@ -775,16 +788,6 @@ export class GameEngine {
     return figures.find((f) => f.side === lane) ?? figures[0];
   }
 
-  /** A fallen boss's fists that it hadn't thrown yet come as ordinary enemies instead. */
-  private freeUnthrownFists(lane: Lane | null) {
-    for (const e of this.enemies) {
-      if (lane && e.lane !== lane) continue;
-      if (e.bossAttack && !e.defeated && e.targetTime - this.approachDuration > this.songTime) {
-        e.bossAttack = false;
-        e.spawnTime = e.targetTime - this.approachDuration;
-      }
-    }
-  }
 
   /** A boss blows apart into big pieces; the final KO also gets a long freeze, a heavy shake and the crowd pop. */
   private blowUpBoss(figure: BossFigure, final: boolean) {
