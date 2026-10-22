@@ -40,7 +40,7 @@ export interface LifetimeStats {
   okHits: number;
   /** Best accuracy (0-100) of any song finished without dying */
   bestClearAccuracy: number;
-  /** Songs finished without a single miss */
+  /** Songs finished with only PERFECT and GOOD hits (no OK, no miss): The White Swan's goal */
   flawlessClears: number;
   /** Most misses (swings at nothing) in one song that was still finished: Drunken Master's goal */
   mostMissesCleared: number;
@@ -97,7 +97,7 @@ export const HERO_UNLOCKS: Partial<Record<HeroId, UnlockGoal>> = {
   drunkenMaster: { stat: 'mostMissesCleared', target: 50, label: 'Complete a song with 50+ misses' },
   spartan: { stat: 'bestCombo', target: 300, label: 'Reach a 300 combo' },
   babaYaga: { stat: 'bestClearAccuracy', target: 98, label: 'Complete a song with 98% accuracy' },
-  ballerina: { stat: 'flawlessClears', target: 1, label: 'Complete a song with no misses' },
+  ballerina: { stat: 'flawlessClears', target: 1, label: 'Complete a song with only PERFECTs and GOODs' },
 };
 
 /**
@@ -166,8 +166,8 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     backdropsUnlocked: backdropsAfterRun(stats.backdropsUnlocked, stats.totalScore + Math.max(0, run.score)),
     okHits: stats.okHits + run.oks,
     bestClearAccuracy: run.cleared ? Math.max(stats.bestClearAccuracy, run.accuracy) : stats.bestClearAccuracy,
-    // A song you finished, with hits and not one miss
-    flawlessClears: stats.flawlessClears + (run.cleared && run.misses === 0 && run.enemiesDefeated > 0 ? 1 : 0),
+    // A song you finished with every hit a PERFECT or GOOD: not one OK, not one miss
+    flawlessClears: stats.flawlessClears + (run.cleared && run.misses === 0 && run.oks === 0 && run.enemiesDefeated > 0 ? 1 : 0),
     mostMissesCleared: run.cleared ? Math.max(stats.mostMissesCleared, run.misses) : stats.mostMissesCleared,
     songsDied: stats.songsDied + (run.died ? 1 : 0),
     songsQuit: stats.songsQuit + (run.quit ? 1 : 0),

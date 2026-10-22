@@ -132,10 +132,14 @@ describe('lifetime totals', () => {
     expect(loadStats(current).backdropsUnlocked).toBe(1);
   });
 
-  it('only finished songs count for accuracy and for no-miss songs', () => {
+  it('only finished songs count for accuracy and for PERFECT-and-GOOD-only songs (The White Swan)', () => {
     const died = addRun(EMPTY_STATS, { enemiesDefeated: 40, perfects: 40, oks: 0, misses: 0, accuracy: 100, maxCombo: 40, cleared: false, seconds: 30, score: 0 });
     expect(died).toMatchObject({ bestClearAccuracy: 0, flawlessClears: 0 });
-    const flawless = addRun(died, { enemiesDefeated: 400, perfects: 380, oks: 2, misses: 0, accuracy: 98, maxCombo: 400, cleared: true, seconds: 190, score: 0 });
+    // No misses but a couple of OKs: not good enough for her
+    const twoOks = addRun(died, { enemiesDefeated: 400, perfects: 380, oks: 2, misses: 0, accuracy: 98, maxCombo: 400, cleared: true, seconds: 190, score: 0 });
+    expect(twoOks).toMatchObject({ bestClearAccuracy: 98, flawlessClears: 0 });
+    // Every hit a PERFECT or GOOD
+    const flawless = addRun(twoOks, { enemiesDefeated: 400, perfects: 360, oks: 0, misses: 0, accuracy: 97, maxCombo: 400, cleared: true, seconds: 190, score: 0 });
     expect(flawless).toMatchObject({ bestClearAccuracy: 98, flawlessClears: 1 });
     const sloppier = addRun(flawless, { enemiesDefeated: 400, perfects: 200, oks: 50, misses: 3, accuracy: 80, maxCombo: 90, cleared: true, seconds: 190, score: 0 });
     expect(sloppier).toMatchObject({ bestClearAccuracy: 98, flawlessClears: 1 });
