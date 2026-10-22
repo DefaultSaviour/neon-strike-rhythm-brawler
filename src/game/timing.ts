@@ -7,7 +7,9 @@ import { Lane, TimingJudgementType } from '../types/game';
 export const HIT_WINDOWS = {
   PERFECT: 0.055,
   GOOD: 0.105,
-  OK: 0.16,
+  // 190ms (was 160): more forgiving before an enemy gets through, while PERFECT and GOOD
+  // stay strict so scores still reward precision.
+  OK: 0.19,
 } as const;
 
 /**
