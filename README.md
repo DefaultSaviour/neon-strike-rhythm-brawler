@@ -42,7 +42,7 @@ A high-octane cyberpunk rhythm brawler powered by HTML5 Canvas and Web Audio API
 
 - **Latency-corrected song clock** (`src/audio/songClock.ts`): the game follows the audio you *hear*, not the audio the browser is processing, so enemies reach the strike line exactly on the audible beat.
 - **Charts land on the attack**: the kick/bass detector's built-in ~15 ms lag is removed (verified by tests on synthetic songs with known kick times).
-- **Fair judging** (`src/game/timing.ts`): PERFECT ±55 ms, GOOD ±105 ms, OK ±160 ms. A press always hits the *earliest* enemy in range, and enemies only breach after their OK window has passed. Key auto-repeat is ignored, and presses are timed from the input event itself.
+- **Fair judging** (`src/game/timing.ts`): PERFECT ±55 ms, GOOD ±105 ms, OK ±190 ms. A press always hits the *earliest* enemy in range, and enemies only breach after their OK window has passed. Key auto-repeat is ignored, and presses are timed from the input event itself.
 - **Timing rings** close onto each strike zone exactly on the beat, and non-PERFECT hits show **EARLY / LATE**.
 - **Auto-calibration**: the results screen shows your average timing and offers a one-click latency offset.
 
@@ -93,6 +93,7 @@ npm test
 | **Menace** | 141 | Easy | 1:05 | A short, stomping 8-bit warm-up: one minute to find the beat. |
 | **Blitz** | 153 | Medium | 1:40 | Fast 8-bit rock that never lets up. |
 | **Shock Trooper** | 153 | Medium | 1:40 | Three tracks smashed into one 8-bit rock assault. |
+| **Dead Signal** | 140 | Medium | 1:55 | Steady, stomping chiptune mash-up of Eargasm and Hellbound. |
 | **Assault** | 150 | Medium | 1:42 | Hard-driving 8-bit techno march. |
 | **Night Prowl** | 143 | Medium | 1:55 | Swung chiptune phonk: the beat bounces, so listen to the drums. |
 | **Hellbound** | 141 | Medium | 2:09 | Dark, grinding chiptune heading straight down. |

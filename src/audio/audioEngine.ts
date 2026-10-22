@@ -1446,6 +1446,17 @@ export const PRELOADED_TRACKS: Track[] = [
     audioUrl: 'audio/shock-trooper.mp3',
   },
   {
+    id: 'track_dead_signal',
+    title: 'Dead Signal',
+    artist: 'defaultsaviour',
+    bpm: 140,
+    difficulty: 'Medium',
+    duration: 115,
+    description: 'Steady, stomping chiptune mash-up of Eargasm and Hellbound.',
+    notes: [], // Charted at runtime from the audio by analyzeAudioBuffer (see prepareTrack)
+    audioUrl: 'audio/dead-signal.mp3',
+  },
+  {
     id: 'track_assault',
     title: 'Assault',
     artist: 'defaultsaviour',
