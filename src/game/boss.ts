@@ -127,6 +127,7 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number, kin
       lastFist[lane] = time;
       plan.sideHp[lane] += HP_PER_ATTACK;
     }
+    clearAroundFists(plan, notes, bpm, ['left', 'right']);
     plan.sideHp = { left: Math.round(plan.sideHp.left), right: Math.round(plan.sideHp.right) };
     plan.maxHp = plan.sideHp.left + plan.sideHp.right;
     return plan;
@@ -151,10 +152,34 @@ export function planBoss(notes: { time: number; lane: Lane }[], bpm: number, kin
     plan.attack[i] = true;
     lastFist = time;
   }
+  clearAroundFists(plan, notes, bpm, [plan.firstSide]);
 
   const attacks = plan.attack.filter(Boolean).length;
   plan.maxHp = Math.round(attacks * HP_PER_ATTACK);
   return plan;
+}
+
+/**
+ * Keep enemies from hiding behind the boss and its fists (players died to both):
+ *  - While the boss crashes down, nothing new walks in on the side(s) it lands on,
+ *    so no enemy is hidden behind it.
+ *  - No ordinary enemy lands within a beat of a fist on the same side, so a fist never
+ *    flies out from behind one (one press only takes the first).
+ * Fists themselves are never dropped.
+ */
+function clearAroundFists(plan: BossPlan, notes: { time: number; lane: Lane }[], bpm: number, landingSides: Lane[]) {
+  const beatSec = 60 / bpm;
+  // Same timings the game uses: enemies walk for 4 beats (1.1-2.2 s), fists fly for 2
+  const flight = fistFlightSec(bpm, Math.max(1.1, Math.min(2.2, beatSec * 4)));
+  const landingFrom = plan.start - flight - ENTRANCE_SEC;
+  const fists = notes.map((n, i) => ({ time: n.time, lane: plan.lanes[i], i })).filter(({ i }) => plan.attack[i]);
+  notes.forEach((n, i) => {
+    if (plan.attack[i] || !plan.keep[i]) return;
+    const lane = plan.lanes[i];
+    const landing = n.time >= landingFrom && n.time < plan.start && landingSides.includes(lane);
+    const tooClose = fists.some((f) => f.lane === lane && Math.abs(f.time - n.time) < beatSec);
+    if (landing || tooClose) plan.keep[i] = false;
+  });
 }
 
 /** Fists fly for 2 beats (normal enemies walk for 4), so they don't bunch up on the short trip. */
