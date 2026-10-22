@@ -18,19 +18,6 @@ export type EnemyTier = 1 | 2 | 3;
 
 export type TimingJudgementType = 'PERFECT' | 'GOOD' | 'OK' | 'MISS';
 
-export interface FloatingJudgement {
-  id: number;
-  text: TimingJudgementType;
-  x: number;
-  y: number;
-  color: string;
-  createdAt: number;
-  scale: number;
-  lane: Lane;
-  /** For non-PERFECT hits: whether the press was early or late (helps players adjust) */
-  detail?: 'EARLY' | 'LATE';
-}
-
 export interface BeatNote {
   time: number;
   lane: Lane;

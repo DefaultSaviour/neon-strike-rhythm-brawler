@@ -117,9 +117,11 @@ export const HUD: React.FC<HUDProps> = ({
 
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10">
-      {/* Practice: a big banner, up the whole song, so nobody misses that it's practice */}
+      {/* Practice: a big banner, up the whole song, so nobody misses that it's practice.
+          Short screens (phones on their side) have no room for it over the fight, so there
+          only the PRACTICE tag in the top bar shows. */}
       {practice && (
-        <div className="practice-banner absolute inset-x-0 top-[22%] flex flex-col items-center text-center px-4">
+        <div className="practice-banner absolute inset-x-0 top-[22%] flex flex-col items-center text-center px-4 [@media(max-height:520px)]:hidden">
           <div className="px-6 py-2 rounded-xl bg-amber-400 text-black text-2xl md:text-4xl font-black tracking-[0.25em] shadow-[0_0_40px_rgba(255,194,58,0.6)]">
             PRACTICE
           </div>
@@ -219,8 +221,8 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         </div>
 
-        {/* Dynamic In-Game HUD: Score, Combo, Grade */}
-        <div className="flex items-center justify-between mt-2">
+        {/* Dynamic In-Game HUD: Score, Combo, Grade (the canvas keeps the hit lists clear of it) */}
+        <div data-hud-scores className="flex items-center justify-between mt-2">
           {/* Left: Combo Counter */}
           <div className="flex flex-col">
             <div className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
