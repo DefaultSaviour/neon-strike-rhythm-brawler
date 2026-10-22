@@ -1,4 +1,5 @@
 import type { HeroId } from './heroes';
+import { backdropsAfterRun, milestonesFor } from './backdrops';
 
 /**
  * Heroes are earned by playing. Each locked hero has one goal, measured on
@@ -33,6 +34,8 @@ export interface LifetimeStats {
   totalScore: number;
   /** Backdrop pieces unlocked early by watching a rewarded ad (see backdrops) */
   backdropAds: number;
+  /** Backdrop pieces opened by score milestones: at most one more per song (see backdrops) */
+  backdropsUnlocked: number;
   /** OK hits (the sloppiest hit that still counts) */
   okHits: number;
   /** Best accuracy (0-100) of any song finished without dying */
@@ -49,7 +52,7 @@ export interface LifetimeStats {
   bestOkStreak: number;
 }
 
-export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 };
+export const EMPTY_STATS: LifetimeStats = { enemiesDefeated: 0, perfects: 0, bestCombo: 0, songsCleared: 0, playSeconds: 0, adUnlocks: 0, heroAds: 0, totalScore: 0, backdropAds: 0, backdropsUnlocked: 0, okHits: 0, bestClearAccuracy: 0, flawlessClears: 0, mostMissesCleared: 0, songsDied: 0, songsQuit: 0, bestOkStreak: 0 };
 
 /**
  * A song's accuracy, 0-100: PERFECT counts 100, GOOD 70, OK 40, a miss 0
@@ -160,6 +163,7 @@ export function addRun(stats: LifetimeStats, run: RunResult): LifetimeStats {
     heroAds: stats.heroAds,
     totalScore: stats.totalScore + Math.max(0, run.score),
     backdropAds: stats.backdropAds,
+    backdropsUnlocked: backdropsAfterRun(stats.backdropsUnlocked, stats.totalScore + Math.max(0, run.score)),
     okHits: stats.okHits + run.oks,
     bestClearAccuracy: run.cleared ? Math.max(stats.bestClearAccuracy, run.accuracy) : stats.bestClearAccuracy,
     // A song you finished, with hits and not one miss
@@ -195,6 +199,9 @@ export function loadStats(store: Pick<Storage, 'getItem'> | undefined): Lifetime
       heroAds: num(parsed.heroAds),
       totalScore: num(parsed.totalScore),
       backdropAds: num(parsed.backdropAds),
+      // Saves from before this count existed keep every piece their score had opened
+      backdropsUnlocked:
+        typeof parsed.backdropsUnlocked === 'number' ? num(parsed.backdropsUnlocked) : milestonesFor(num(parsed.totalScore)),
       okHits: num(parsed.okHits),
       bestClearAccuracy: Math.min(100, num(parsed.bestClearAccuracy)),
       flawlessClears: num(parsed.flawlessClears),

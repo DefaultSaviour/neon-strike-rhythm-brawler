@@ -5,6 +5,7 @@ import {
   BACKDROP_LAYERS,
   BACKDROP_MILESTONES,
   BACKDROP_UNLOCK_PATH,
+  backdropsAfterRun,
   backdropsEarned,
   DEFAULT_BACKDROP,
   isBackdropUnlocked,
@@ -36,24 +37,33 @@ describe('backdrops', () => {
     expect([...BACKDROP_MILESTONES].sort((a, b) => a - b)).toEqual(BACKDROP_MILESTONES);
   });
 
-  it('opens one piece per total-score milestone', () => {
-    expect(backdropsEarned(stats({ totalScore: 9_999 }))).toBe(0);
+  it('opens a piece at each total-score milestone, but never more than one per song', () => {
+    expect(backdropsAfterRun(0, 9_999)).toBe(0);
+    expect(backdropsAfterRun(0, 10_000)).toBe(1);
+    // One big song passing four milestones still opens just one piece...
+    expect(backdropsAfterRun(0, 100_000)).toBe(1);
+    // ...and the others follow one per song, even a song that scores nothing new
+    expect(backdropsAfterRun(1, 100_000)).toBe(2);
+    expect(backdropsAfterRun(3, 100_000)).toBe(4);
+    expect(backdropsAfterRun(4, 100_000)).toBe(4);
     expect(isBackdropUnlocked('dusk', EMPTY_STATS)).toBe(true);
-    expect(isBackdropUnlocked(BACKDROP_UNLOCK_PATH[0], stats({ totalScore: 10_000 }))).toBe(true);
-    expect(isBackdropUnlocked(BACKDROP_UNLOCK_PATH[1], stats({ totalScore: 10_000 }))).toBe(false);
-    expect(backdropsEarned(stats({ totalScore: 1e12 }))).toBe(BACKDROP_UNLOCK_PATH.length);
-    expect(nextBackdrop(stats({ totalScore: 1e12 }))).toBeNull();
+    expect(isBackdropUnlocked(BACKDROP_UNLOCK_PATH[0], stats({ backdropsUnlocked: 1 }))).toBe(true);
+    expect(isBackdropUnlocked(BACKDROP_UNLOCK_PATH[1], stats({ backdropsUnlocked: 1 }))).toBe(false);
+    expect(backdropsEarned(stats({ backdropsUnlocked: 99 }))).toBe(BACKDROP_UNLOCK_PATH.length);
+    expect(nextBackdrop(stats({ backdropsUnlocked: 99 }))).toBeNull();
   });
 
   it('an ad opens the next piece straight away, and the next milestone still counts', () => {
     expect(nextBackdrop(stats({ backdropAds: 1 }))!.id).toBe(BACKDROP_UNLOCK_PATH[1]);
-    expect(backdropsEarned(stats({ totalScore: 10_000, backdropAds: 1 }))).toBe(2);
+    expect(backdropsEarned(stats({ backdropsUnlocked: 1, backdropAds: 1 }))).toBe(2);
     expect(scoreToNextBackdrop(stats({ totalScore: 4_000 }))).toBe(6_000);
+    // Milestone already passed, piece still to come: it opens after the next song
+    expect(scoreToNextBackdrop(stats({ totalScore: 100_000, backdropsUnlocked: 1 }))).toBe(0);
   });
 
   it('draws the chosen pieces, swapping anything locked (or unknown) for the free piece of that layer', () => {
     expect(activeBackdrop(undefined, EMPTY_STATS)).toEqual(DEFAULT_BACKDROP);
-    const all = stats({ totalScore: 1e12 });
+    const all = stats({ backdropsUnlocked: 99 });
     expect(activeBackdrop({ sky: 'storm', floor: 'lava' }, all)).toEqual({ ...DEFAULT_BACKDROP, sky: 'storm', floor: 'lava' });
     expect(activeBackdrop({ sky: 'storm' }, EMPTY_STATS).sky).toBe('dusk');
     expect(activeBackdrop({ sky: 'lava' }, all).sky).toBe('dusk'); // a floor isn't a sky

@@ -7,7 +7,9 @@ import type { LifetimeStats } from './heroUnlocks';
  * conveyors. One of each is free (the original synthwave look); the other 16
  * unlock one at a time along a single path, at total-score milestones, or
  * straight away by watching a rewarded ad (scoring stays the free way to get
- * them all, as CrazyGames requires).
+ * them all, as CrazyGames requires). Scores grow fast with combos, so one song
+ * can pass several milestones: still only one piece opens per song, and the
+ * rest follow one per song after.
  */
 
 export type BackdropLayer = 'sky' | 'skyline' | 'centre' | 'floor';
@@ -77,14 +79,22 @@ export const BACKDROP_MILESTONES: number[] = [
   2_000_000, 2_500_000, 3_000_000, 4_000_000,
 ];
 
-/** Score milestones passed so far. */
-function milestonesReached(stats: LifetimeStats): number {
-  return BACKDROP_MILESTONES.filter((m) => stats.totalScore >= m).length;
+/** Score milestones passed at this total score. */
+export function milestonesFor(totalScore: number): number {
+  return BACKDROP_MILESTONES.filter((m) => totalScore >= m).length;
 }
 
-/** How many pieces of the path are open: one per milestone passed, plus one per ad watched. */
+/**
+ * Milestone pieces open after a song: one more than before at most, however
+ * many milestones the song's score passed (the rest come with later songs).
+ */
+export function backdropsAfterRun(unlockedBefore: number, totalScore: number): number {
+  return Math.min(milestonesFor(totalScore), unlockedBefore + 1);
+}
+
+/** How many pieces of the path are open: the milestone pieces given so far, plus one per ad watched. */
 export function backdropsEarned(stats: LifetimeStats): number {
-  return Math.min(BACKDROP_UNLOCK_PATH.length, milestonesReached(stats) + stats.backdropAds);
+  return Math.min(BACKDROP_UNLOCK_PATH.length, stats.backdropsUnlocked + stats.backdropAds);
 }
 
 export function isBackdropUnlocked(id: string, stats: LifetimeStats): boolean {
@@ -98,10 +108,13 @@ export function nextBackdrop(stats: LifetimeStats): BackdropItem | null {
   return id ? BACKDROP_ITEMS.find((b) => b.id === id)! : null;
 }
 
-/** Total score still needed to pass the next milestone (null when they're all open). */
+/**
+ * Total score still needed for the next piece (null when they're all open).
+ * 0 means its milestone is already passed and it opens after the next song.
+ */
 export function scoreToNextBackdrop(stats: LifetimeStats): number | null {
   if (!nextBackdrop(stats)) return null;
-  const next = BACKDROP_MILESTONES[milestonesReached(stats)];
+  const next = BACKDROP_MILESTONES[stats.backdropsUnlocked];
   return next === undefined ? null : Math.max(0, next - stats.totalScore);
 }
 
