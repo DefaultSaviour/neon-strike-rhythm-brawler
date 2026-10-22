@@ -52,7 +52,24 @@ export interface BossState {
   /** Beat time of the last fist (each twin's own, and overall): hitting it is the killing blow */
   finalFist: Record<Lane, number>;
   finalFistAll: number;
+  /** Health as the bar shows it: it drops when a hit-back fist lands, a moment after the hit */
+  shownHp: number;
+  shownSideHp: Record<Lane, number>;
 }
+
+/** A fist the player hit back, flying at the boss (see returnedFistPosition). */
+export interface ReturningFist {
+  fromX: number;
+  /** The fist's side: for the twins, the twin it flies back to */
+  lane: Lane;
+  /** performance.now() when it was hit */
+  start: number;
+  /** It's the killing blow: the boss (or this twin) goes down when it lands */
+  final: boolean;
+}
+
+/** How long a hit-back fist takes to reach the boss (ms). */
+export const RETURN_MS = 280;
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -251,6 +268,8 @@ export class GameEngine {
   public practice = false;
   /** The end-of-song boss for this song, or null when the song has none */
   public boss: BossState | null = null;
+  /** Fists the player hit back, flying at the boss */
+  public returningFists: ReturningFist[] = [];
   /** Song time the song is cut off at (only with the dev ?short switch) */
   private songEndAt = Infinity;
   /** Song times (s) of the hits taken this practice run */
@@ -399,6 +418,7 @@ export class GameEngine {
     const session = ++this.songSession;
     this.track = track;
     this.boss = null;
+    this.returningFists = [];
     this.songEndAt = Infinity;
     this.practice = practice;
     this.practiceHits = [];
@@ -479,6 +499,8 @@ export class GameEngine {
           hurtSide: null,
           finalFist: { left: -1, right: -1 },
           finalFistAll: -1,
+          shownHp: bossPlan.maxHp,
+          shownSideHp: { ...bossPlan.sideHp },
         }
       : null;
     this.scoreState.totalNotes = bossPlan ? bossPlan.keep.filter(Boolean).length : notes.length;
@@ -702,8 +724,7 @@ export class GameEngine {
     });
 
     if (enemy.bossAttack) {
-      this.burstFist(enemy, judgement);
-      this.damageBoss(enemy.lane, enemy.targetTime);
+      this.returnFist(enemy, judgement, this.damageBoss(enemy.lane, enemy.targetTime));
     } else this.spawnEnemyDebrisExplosion(enemy, judgement);
     this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
@@ -725,14 +746,10 @@ export class GameEngine {
   }
 
   /** A boss fist smashed back: it bursts into hot shards and a ring of light. Better timing, bigger burst. */
-  private burstFist(enemy: Enemy, judgement: TimingJudgementType) {
-    const power = (judgement === 'PERFECT' ? 1.3 : judgement === 'GOOD' ? 1.05 : 0.85) * Math.min(1.4, comboBlastPower(this.scoreState.combo));
-    const count = judgement === 'PERFECT' ? 10 : judgement === 'GOOD' ? 7 : 5;
+  private returnFist(enemy: Enemy, judgement: TimingJudgementType, final: boolean) {
     const look = BOSS_LOOKS[this.boss?.plan.kind ?? 'leaper'];
-    this.debris.push(
-      ...burstOrb({ x: enemy.x, y: -6, color: look.color, accent: look.accent, power, count }, () => this.nextDebrisId++)
-    );
-    trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
+    // A ring of light where it was struck, then it flies back at the boss
+    this.returningFists.push({ fromX: enemy.x, lane: enemy.lane, start: performance.now(), final });
     this.particles.push({
       x: enemy.x,
       y: -6,
@@ -751,32 +768,59 @@ export class GameEngine {
    * A fist was hit back: every fist takes the same chunk of health, so the boss goes down
    * on its last fist (the last thing to hit in the song). One that got through in practice
    * leaves it standing. Each twin takes damage from its own fists and falls on its own last.
+   * Returns true for the killing blow, which floors it when the fist lands (landReturnedFist).
    */
-  private damageBoss(lane: Lane, fistTime: number) {
+  private damageBoss(lane: Lane, fistTime: number): boolean {
     const boss = this.boss;
-    if (!boss || boss.ko) return;
+    if (!boss || boss.ko) return false;
     const twins = boss.plan.kind === 'twins';
-    if (twins && boss.downAt[lane]) return;
+    if (twins && boss.downAt[lane]) return false;
     const damage = Math.min(HP_PER_ATTACK, twins ? boss.sideHp[lane] : boss.hp);
     boss.hp -= damage;
     if (twins) boss.sideHp[lane] -= damage;
+    if (twins) return fistTime >= boss.finalFist[lane] && boss.sideHp[lane] <= 0;
+    return fistTime >= boss.finalFistAll && boss.hp <= 0;
+  }
+
+  /** Where a hit-back fist is now: curving up and back into the boss's chest (it homes in as the boss moves). */
+  public returnedFistPosition(f: ReturningFist, now: number): { x: number; y: number; u: number } {
+    const u = Math.min(1, Math.max(0, (now - f.start) / RETURN_MS));
+    const target = this.boss ? this.bossFigure(this.boss.plan.kind === 'twins' ? f.lane : null) : null;
+    const tx = target ? target.x : f.fromX;
+    const ty = target ? -target.lift - 70 : -70;
+    const ease = u * u * (3 - 2 * u);
+    return { x: f.fromX + (tx - f.fromX) * ease, y: -6 + (ty + 6) * ease - Math.sin(u * Math.PI) * 34, u };
+  }
+
+  /** A hit-back fist reaches the boss: it bursts on it, the boss flinches, the bar drops, and the last one floors it. */
+  private landReturnedFist(f: ReturningFist) {
+    const boss = this.boss;
+    if (!boss) return;
+    const look = BOSS_LOOKS[boss.plan.kind];
+    const twins = boss.plan.kind === 'twins';
+    const at = this.returnedFistPosition(f, f.start + RETURN_MS);
+    const power = Math.min(1.4, comboBlastPower(this.scoreState.combo));
+    this.debris.push(
+      ...burstOrb({ x: at.x, y: at.y, color: look.color, accent: look.accent, power, count: 7 }, () => this.nextDebrisId++)
+    );
+    trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
     boss.hurtAt = performance.now();
-    boss.hurtSide = lane;
+    boss.hurtSide = f.lane;
+    boss.shownHp = Math.max(0, boss.shownHp - HP_PER_ATTACK);
+    if (twins) boss.shownSideHp[f.lane] = Math.max(0, boss.shownSideHp[f.lane] - HP_PER_ATTACK);
+    if (!f.final) return;
 
     if (twins) {
-      if (fistTime < boss.finalFist[lane] || boss.sideHp[lane] > 0) return;
-      boss.downAt[lane] = performance.now();
-      const other: Lane = lane === 'left' ? 'right' : 'left';
+      boss.downAt[f.lane] = performance.now();
+      const other: Lane = f.lane === 'left' ? 'right' : 'left';
       const last = !!boss.downAt[other];
-      this.blowUpBoss(this.bossFigure(lane), last);
+      this.blowUpBoss(this.bossFigure(f.lane), last);
       if (last) {
         boss.ko = true;
         boss.koAt = performance.now();
       }
       return;
     }
-
-    if (fistTime < boss.finalFistAll || boss.hp > 0) return;
     boss.ko = true;
     boss.koAt = performance.now();
     this.blowUpBoss(this.bossFigure(null), true);
@@ -1011,6 +1055,14 @@ export class GameEngine {
         this.triggerPlayerDeath(enemy);
         return;
       }
+    }
+
+    // Fists the player hit back reach the boss
+    if (this.returningFists.length > 0) {
+      const nowMs = performance.now();
+      const landed = this.returningFists.filter((f) => nowMs - f.start >= RETURN_MS);
+      this.returningFists = this.returningFists.filter((f) => nowMs - f.start < RETURN_MS);
+      for (const f of landed) this.landReturnedFist(f);
     }
 
     // 2. HIT-STOP: on impact, effects and the fighter freeze for a few frames.
