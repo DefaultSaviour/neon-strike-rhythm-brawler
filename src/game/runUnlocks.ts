@@ -1,7 +1,7 @@
 import { BACKDROP_ITEMS, BACKDROP_LAYERS, BACKDROP_UNLOCK_PATH, backdropsEarned, nextBackdrop } from './backdrops';
 import { ENEMY_MOTION_STYLES } from './enemyMotion';
 import { getHero, HEROES, HeroId } from './heroes';
-import { HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, newlyUnlocked, UNLOCK_ORDER } from './heroUnlocks';
+import { HERO_UNLOCKS, heroesOpenedByAd, isHeroUnlocked, LifetimeStats, newlyUnlocked, UNLOCK_ORDER } from './heroUnlocks';
 import { nextStance, STANCE_UNLOCK_ORDER, stancesEarned } from './stanceUnlocks';
 import type { UnlockKind } from './seenUnlocks';
 
@@ -28,13 +28,19 @@ export function unlocksBetween(before: LifetimeStats, after: LifetimeStats): Run
 /**
  * The next thing a rewarded ad would unlock, or null when there's nothing
  * left. The ad hero (The Bride) comes first while she's locked, as the
- * biggest prize; then the next enemy stance; then the next backdrop piece.
- * Every one of these can also be earned by playing (CrazyGames requires it).
+ * biggest prize. After her it takes turns: a stance, then a hero (the next
+ * locked one on the path), then a stance, and so on, going by how many of
+ * each ads have opened. When one kind runs out it's the other; when both
+ * have, the next backdrop piece. Every one of these can also be earned by
+ * playing (CrazyGames requires it).
  */
 export function adOffer(stats: LifetimeStats): RunUnlock | null {
-  const hero = UNLOCK_ORDER.find((id) => HERO_UNLOCKS[id]?.ad && !isHeroUnlocked(id, stats));
-  if (hero) return { kind: 'hero', id: hero };
+  const bride = UNLOCK_ORDER.find((id) => HERO_UNLOCKS[id]?.ad && !isHeroUnlocked(id, stats));
+  if (bride) return { kind: 'hero', id: bride };
   const stance = nextStance(stats);
+  const hero = UNLOCK_ORDER.find((id) => !isHeroUnlocked(id, stats));
+  const heroTurn = (stats.adUnlocks + heroesOpenedByAd(stats)) % 2 === 1;
+  if (hero && (heroTurn || !stance)) return { kind: 'hero', id: hero };
   if (stance) return { kind: 'stance', id: stance };
   const piece = nextBackdrop(stats);
   if (piece) return { kind: 'backdrop', id: piece.id };
