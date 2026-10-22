@@ -118,6 +118,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       drawParticles(ctx, engine);
       // Boss fists go above the fighter and the effects: a big move must never hide one
       drawFullSizedEnemies(ctx, engine, halfW, true);
+      drawReturningFists(ctx, engine);
       drawJudgements(ctx, engine);
       drawBossKo(ctx, engine);
       // Last, so no effect can ever cover the timing cue.
@@ -561,6 +562,41 @@ function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameE
   ctx.restore();
 }
 
+/** Fists the player hit back: white-hot, a tail streaming behind, curving into the boss. */
+function drawReturningFists(ctx: CanvasRenderingContext2D, engine: GameEngine) {
+  if (!engine.boss || engine.returningFists.length === 0) return;
+  const look = BOSS_LOOKS[engine.boss.plan.kind];
+  const now = performance.now();
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const f of engine.returningFists) {
+    const p = engine.returnedFistPosition(f, now);
+    const back = engine.returnedFistPosition(f, now - 45);
+    const r = 9 + 4 * Math.sin(p.u * Math.PI);
+    const tail = ctx.createLinearGradient(p.x, p.y, back.x, back.y);
+    tail.addColorStop(0, colorWithAlpha('#ffffff', 0.9));
+    tail.addColorStop(1, colorWithAlpha(look.accent, 0));
+    ctx.strokeStyle = tail;
+    ctx.lineWidth = r * 1.3;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(back.x + (back.x - p.x) * 1.5, back.y + (back.y - p.y) * 1.5);
+    ctx.stroke();
+    ctx.fillStyle = heatColor(look.accent, 0.6);
+    ctx.shadowColor = look.accent;
+    ctx.shadowBlur = 26;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  ctx.restore();
+}
+
 /** The KO stamp over the fight when the boss falls. */
 function drawBossKo(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const boss = engine.boss;
@@ -625,10 +661,10 @@ function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: n
     const half = (w - gap) / 2;
     for (const side of ['left', 'right'] as const) {
       const full = boss.plan.sideHp[side];
-      bar(side === 'left' ? left : left + half + gap, half, full > 0 ? boss.sideHp[side] / full : 0, recentlyHurt && boss.hurtSide === side);
+      bar(side === 'left' ? left : left + half + gap, half, full > 0 ? boss.shownSideHp[side] / full : 0, recentlyHurt && boss.hurtSide === side);
     }
   } else {
-    bar(left, w, boss.hp / boss.plan.maxHp, recentlyHurt);
+    bar(left, w, boss.shownHp / boss.plan.maxHp, recentlyHurt);
   }
   ctx.restore();
 }
