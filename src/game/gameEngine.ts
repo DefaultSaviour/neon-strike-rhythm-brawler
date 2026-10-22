@@ -695,7 +695,11 @@ export class GameEngine {
 
     const remaining = this.enemies.filter((e) => !e.defeated);
     if (remaining.length === 0) {
-      setTimeout(() => this.finishSong(true), 600);
+      // Only if it's still this song: pressing R in the gap starts a new one, which must not end
+      const session = this.songSession;
+      setTimeout(() => {
+        if (session === this.songSession) this.finishSong(true);
+      }, 600);
     }
   }
 
@@ -1187,7 +1191,10 @@ export class GameEngine {
       });
     }
 
+    // The results come up a moment later, unless a new song started in the gap (R pressed)
+    const session = this.songSession;
     setTimeout(() => {
+      if (session !== this.songSession) return;
       this.callbacks.onGameOver(this.scoreState, false, report);
     }, 700);
   }
