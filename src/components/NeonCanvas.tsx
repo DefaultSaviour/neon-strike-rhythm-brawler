@@ -113,9 +113,11 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       drawFloorShadowsAndReflections(ctx, engine, halfW);
       drawDebrisPieces(ctx, engine);
       drawBoss(ctx, engine);
-      drawFullSizedEnemies(ctx, engine, halfW);
+      drawFullSizedEnemies(ctx, engine, halfW, false);
       drawPlayer(ctx, engine);
       drawParticles(ctx, engine);
+      // Boss fists go above the fighter and the effects: a big move must never hide one
+      drawFullSizedEnemies(ctx, engine, halfW, true);
       drawJudgements(ctx, engine);
       drawBossKo(ctx, engine);
       // Last, so no effect can ever cover the timing cue.
@@ -358,7 +360,8 @@ interface EnemyDrawOptions {
 }
 
 // FULL-SIZED CYBER ENEMIES: 3 Frequency Bands (Sub, Bass, High) x 3 Tiers (Low, Mid, High Hz)
-function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine, halfW: number) {
+/** `fists`: draw only the boss's fists (a later layer), or only everything else. */
+function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine, halfW: number, fists: boolean) {
   const now = performance.now();
   // The next enemy due in each lane is drawn at full strength; the queue behind
   // it is dimmed, so the player always knows which one to hit next.
@@ -368,6 +371,7 @@ function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine,
   // Draw back-to-front: queued enemies first, the next one on top.
   const ordered = [...engine.enemies].sort((a, b) => b.targetTime - a.targetTime);
   for (const enemy of ordered) {
+    if (!!enemy.bossAttack !== fists) continue;
     if (enemy.defeated) {
       const age = enemy.deathTime !== undefined ? now - enemy.deathTime : Infinity;
       if (age < HIT_FLASH_MS) {
