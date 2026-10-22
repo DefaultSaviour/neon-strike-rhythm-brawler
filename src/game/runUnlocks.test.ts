@@ -12,7 +12,7 @@ describe('what a song unlocked', () => {
   });
 
   it('heroes first, then stances, then backdrop pieces', () => {
-    const after = stats({ songsCleared: 1, enemiesDefeated: 400, playSeconds: SECONDS_PER_STANCE + 5, totalScore: BACKDROP_MILESTONES[1] });
+    const after = stats({ songsCleared: 1, enemiesDefeated: 400, playSeconds: SECONDS_PER_STANCE + 5, totalScore: BACKDROP_MILESTONES[1], backdropsUnlocked: 2 });
     expect(unlocksBetween(EMPTY_STATS, after)).toEqual([
       { kind: 'hero', id: 'theOne' },
       { kind: 'hero', id: 'dragon' },
@@ -23,8 +23,8 @@ describe('what a song unlocked', () => {
   });
 
   it('only what is new: things already open before the song are left out', () => {
-    const before = stats({ songsCleared: 1, totalScore: BACKDROP_MILESTONES[0] });
-    const after = stats({ songsCleared: 2, totalScore: BACKDROP_MILESTONES[1] });
+    const before = stats({ songsCleared: 1, totalScore: BACKDROP_MILESTONES[0], backdropsUnlocked: 1 });
+    const after = stats({ songsCleared: 2, totalScore: BACKDROP_MILESTONES[1], backdropsUnlocked: 2 });
     expect(unlocksBetween(before, after)).toEqual([{ kind: 'backdrop', id: BACKDROP_UNLOCK_PATH[1] }]);
   });
 });

@@ -121,7 +121,15 @@ describe('lifetime totals', () => {
   it('add up across songs (score and OK hits included), keep the best combo, and count only cleared songs', () => {
     let s = addRun(EMPTY_STATS, { enemiesDefeated: 90, perfects: 40, oks: 9, misses: 5, accuracy: 99, maxCombo: 30, cleared: false, seconds: 61, score: 12000 });
     s = addRun(s, { enemiesDefeated: 80, perfects: 50, oks: 4, misses: 2, accuracy: 85, maxCombo: 22, cleared: true, seconds: 190, score: 30500 });
-    expect(s).toEqual({ ...EMPTY_STATS, enemiesDefeated: 170, perfects: 90, okHits: 13, bestCombo: 30, songsCleared: 1, playSeconds: 251, totalScore: 42500, bestClearAccuracy: 85, mostMissesCleared: 2 });
+    // 42,500 total passes two backdrop milestones, one per song
+    expect(s).toEqual({ ...EMPTY_STATS, enemiesDefeated: 170, perfects: 90, okHits: 13, bestCombo: 30, songsCleared: 1, playSeconds: 251, totalScore: 42500, backdropsUnlocked: 2, bestClearAccuracy: 85, mostMissesCleared: 2 });
+  });
+
+  it('give saves from before the one-backdrop-per-song rule every piece their score had opened', () => {
+    const old = { getItem: () => JSON.stringify({ totalScore: 100_000 }) };
+    expect(loadStats(old).backdropsUnlocked).toBe(4);
+    const current = { getItem: () => JSON.stringify({ totalScore: 100_000, backdropsUnlocked: 1 }) };
+    expect(loadStats(current).backdropsUnlocked).toBe(1);
   });
 
   it('only finished songs count for accuracy and for no-miss songs', () => {

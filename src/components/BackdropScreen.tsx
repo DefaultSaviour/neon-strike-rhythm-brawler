@@ -96,13 +96,15 @@ export const BackdropScreen: React.FC<BackdropScreenProps> = ({ stats, selected,
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 min-h-[128px] sm:min-h-[112px] lg:min-h-[88px] border-b border-slate-800 bg-slate-900/50">
           <div>
             <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-pink-500 to-amber-300">BACKDROP</div>
-            <div className="text-xs text-slate-400">Mix your own: a sky, a skyline, a centrepiece and a floor. New pieces open as your total score grows.</div>
+            <div className="text-xs text-slate-400">Mix your own: a sky, a skyline, a centrepiece and a floor. New pieces open as your total score grows, one per song.</div>
           </div>
           {next && toGo !== null ? (
             <div className="flex items-center gap-2">
               <div className="text-right font-mono">
                 <div className="text-[10px] text-slate-500 uppercase">Next: {next.label}</div>
-                <div className="text-sm font-bold text-amber-300 tabular-nums">{toGo.toLocaleString()} points to go</div>
+                <div className="text-sm font-bold text-amber-300 tabular-nums">
+                  {toGo === 0 ? 'Opens after your next song' : `${toGo.toLocaleString()} points to go`}
+                </div>
               </div>
               {onWatchAd && (
                 <button

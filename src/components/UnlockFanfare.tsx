@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { audioEngine } from '../audio/audioEngine';
 import type { BackdropLayer } from '../game/backdrops';
-import { scoreToNextBackdrop } from '../game/backdrops';
+import { BACKDROP_MILESTONES, BACKDROP_UNLOCK_PATH, scoreToNextBackdrop } from '../game/backdrops';
 import type { EnemyMotionStyle } from '../game/enemyMotion';
 import type { HeroId } from '../game/heroes';
 import { HERO_UNLOCKS, LifetimeStats } from '../game/heroUnlocks';
@@ -53,7 +53,8 @@ const UnlockArt: React.FC<{ unlock: RunUnlock; backdrop: Record<BackdropLayer, s
 function earnedText(u: RunUnlock): string {
   if (u.kind === 'hero') return `${HERO_UNLOCKS[u.id as HeroId]?.label ?? 'Goal reached'}: done!`;
   if (u.kind === 'stance') return `${MINUTES_PER_STANCE} more minutes of play: done!`;
-  return 'Score milestone passed: done!';
+  const milestone = BACKDROP_MILESTONES[BACKDROP_UNLOCK_PATH.indexOf(u.id)];
+  return milestone ? `Total score passed ${milestone.toLocaleString()}` : 'Total score milestone passed';
 }
 
 /** How to earn the offer without an ad (on the offer card). */
@@ -61,6 +62,7 @@ function earnText(u: RunUnlock, stats: LifetimeStats): string {
   if (u.kind === 'hero') return `Or earn it by playing: ${HERO_UNLOCKS[u.id as HeroId]?.label.toLowerCase() ?? 'keep playing'}.`;
   if (u.kind === 'stance') return `Or earn it by playing: a new stance opens every ${MINUTES_PER_STANCE} minutes.`;
   const toGo = scoreToNextBackdrop(stats);
+  if (toGo === 0) return 'Or earn it by playing: it opens after your next song.';
   return toGo ? `Or earn it by playing: ${toGo.toLocaleString()} more points.` : 'Or earn it by playing.';
 }
 
