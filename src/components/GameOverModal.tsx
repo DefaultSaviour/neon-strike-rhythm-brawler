@@ -170,7 +170,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             )}
             {boss === 'standing' && cleared && (
               <div className="mt-3 px-3 py-2 rounded-lg bg-slate-900/80 border border-amber-400/50 text-sm text-slate-200">
-                <span className="font-bold text-amber-300">The {bossName} survived.</span> PERFECT hits on the fists do the most damage.
+                <span className="font-bold text-amber-300">The {bossName} survived.</span> Hit back every fist to knock it out.
               </div>
             )}
             {!cleared && deathReport && (

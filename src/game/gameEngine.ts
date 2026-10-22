@@ -33,7 +33,7 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
-import { BOSS_DAMAGE, BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, planBoss, standX } from './boss';
+import { BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, HP_PER_ATTACK, planBoss, standX } from './boss';
 
 /** The end-of-song boss while a song is playing (see boss.ts). */
 export interface BossState {
@@ -703,7 +703,7 @@ export class GameEngine {
 
     if (enemy.bossAttack) {
       this.burstFist(enemy, judgement);
-      this.damageBoss(judgement, enemy.lane, enemy.targetTime);
+      this.damageBoss(enemy.lane, enemy.targetTime);
     } else this.spawnEnemyDebrisExplosion(enemy, judgement);
     this.spawnHitParticles(enemy.x, -22, lane, judgement, enemy.color);
 
@@ -748,17 +748,16 @@ export class GameEngine {
   }
 
   /**
-   * A fist was hit back: the boss takes damage by timing. It only goes down on its last
-   * fist (the last thing to hit in the song), and only if its health is gone by then: out
-   * of health early, it keeps fighting with an empty bar ("FINISH IT!"). Each twin takes
-   * damage from its own fists and falls on its own last one.
+   * A fist was hit back: every fist takes the same chunk of health, so the boss goes down
+   * on its last fist (the last thing to hit in the song). One that got through in practice
+   * leaves it standing. Each twin takes damage from its own fists and falls on its own last.
    */
-  private damageBoss(judgement: TimingJudgementType, lane: Lane, fistTime: number) {
+  private damageBoss(lane: Lane, fistTime: number) {
     const boss = this.boss;
     if (!boss || boss.ko) return;
     const twins = boss.plan.kind === 'twins';
     if (twins && boss.downAt[lane]) return;
-    const damage = Math.min(BOSS_DAMAGE[judgement], twins ? boss.sideHp[lane] : boss.hp);
+    const damage = Math.min(HP_PER_ATTACK, twins ? boss.sideHp[lane] : boss.hp);
     boss.hp -= damage;
     if (twins) boss.sideHp[lane] -= damage;
     boss.hurtAt = performance.now();

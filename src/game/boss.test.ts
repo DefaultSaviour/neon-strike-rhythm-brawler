@@ -100,12 +100,14 @@ describe('the end-of-song boss', () => {
     expect(planBoss(notes, 60)!.keep.some((k) => !k)).toBe(true);
   });
 
-  it('has more health than all-GOOD hits can take, so the KO needs PERFECTs', () => {
+  it('has one chunk of health per fist, so the bar empties exactly on the last fist', () => {
     const plan = planBoss(chart(), 120)!;
-    const fists = plan.attack.filter(Boolean).length;
-    expect(plan.maxHp).toBe(Math.round(fists * HP_PER_ATTACK));
-    expect(fists * 2).toBeLessThan(plan.maxHp);
-    expect(fists * 3).toBeGreaterThan(plan.maxHp);
+    expect(plan.maxHp).toBe(plan.attack.filter(Boolean).length * HP_PER_ATTACK);
+    const twins = planBoss(chart(), 120, 'twins')!;
+    const notes = chart();
+    for (const side of ['left', 'right'] as const) {
+      expect(twins.sideHp[side]).toBe(notes.filter((_, i) => twins.attack[i] && twins.lanes[i] === side).length);
+    }
   });
 
   it('skips short songs', () => {

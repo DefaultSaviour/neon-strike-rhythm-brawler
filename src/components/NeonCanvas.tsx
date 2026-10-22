@@ -619,21 +619,6 @@ function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: n
   ctx.shadowColor = look.accent;
   ctx.shadowBlur = 10;
   ctx.fillText(look.name.toUpperCase(), left, y - 8);
-  // Out of health before its last fist: it fights on until that one lands
-  const finishing =
-    boss.plan.kind === 'twins'
-      ? (['left', 'right'] as const).some((s) => boss.sideHp[s] <= 0 && !boss.downAt[s])
-      : boss.hp <= 0;
-  if (finishing) {
-    ctx.save();
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = look.accent;
-    ctx.shadowBlur = 14;
-    ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 160));
-    ctx.fillText('FINISH IT!', left + w, y - 8);
-    ctx.restore();
-  }
   ctx.shadowBlur = 0;
   if (boss.plan.kind === 'twins') {
     const gap = 10;

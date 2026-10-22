@@ -2,8 +2,9 @@
  * The end-of-song bosses.
  *
  * Over the last stretch of a song a big boss throws punches (energy fists) on
- * the beat. Hitting a fist on time damages it: PERFECTs hurt most. There are
- * three, and songs take turns:
+ * the beat. Every fist hit back takes off the same chunk of its health, so the
+ * bar empties exactly on its last fist: the killing blow. There are three, and
+ * songs take turns:
  *  - Titan King (leaper): stands on one side and every few bars leaps over the
  *    player to the other side.
  *  - Volt Runner (runner): sprints off the edge of the screen and bursts back
@@ -13,10 +14,11 @@
  * With the single bosses, every third beat charted on the far side still brings
  * a small enemy from there.
  *
- * Letting a fist through is the same as letting any enemy through, so surviving
- * isn't enough to win: the KO needs good timing.
+ * Letting a fist through is the same as letting any enemy through, so in a real
+ * run getting through the boss alive is the KO. (In practice a fist that gets
+ * through leaves it standing.)
  */
-import { EnemyTier, FrequencyBand, Lane, TimingJudgementType } from '../types/game';
+import { EnemyTier, FrequencyBand, Lane } from '../types/game';
 
 export type BossKind = 'leaper' | 'runner' | 'twins';
 
@@ -54,10 +56,8 @@ export function bossKindFor(trackId: string, soundtrackIds: string[]): BossKind 
 export const BOSS_SECONDS = 24;
 /** Beats a single boss stays on one side before moving to the other. */
 export const SWITCH_BEATS = 8;
-/** Damage a fist does to the boss when hit, by timing. */
-export const BOSS_DAMAGE: Record<TimingJudgementType, number> = { PERFECT: 3, GOOD: 2, OK: 1, MISS: 0 };
-/** Boss health per fist it throws: all GOODs fall short, so the KO needs some PERFECTs. */
-export const HP_PER_ATTACK = 2.2;
+/** Boss health per fist it throws: every fist hit back does the same damage, whatever the timing. */
+export const HP_PER_ATTACK = 1;
 /** Fists land at least this many beats apart on one side (so no frantic runs on one key). */
 export const MIN_GAP_BEATS = 0.5;
 /** Of the beats charted on the far side, every this-many-th stays a small enemy. */
