@@ -686,6 +686,7 @@ export default function App() {
           practice={engine.practice}
           practiceHits={engine.practiceHits.length}
           onPlayForReal={() => handleStartGame(selectedTrack, false)}
+          onPractice={() => handleStartGame(selectedTrack, true)}
           boss={engine.bossResult()}
           bossName={engine.boss ? BOSS_LOOKS[engine.boss.plan.kind].name : undefined}
           track={selectedTrack}

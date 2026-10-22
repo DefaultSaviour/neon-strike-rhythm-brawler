@@ -154,7 +154,11 @@ export const UnlockFanfare: React.FC<UnlockFanfareProps> = ({ unlocks, offer, of
               <div className="mt-4 [@media(max-height:479px)]:mt-2 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => onEquip(card.u)}
+                  onClick={() => {
+                    // Equip it and move straight on (to the next card, or close on the last)
+                    onEquip(card.u);
+                    next();
+                  }}
                   disabled={equipped}
                   className="flex-1 min-h-11 rounded-lg font-bold text-sm bg-amber-400 text-slate-900 hover:bg-amber-300 disabled:bg-emerald-400 disabled:cursor-default cursor-pointer"
                 >
