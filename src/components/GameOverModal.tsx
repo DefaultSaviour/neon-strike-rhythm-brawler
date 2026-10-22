@@ -4,7 +4,7 @@ import type { DeathReport } from '../game/timing';
 import type { RunProgress } from '../game/runProgress';
 import type { HeroId } from '../game/heroes';
 import { RunProgressBar } from './RunProgressBar';
-import { RotateCcw, Music, Trophy, Flame, Target, Home, Play } from 'lucide-react';
+import { RotateCcw, Music, Trophy, Flame, Target, Home, Play, Shield } from 'lucide-react';
 
 interface GameOverModalProps {
   cleared: boolean;
@@ -38,6 +38,8 @@ interface GameOverModalProps {
   practiceHits?: number;
   /** After practice: play the same song for real (the main button then) */
   onPlayForReal?: () => void;
+  /** After a real run: play the same song as practice (getting hit doesn't end it) */
+  onPractice?: () => void;
   /** The end-of-song boss: knocked out, still standing, or never reached (null) */
   boss?: 'ko' | 'standing' | null;
   /** Which boss it was ("Titan King") */
@@ -63,6 +65,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   practice = false,
   practiceHits = 0,
   onPlayForReal,
+  onPractice,
   boss = null,
   bossName = 'boss',
 }) => {
@@ -305,6 +308,18 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <span className="[@media(pointer:coarse)]:hidden"> (Press Space / R)</span>
             </span>
           </button>
+
+          {/* After a real run, learn the song without it ending on a hit */}
+          {!practice && onPractice && (
+            <button
+              onClick={onPractice}
+              title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records"
+              className="w-full py-2.5 rounded-lg bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border border-amber-400/60 font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Shield className="w-4 h-4" />
+              <span>Practice This Song</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenSelect}
