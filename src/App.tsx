@@ -688,8 +688,6 @@ export default function App() {
           onPlayForReal={() => handleStartGame(selectedTrack, false)}
           boss={engine.bossResult()}
           bossName={engine.boss ? BOSS_LOOKS[engine.boss.plan.kind].name : undefined}
-          newUnlocks={engine.newUnlocks}
-          onPickHero={(hero) => handleUpdateSettings({ hero })}
           track={selectedTrack}
           scoreState={scoreState}
           highScoreRecord={engine.getHighScore(selectedTrack.id)}
