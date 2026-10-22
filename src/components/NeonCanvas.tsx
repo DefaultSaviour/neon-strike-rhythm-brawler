@@ -1,13 +1,13 @@
 import React, { useRef, useEffect } from 'react';
 import { GameEngine } from '../game/gameEngine';
 import { Point2D } from '../types/game';
-import { getMoveForCombo } from '../game/animations';
 import { getEnemyStyle, resolveBandTier } from '../game/enemyStyles';
 import { audioEngine } from '../audio/audioEngine';
 import { beatPosition, beatPulse } from '../audio/beatGrid';
 import { BOSS_LOOKS, BOSS_SCALE, bossFigures, BossLook } from '../game/boss';
-import { ArenaLayout, computeArenaLayout, FLOOR_Y, SPAWN_DISTANCE } from '../game/layout';
+import { ArenaLayout, computeArenaLayout, FIGHTER_HEIGHT, FLOOR_Y, SPAWN_DISTANCE } from '../game/layout';
 import { HIT_WINDOWS } from '../game/timing';
+import { HIT_LOG_FADE_SECONDS, HIT_LOG_SECONDS, hitLogArea, HitLogEntry, HudBox, JUDGEMENT_COLORS } from '../game/hitLog';
 import { Enemy } from '../types/game';
 import { enemyPoseFor } from '../game/customAnimation';
 import { getActiveAnimations } from '../game/animationLibrary';
@@ -54,6 +54,23 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
 
     window.addEventListener('resize', resize);
     resize();
+
+    // Where the HUD's score row is, so the hit lists keep clear of it (re-read now and then)
+    let hud: HudBox | null = null;
+    let hudReadAt = -Infinity;
+    const readHud = (now: number) => {
+      if (now - hudReadAt < 500) return hud;
+      hudReadAt = now;
+      const el = document.querySelector('[data-hud-scores]');
+      const r = el?.getBoundingClientRect();
+      // Its three blocks: combo, rank, score
+      const [combo, rank, score] = el ? [...el.children].map((c) => c.getBoundingClientRect()) : [];
+      hud =
+        r && r.width > 0 && combo && rank && score
+          ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom, comboRight: combo.right, rankLeft: rank.left, rankRight: rank.right, scoreLeft: score.left }
+          : null;
+      return hud;
+    };
 
     const render = (timestamp: number) => {
       const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
@@ -119,7 +136,6 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       // Boss fists go above the fighter and the effects: a big move must never hide one
       drawFullSizedEnemies(ctx, engine, halfW, true);
       drawReturningFists(ctx, engine);
-      drawJudgements(ctx, engine);
       drawBossKo(ctx, engine);
       // Last, so no effect can ever cover the timing cue.
       drawTimingRings(ctx, engine);
@@ -131,6 +147,11 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
         drawCrowdPop(ctx, width, height, engine.crowdPop);
       }
       drawBossBar(ctx, engine, width, height);
+      if (engine.hitLog.length > 0) {
+        // Up from the horizon, and never down among the fighters' and enemies' heads
+        const heads = layout.floorScreenY - FIGHTER_HEIGHT * layout.scale;
+        drawHitLists(ctx, engine.hitLog, width, height, layout.horizonY - 10, heads - 24, layout.scale, readHud(timestamp));
+      }
 
       if (scanlines) {
         drawScanlines(ctx, width, height);
@@ -791,19 +812,6 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.restore();
   }
 
-  // Move & tier banner
-  if (engine.isAttacking && combo > 0) {
-    const move = getMoveForCombo(combo, engine.currentMoveIndex, engine.hero.moves);
-    ctx.save();
-    ctx.font = '800 9px "Outfit", sans-serif';
-    ctx.fillStyle = tier.color;
-    ctx.shadowColor = tier.color;
-    ctx.shadowBlur = 12;
-    ctx.textAlign = 'center';
-    ctx.fillText(`${tier.name} · ${move.name.toUpperCase()}`, 0, -150);
-    ctx.restore();
-  }
-
   ctx.restore();
 }
 
@@ -856,44 +864,75 @@ function drawParticles(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.restore();
 }
 
-function drawJudgements(ctx: CanvasRenderingContext2D, engine: GameEngine) {
-  ctx.save();
-
+/**
+ * The hit lists up the sides (see hitLog): left-lane hits on the left,
+ * right-lane hits on the right. The newest line comes in at the bottom with
+ * a little pop, pushing the older ones up; older lines dim, and each fades
+ * out after a few seconds so the sky clears when the fight goes quiet.
+ */
+function drawHitLists(ctx: CanvasRenderingContext2D, log: HitLogEntry[], width: number, height: number, horizon: number, lowest: number, scale: number, hud: HudBox | null) {
+  const area = hitLogArea(width, height, horizon, lowest, scale, hud);
   const now = performance.now();
-
-  for (const j of engine.judgements) {
-    const age = (now - j.createdAt) / 1000;
-    const alpha = Math.max(0, 1 - age / 0.7);
-    const floatY = j.y - age * 40;
-    // Pops in big, then settles
-    const scale = j.scale * (1 + Math.max(0, 0.45 - age * 4));
-
-    ctx.save();
-    ctx.translate(j.x, floatY);
-    ctx.scale(scale, scale);
-    ctx.globalAlpha = alpha;
-
-    ctx.font = '900 13px "Outfit", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = j.color;
-    ctx.shadowColor = j.color;
-    ctx.shadowBlur = 16;
-    ctx.fillText(j.text, 0, 0);
-
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(j.text, 0, 0);
-
-    // EARLY / LATE hint so players can tell which way they're off
-    if (j.detail) {
-      ctx.font = '800 7px "JetBrains Mono", monospace';
-      ctx.fillStyle = j.detail === 'EARLY' ? '#7dd3fc' : '#fda4af';
-      ctx.fillText(j.detail, 0, 9);
+  // Never smaller than this, even on a phone
+  const big = Math.max(11, Math.round(area.lineH * 0.74));
+  const small = Math.max(9, Math.round(area.lineH * 0.52));
+  const gap = Math.round(area.lineH * 0.3);
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';
+  for (const lane of ['left', 'right'] as const) {
+    const lines = log.filter((e) => e.lane === lane).slice(-area.rows);
+    if (lines.length === 0) continue;
+    // Slide the older lines up by one as the newest comes in
+    const newestAge = (now - lines[lines.length - 1].at) / 1000;
+    const slide = 1 - smoothstep(0, 0.12, newestAge);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const e = lines[i];
+      const slot = lines.length - 1 - i;
+      const age = (now - e.at) / 1000;
+      // The newest fades in at the bottom; the rest slide up from the line below
+      const y = area.bottom - (slot === 0 ? 0 : slot - slide) * area.lineH;
+      const fade = Math.min(1, (HIT_LOG_SECONDS - age) / HIT_LOG_FADE_SECONDS);
+      const alpha = Math.max(0, fade) * (slot === 0 ? 1 - slide * 0.8 : 1 - (slot / area.rows) * 0.65);
+      if (alpha <= 0.01) continue;
+      const color = JUDGEMENT_COLORS[e.text];
+      // The pieces of the line: judgement, early/late, move
+      const parts: { text: string; font: string; fill: string; glow: boolean }[] = [
+        { text: e.text, font: `900 ${big}px "Outfit", sans-serif`, fill: color, glow: true },
+      ];
+      if (e.detail) parts.push({ text: e.detail, font: `800 ${small}px "JetBrains Mono", monospace`, fill: e.detail === 'EARLY' ? '#7dd3fc' : '#fda4af', glow: false });
+      if (e.move) parts.push({ text: e.move.toUpperCase(), font: `800 ${small + 1}px "Outfit", sans-serif`, fill: '#e2e8f0', glow: false });
+      const widths = parts.map((p) => {
+        ctx.font = p.font;
+        return ctx.measureText(p.text).width;
+      });
+      const total = widths.reduce((a, w) => a + w, 0) + gap * (parts.length - 1);
+      const squeeze = Math.min(1, area.maxWidth / total);
+      const pop = slot === 0 ? 1 + 0.18 * (1 - smoothstep(0, 0.15, age)) : 1;
+      const left = lane === 'left' ? area.leftX : area.rightX - total * squeeze * pop;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(left, y);
+      ctx.scale(squeeze * pop, pop);
+      let x = 0;
+      parts.forEach((p, k) => {
+        ctx.font = p.font;
+        ctx.fillStyle = p.fill;
+        ctx.shadowColor = p.fill;
+        ctx.shadowBlur = p.glow ? 14 : 0;
+        ctx.fillText(p.text, x, 0);
+        if (p.glow) {
+          // A white-hot core on the judgement word, like the old pop-up
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = alpha * 0.55;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(p.text, x, 0);
+          ctx.globalAlpha = alpha;
+        }
+        x += widths[k] + gap;
+      });
+      ctx.restore();
     }
-
-    ctx.restore();
   }
-
   ctx.restore();
 }
 

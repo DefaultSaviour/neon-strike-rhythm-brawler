@@ -3,7 +3,6 @@ import {
   Enemy,
   Lane,
   TimingJudgementType,
-  FloatingJudgement,
   Particle,
   GameScoreState,
   HighScoreRecord,
@@ -33,6 +32,7 @@ import { getActiveAnimations } from './animationLibrary';
 import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
+import { addHitLog, HitLogEntry, liveHitLog } from './hitLog';
 import { BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, HP_PER_ATTACK, planBoss, standX } from './boss';
 
 /** The end-of-song boss while a song is playing (see boss.ts). */
@@ -106,7 +106,8 @@ export class GameEngine {
   public debris: DebrisPiece[] = [];
   /** Half the visible screen width in world units, from the latest update() */
   private worldHalfWidth = 400;
-  public judgements: FloatingJudgement[] = [];
+  /** The hit lists up the sides of the screen (see hitLog) */
+  public hitLog: HitLogEntry[] = [];
   public currentPose: SkeletonPose = { ...IDLE_POSE };
   public isAttacking: boolean = false;
   /** True during the fast "blow landing" part of a strike (for slash trails) */
@@ -178,7 +179,7 @@ export class GameEngine {
 
   private callbacks: GameEngineCallbacks;
   private isRunning: boolean = false;
-  private nextJudgementId: number = 1;
+  private nextHitLogId: number = 1;
   private nextDebrisId: number = 1;
   private songSession: number = 0;
 
@@ -433,7 +434,7 @@ export class GameEngine {
     this.enemies = [];
     this.particles = [];
     this.debris = [];
-    this.judgements = [];
+    this.hitLog = [];
     this.hitOffsets = [];
     this.recentPresses = [];
     this.lastRun = null;
@@ -715,20 +716,7 @@ export class GameEngine {
       this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
     }
 
-    const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-    // One judgement word per side: the newest replaces the last, so they never stack up.
-    this.judgements = this.judgements.filter((j) => j.lane !== lane);
-    this.judgements.push({
-      id: this.nextJudgementId++,
-      text: judgement,
-      x: targetX,
-      y: -92 - Math.random() * 8,
-      color: judgement === 'PERFECT' ? '#00f3ff' : judgement === 'GOOD' ? '#ff007f' : '#ffe600',
-      createdAt: performance.now(),
-      scale: judgement === 'PERFECT' ? 1.4 : judgement === 'GOOD' ? 1.2 : 1.0,
-      lane,
-      detail: judgement === 'PERFECT' ? undefined : offsetSec < 0 ? 'EARLY' : 'LATE',
-    });
+    this.logHit(lane, judgement, judgement === 'PERFECT' ? undefined : offsetSec < 0 ? 'EARLY' : 'LATE', currentMove.name);
 
     if (enemy.bossAttack) {
       this.returnFist(enemy, judgement, this.damageBoss(enemy.lane, enemy.targetTime));
@@ -912,6 +900,11 @@ export class GameEngine {
     trimDebris(this.debris, MAX_DEBRIS, this.worldHalfWidth);
   }
 
+  /** A line in the hit list on that side of the screen. */
+  private logHit(lane: Lane, text: TimingJudgementType, detail?: 'EARLY' | 'LATE', move?: string) {
+    this.hitLog = addHitLog(this.hitLog, { id: this.nextHitLogId++, lane, text, detail, move, at: performance.now() });
+  }
+
   private triggerMiss(lane: Lane) {
     this.scoreState.combo = 0;
     this.okStreak = 0;
@@ -920,17 +913,7 @@ export class GameEngine {
     this.callbacks.onJudgement('MISS', 0);
     audioEngine.playSwingSound();
 
-    const targetX = lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-    this.judgements.push({
-      id: this.nextJudgementId++,
-      text: 'MISS',
-      x: targetX,
-      y: -80,
-      color: '#ff2a5f',
-      createdAt: performance.now(),
-      scale: 1.0,
-      lane,
-    });
+    this.logHit(lane, 'MISS');
 
     // A whiff: quick jab into empty air with only a small lunge.
     this.startStrike(lane, getOrientedPose(this.hero.moves[0].pose, lane), 0.16, LUNGE_DISTANCE * 0.4);
@@ -1118,11 +1101,7 @@ export class GameEngine {
     this.cameraKick.x *= kickDecay;
     this.cameraKick.zoom *= kickDecay;
 
-    const now = performance.now();
-    this.judgements = this.judgements.filter((j) => {
-      const age = (now - j.createdAt) / 1000;
-      return age < 0.7;
-    });
+    if (this.hitLog.length > 0) this.hitLog = liveHitLog(this.hitLog, performance.now());
 
     // Keep the newest sparks if there are too many on screen.
     if (this.particles.length > MAX_PARTICLES) {
@@ -1191,16 +1170,7 @@ export class GameEngine {
     this.callbacks.onScoreUpdate({ ...this.scoreState });
     this.callbacks.onJudgement('MISS', 0);
     this.screenShake = Math.max(this.screenShake, 6);
-    this.judgements.push({
-      id: this.nextJudgementId++,
-      text: 'MISS',
-      x: enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset,
-      y: -80,
-      color: '#ff2a5f',
-      createdAt: performance.now(),
-      scale: 1.2,
-      lane: enemy.lane,
-    });
+    this.logHit(enemy.lane, 'MISS');
     for (let i = 0; i < 14; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 160;
