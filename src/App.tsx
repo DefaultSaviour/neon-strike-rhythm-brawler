@@ -6,7 +6,7 @@ import { PRELOADED_TRACKS, audioEngine } from './audio/audioEngine';
 import { audioStorage } from './utils/audioStorage';
 import { NeonCanvas } from './components/NeonCanvas';
 import { HUD } from './components/HUD';
-import { TrackSelectModal } from './components/TrackSelectModal';
+import { SongSelectScreen } from './components/SongSelectScreen';
 import { AnimationStudio } from './components/AnimationStudio';
 import { GameOverModal } from './components/GameOverModal';
 import { StartChoice, StartScreen } from './components/StartScreen';
@@ -38,6 +38,7 @@ import { midgameAdDue } from './game/adPacing';
 import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from './game/enemyMotion';
 import { getHero, HeroId } from './game/heroes';
 import { adOffer, backdropLayerOf, describeUnlock, RunUnlock } from './game/runUnlocks';
+import { UNLOCK_ORDER } from './game/heroUnlocks';
 import { UnlockFanfare } from './components/UnlockFanfare';
 
 /** Dev builds only: ?adTest makes a midgame ad due at the end of every song, to try the flow. */
@@ -566,7 +567,9 @@ export default function App() {
       {gameStatus === 'MENU' && !showTrackSelect && !showStudio && !menuScreen && (
         <StartScreen
           onChoose={handleStartChoice}
+          heroId={engine.hero.id}
           heroLabel={engine.hero.label}
+          songCount={PRELOADED_TRACKS.length + customTracks.length}
           newUnlocks={unseen.hero.length + unseen.stance.length + unseen.backdrop.length}
           oneButtonMode={audioSettings.oneButtonMode}
           notice={menuNotice}
@@ -732,13 +735,19 @@ export default function App() {
       {/* Animation Studio: custom enemy moves */}
       {showStudio && <AnimationStudio onClose={() => setShowStudio(false)} />}
 
-      {/* Track Select & Custom Audio Importer Modal */}
+      {/* Song select: the song, your fighter, and importing your own songs */}
       {showTrackSelect && (
-        <TrackSelectModal
+        <SongSelectScreen
           currentTrack={selectedTrack}
           highScores={highScores}
-          settings={audioSettings}
           customTracks={customTracks}
+          heroId={engine.hero.id}
+          heroLabel={engine.hero.label}
+          unlockedHeroes={UNLOCK_ORDER.filter((id) => engine.isHeroUnlocked(id))}
+          onSelectHero={(hero) => {
+            handleUpdateSettings({ hero });
+            markSeen('hero', hero);
+          }}
           onSelectTrack={(t) => {
             setSelectedTrack(t);
           }}
@@ -754,7 +763,6 @@ export default function App() {
           }}
           onTrackAdded={handleTrackAdded}
           onTrackDeleted={handleTrackDeleted}
-          onUpdateSettings={handleUpdateSettings}
           onClose={() => {
             setShowTrackSelect(false);
           }}

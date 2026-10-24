@@ -1,4 +1,5 @@
 import { Track, BeatNote, Lane, TimingJudgementType, FrequencyBand, HitSoundMode } from '../types/game';
+import { energyEnvelope, planPreview, PreviewPlan, previewBeatAt, PREVIEW_HOP_SEC } from './preview';
 import { audioStorage } from '../utils/audioStorage';
 import { BeatGrid, gridForNotes, onEighthNote } from './beatGrid';
 import { gridFit, MIN_GRID_FIT, snapToBeats, trackBeatFrames } from './beatSnap';
@@ -249,6 +250,18 @@ class AudioEngine {
   private platformMuted = false;
   public bassMeter: number = 0;
   public trebleMeter: number = 0;
+  /** The song select preview: its own source, faded in and out on top of the music volume */
+  private previewSource: AudioBufferSourceNode | null = null;
+  private previewGain: GainNode | null = null;
+  private previewSession = 0;
+  /** When the preview started (context time), and its plan, for the beat (see getPreviewBeat) */
+  private previewAt = 0;
+  private previewPlan: PreviewPlan | null = null;
+  private previewPlans: Map<string, PreviewPlan> = new Map();
+  /** The music's bass and mids, filtered apart, for the menus' music lines (see getScopes) */
+  private bassScope: AnalyserNode | null = null;
+  private midScope: AnalyserNode | null = null;
+  private scopeData: { bass: Float32Array<ArrayBuffer>; mid: Float32Array<ArrayBuffer> } | null = null;
 
   public getAudioContext(): AudioContext {
     this.initContext();
@@ -286,6 +299,29 @@ class AudioEngine {
       this.platformGain.gain.setValueAtTime(this.platformMuted ? 0 : 1, this.ctx.currentTime);
       this.compressor.connect(this.platformGain);
       this.platformGain.connect(this.ctx.destination);
+
+      // Taps for the menus' music lines: the bass on its own, and the mids on their own.
+      // They end in a silent gain so the browser keeps them running without adding any sound.
+      const bassFilter = this.ctx.createBiquadFilter();
+      bassFilter.type = 'lowpass';
+      bassFilter.frequency.value = 150;
+      const midFilter = this.ctx.createBiquadFilter();
+      midFilter.type = 'bandpass';
+      midFilter.frequency.value = 900;
+      midFilter.Q.value = 0.8;
+      this.bassScope = this.ctx.createAnalyser();
+      this.bassScope.fftSize = 4096;
+      this.midScope = this.ctx.createAnalyser();
+      this.midScope.fftSize = 2048;
+      const silent = this.ctx.createGain();
+      silent.gain.value = 0;
+      this.musicGain.connect(bassFilter);
+      bassFilter.connect(this.bassScope);
+      this.musicGain.connect(midFilter);
+      midFilter.connect(this.midScope);
+      this.bassScope.connect(silent);
+      this.midScope.connect(silent);
+      silent.connect(this.ctx.destination);
     }
 
     if (this.ctx.state === 'suspended' && !this.paused) {
@@ -474,7 +510,92 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Play a song's preview on the song select screen: a loop from a bar before
+   * its drop, faded in. Replaces any preview already playing. Does nothing
+   * while a song is paused (the audio clock is frozen then).
+   */
+  public async playPreview(track: Track): Promise<void> {
+    if (this.paused) return;
+    this.initContext();
+    this.stopPreview();
+    const session = this.previewSession;
+    // Charting the song gives its exact beat grid (and is kept, so the song starts faster after)
+    await this.prepareTrack(track);
+    const buffer = await this.preloadTrackAudio(track);
+    if (!buffer || session !== this.previewSession || this.paused || this.currentSource) return;
+    let plan = this.previewPlans.get(track.id);
+    if (!plan) {
+      const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
+      const grid = gridForNotes(track.notes, track.bpm);
+      plan = planPreview(energyEnvelope(channels, buffer.sampleRate), PREVIEW_HOP_SEC, grid, buffer.duration);
+      this.previewPlans.set(track.id, plan);
+    }
+    const ctx = this.ctx!;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.4);
+    gain.connect(this.musicGain!);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.loopStart = plan.start;
+    source.loopEnd = plan.end;
+    source.connect(gain);
+    const at = ctx.currentTime + 0.05;
+    source.start(at, plan.start);
+    this.previewSource = source;
+    this.previewGain = gain;
+    this.previewAt = at;
+    this.previewPlan = plan;
+  }
+
+  /** Fade out and stop the song select preview. */
+  public stopPreview(fadeSec = 0.2) {
+    // Also cancels a preview still loading
+    this.previewSession++;
+    const source = this.previewSource;
+    const gain = this.previewGain;
+    this.previewSource = null;
+    this.previewGain = null;
+    this.previewPlan = null;
+    if (!source || !gain || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    try {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0, now + fadeSec);
+      source.stop(now + fadeSec + 0.02);
+    } catch {}
+    source.onended = () => gain.disconnect();
+  }
+
+  /**
+   * The music's waveform right now, bass and mids apart (values about -1..1),
+   * for the menus' music lines. Returns null before any sound has played.
+   * Never starts the audio itself.
+   */
+  public getScopes(): { bass: Float32Array<ArrayBuffer>; mid: Float32Array<ArrayBuffer> } | null {
+    if (!this.ctx || !this.bassScope || !this.midScope) return null;
+    // Reused every frame, so drawing the lines makes no garbage
+    if (!this.scopeData) this.scopeData = { bass: new Float32Array(this.bassScope.fftSize), mid: new Float32Array(this.midScope.fftSize) };
+    this.bassScope.getFloatTimeDomainData(this.scopeData.bass);
+    this.midScope.getFloatTimeDomainData(this.scopeData.mid);
+    return this.scopeData;
+  }
+
+  /** The beat of the preview the player is hearing now (for the fighter's moves), or null with no preview. */
+  public getPreviewBeat(): { beat: number; since: number } | null {
+    const plan = this.previewPlan;
+    if (!plan || !this.ctx) return null;
+    const heard = this.ctx.currentTime - this.previewAt - ((this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0));
+    if (heard < 0) return null;
+    const loop = plan.end - plan.start;
+    return previewBeatAt(plan, plan.start + (heard % loop));
+  }
+
   public stop() {
+    this.stopPreview(0.05);
     this.playSessionId++;
     this.isLoadingBuffer = false;
     if (this.paused) {
