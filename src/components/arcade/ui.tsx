@@ -1,0 +1,230 @@
+import React, { useEffect, useRef } from 'react';
+import { HeroId, HEROES } from '../../game/heroes';
+import { fighterTier } from '../../game/fighterTier';
+import { drawFighter } from '../fighterArt';
+import { getOrientedPose, lerpPose } from '../../game/animations';
+import { audioEngine } from '../../audio/audioEngine';
+import { stripeLayout, THROB, throbAfter, waveLevel } from './musicLines';
+
+/**
+ * Shared pieces of the arcade menus (see arcade.css): the full-screen frame
+ * with its slashes, slanted buttons, and a hero drawn big in their stance.
+ */
+
+/** A full-screen arcade menu: dark, with the music lines and halftone behind. */
+export const ArcadeScreen: React.FC<{ children: React.ReactNode; className?: string; label?: string }> = ({ children, className = '', label }) => (
+  <div className={`arc-screen ${className}`} role="dialog" aria-label={label}>
+    <div className="arc-bg" aria-hidden="true" />
+    <MusicStripes />
+    <div className="arc-halftone" aria-hidden="true" />
+    {children}
+  </div>
+);
+
+/**
+ * The two colour slashes behind the menus, throbbing with the music (see
+ * musicLines): pink with the bass, cyan with the mids, each up to 30%
+ * fatter on a hit. Plain when nothing's playing, and when the player has
+ * asked for less motion.
+ */
+export const MusicStripes: React.FC = () => {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    // Each line's recent loudest level: the music is measured against it, so the lines throb as much
+    // in a quiet song (or at low volume) as in a loud one. It lets go slowly, so a fade-out still fades.
+    const peak = { bass: 0, mid: 0 };
+    // ...and its usual level over the last second: a hit is how far above that it jumps
+    const usual = { bass: 0, mid: 0 };
+    const throb = { bass: 0, mid: 0 };
+    let last = performance.now();
+    let raf = 0;
+    const draw = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+      }
+      const scopes = still ? null : audioEngine.getScopes();
+      for (const kind of ['bass', 'mid'] as const) {
+        const rms = scopes ? waveLevel(scopes[kind]) : 0;
+        peak[kind] = Math.max(rms, peak[kind] * Math.exp(-dt / 3));
+        usual[kind] += (rms - usual[kind]) * Math.min(1, dt / 0.8);
+        // How far above its usual level the music jumps, against its loudest; a floor so near-silence stays still
+        const level = (rms - usual[kind]) / Math.max(kind === 'bass' ? 0.01 : 0.005, peak[kind] - usual[kind]);
+        throb[kind] = throbAfter(throb[kind], level, dt);
+      }
+      const layout = stripeLayout(w, h);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.lineCap = 'butt';
+      for (const stripe of layout.stripes) {
+        ctx.lineWidth = stripe.width * (1 + THROB * throb[stripe.kind]);
+        ctx.strokeStyle = stripe.color;
+        ctx.beginPath();
+        ctx.moveTo(stripe.x - layout.along.x * layout.halfLength, stripe.y - layout.along.y * layout.halfLength);
+        ctx.lineTo(stripe.x + layout.along.x * layout.halfLength, stripe.y + layout.along.y * layout.halfLength);
+        ctx.stroke();
+      }
+      if (!still) raf = requestAnimationFrame(draw);
+    };
+    draw(performance.now());
+    const resized = new ResizeObserver(() => still && draw(performance.now()));
+    resized.observe(canvas);
+    return () => {
+      cancelAnimationFrame(raf);
+      resized.disconnect();
+    };
+  }, []);
+  return <canvas ref={ref} className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.85 }} aria-hidden="true" />;
+};
+
+type SlantButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  /** hot: the yellow main action. alt: yellow text on dark (Practice). selected: white */
+  variant?: 'hot' | 'alt' | 'dark' | 'selected';
+  size?: 'sm' | 'md' | 'lg';
+  /** The keyboard key that does the same, shown small (hidden on touch screens) */
+  hotkey?: string;
+};
+
+/** A slanted, fighting-game style button. */
+export const SlantButton: React.FC<SlantButtonProps> = ({ variant = 'dark', size = 'md', hotkey, className = '', children, ...rest }) => (
+  <button
+    type="button"
+    {...rest}
+    className={`arc-btn ${variant === 'hot' ? 'is-hot' : variant === 'alt' ? 'is-alt' : variant === 'selected' ? 'is-selected' : ''} ${size === 'lg' ? 'is-lg' : size === 'sm' ? 'is-sm' : ''} ${className}`}
+  >
+    {children}
+    {hotkey && <span className="arc-key [@media(pointer:coarse)]:hidden">{hotkey}</span>}
+  </button>
+);
+
+/** The beat being heard (see audioEngine.getPreviewBeat): which beat, and how long ago it hit (s). */
+export type BeatNow = () => { beat: number; since: number } | null;
+
+/**
+ * Which pose the fighter is in `since` seconds after striking on a beat:
+ * snap into the strike, hold it, then ease back to their stance.
+ */
+export function strikeBlend(since: number): number {
+  if (since < 0.05) return since / 0.05;
+  if (since < 0.2) return 1;
+  if (since < 0.42) return 1 - (since - 0.2) / 0.22;
+  return 0;
+}
+
+/**
+ * A hero drawn in their fighting stance, filling the element's height, feet
+ * at the bottom. With `animate` they breathe and glow like in a song;
+ * locked heroes are a dark silhouette. With `beatNow` they fight to the
+ * music: each beat they throw their next move, left then right, and they
+ * level up through the glow tiers as the bars go by.
+ */
+export const HeroFigure: React.FC<{ id: HeroId; animate?: boolean; locked?: boolean; beatNow?: BeatNow; className?: string; style?: React.CSSProperties }> = ({
+  id,
+  animate = false,
+  locked = false,
+  beatNow,
+  className = '',
+  style,
+}) => {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  const beatRef = useRef(beatNow);
+  beatRef.current = beatNow;
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const hero = HEROES.find((h) => h.id === id) ?? HEROES[0];
+    let facing: 1 | -1 = 1;
+    const draw = (now: number) => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+      }
+      // A fighter is about 150 units from crest to feet, feet at y = 68: fit that to the height, feet near the bottom
+      const s = (h * 0.85) / 150;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.translate(w / 2, h * 0.95 - 68 * s);
+      ctx.scale(s, s);
+      if (locked) {
+        ctx.filter = 'grayscale(1) brightness(0.35)';
+        ctx.globalAlpha = 0.85;
+      }
+      let pose = hero.idlePose;
+      let combo = 0;
+      const beat = beatRef.current?.();
+      if (beat && hero.moves.length > 0) {
+        const lane = beat.beat % 2 === 0 ? 'right' : 'left';
+        const move = hero.moves[beat.beat % hero.moves.length];
+        const t = strikeBlend(beat.since);
+        if (t > 0) facing = lane === 'left' ? -1 : 1;
+        const stance = facing === 1 ? hero.idlePose : getOrientedPose(hero.idlePose, 'left');
+        pose = lerpPose(stance, getOrientedPose(move.pose, lane), t);
+        // Climbs a tier every few bars, like a combo building up
+        combo = beat.beat * 2;
+      } else if (facing === -1) {
+        pose = getOrientedPose(hero.idlePose, 'left');
+      }
+      drawFighter(ctx, pose, {
+        tier: fighterTier(combo),
+        facing,
+        time: animate || beatRef.current ? now / 1000 : 0.4,
+        hero: id,
+        random: animate || beatRef.current ? Math.random : () => 0.5,
+      });
+      ctx.restore();
+    };
+    // Animated: about 30 frames a second is plenty for a menu (60 when fighting to a beat)
+    const frameMs = beatNow ? 15 : 33;
+    let raf = 0;
+    let last = -Infinity;
+    const loop = (t: number) => {
+      if (t - last >= frameMs) {
+        last = t;
+        draw(t);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    if (animate || beatNow) raf = requestAnimationFrame(loop);
+    else draw(0);
+    const resized = new ResizeObserver(() => draw(performance.now()));
+    resized.observe(canvas);
+    return () => {
+      cancelAnimationFrame(raf);
+      resized.disconnect();
+    };
+    // beatNow is read through a ref; only whether there is one changes the loop
+  }, [id, animate, locked, !!beatNow]);
+  return <canvas ref={ref} className={`block ${className}`} style={style} aria-hidden="true" />;
+};
+
+/** The arcade unit (--u) in pixels, kept up to date as the window changes (for scaling canvases to fit). */
+export function useArcadeUnit(): number {
+  const read = () => Math.min(window.innerHeight / 100, window.innerWidth * 0.005625);
+  const [unit, setUnit] = React.useState(read);
+  useEffect(() => {
+    const onResize = () => setUnit(read());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return unit;
+}
+
+/** Difficulty as 0-3 slanted pips (imported songs have none). */
+export function difficultyPips(difficulty: string): number {
+  return difficulty === 'Easy' ? 1 : difficulty === 'Medium' ? 2 : difficulty === 'Hard' ? 3 : 0;
+}

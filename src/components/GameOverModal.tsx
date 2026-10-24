@@ -1,10 +1,18 @@
 import React, { useEffect } from 'react';
 import { GameScoreState, Track, HighScoreRecord } from '../types/game';
 import type { DeathReport } from '../game/timing';
-import type { RunProgress } from '../game/runProgress';
+import { formatSongTime, RunProgress } from '../game/runProgress';
 import type { HeroId } from '../game/heroes';
 import { RunProgressBar } from './RunProgressBar';
-import { RotateCcw, Music, Trophy, Flame, Target, Home, Play, Shield } from 'lucide-react';
+import { ArcadeScreen, SlantButton, useArcadeUnit } from './arcade/ui';
+
+/**
+ * The results screen, arcade style, all on one screen (no scrolling, even
+ * on a phone on its side): how far you got along the top, a stamp
+ * (DEFEATED / CLEARED! / PRACTICE) with why and your grade on the left,
+ * the numbers on the right, and the buttons along the bottom with Retry
+ * the biggest. R or Space retries.
+ */
 
 interface GameOverModalProps {
   cleared: boolean;
@@ -29,8 +37,8 @@ interface GameOverModalProps {
   /** The hero you played (the progress-bar runner is drawn as them) */
   heroId?: HeroId;
   /**
-   * A small, quiet offer under the buttons: what a rewarded ad would unlock
-   * now (the big one is the last card of the unlock popup). `done` once watched.
+   * A small, quiet offer: what a rewarded ad would unlock now (the big one
+   * is the last card of the unlock popup). `done` once watched.
    */
   adOffer?: { name: string; busy: boolean; done: boolean; notice?: string | null; onWatch: () => void };
   /** A practice run (nothing was saved), and how many hits were taken */
@@ -46,9 +54,23 @@ interface GameOverModalProps {
   bossName?: string;
 }
 
+type Grade = 'SSS' | 'SS' | 'S' | 'A' | 'B' | 'C' | 'D';
+const GRADE_COLORS: Record<Grade, string> = {
+  SSS: '#ffe600',
+  SS: '#00e5ff',
+  S: '#ff1f6d',
+  A: '#34f5a0',
+  B: '#6ea8ff',
+  C: '#ffb347',
+  D: '#8d95b3',
+};
+
+const u = (n: number) => `calc(var(--u) * ${n})`;
+/** The progress bar's own canvas height, in px (its caption is written here instead, at a readable size) */
+const BAR_HEIGHT = 150;
+
 export const GameOverModal: React.FC<GameOverModalProps> = ({
   cleared,
-  track,
   scoreState,
   highScoreRecord,
   onRestart,
@@ -69,6 +91,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   boss = null,
   bossName = 'boss',
 }) => {
+  const unit = useArcadeUnit();
   const forReal = practice && onPlayForReal;
   const [appliedOffset, setAppliedOffset] = React.useState<number | null>(null);
   // Freeze the suggestion when the screen opens: once applied, the setting
@@ -76,291 +99,215 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const [suggestion] = React.useState(suggestedLatencyOffsetMs);
   const [offsetAtOpen] = React.useState(currentLatencyOffsetMs);
   // Only worth suggesting a change if it's a noticeable one.
-  const showSuggestion =
-    suggestion !== null && Math.abs(suggestion - offsetAtOpen) >= 15 && onApplyLatencyOffset !== undefined;
-  const totalHits =
-    scoreState.perfectCount + scoreState.goodCount + scoreState.okCount + scoreState.missCount;
+  const showSuggestion = suggestion !== null && Math.abs(suggestion - offsetAtOpen) >= 15 && onApplyLatencyOffset !== undefined;
+
+  const totalHits = scoreState.perfectCount + scoreState.goodCount + scoreState.okCount + scoreState.missCount;
   const accuracy =
     totalHits > 0
-      ? Math.round(
-          ((scoreState.perfectCount * 100 +
-            scoreState.goodCount * 70 +
-            scoreState.okCount * 40) /
-            (totalHits * 100)) *
-            100
-        )
+      ? Math.round(((scoreState.perfectCount * 100 + scoreState.goodCount * 70 + scoreState.okCount * 40) / (totalHits * 100)) * 100)
       : 0;
+  let grade: Grade = 'D';
+  if (accuracy >= 98 && scoreState.missCount === 0) grade = 'SSS';
+  else if (accuracy >= 94) grade = 'SS';
+  else if (accuracy >= 90) grade = 'S';
+  else if (accuracy >= 80) grade = 'A';
+  else if (accuracy >= 70) grade = 'B';
+  else if (accuracy >= 60) grade = 'C';
 
-  let grade: 'SSS' | 'SS' | 'S' | 'A' | 'B' | 'C' | 'D' = 'D';
-  let gradeColor = 'text-slate-400 border-slate-600';
-  if (accuracy >= 98 && scoreState.missCount === 0) {
-    grade = 'SSS';
-    gradeColor = 'text-amber-300 border-amber-300 drop-shadow-[0_0_15px_rgba(255,230,0,0.8)]';
-  } else if (accuracy >= 94) {
-    grade = 'SS';
-    gradeColor = 'text-cyan-300 border-cyan-300 drop-shadow-[0_0_15px_rgba(0,243,255,0.8)]';
-  } else if (accuracy >= 90) {
-    grade = 'S';
-    gradeColor = 'text-pink-400 border-pink-400 drop-shadow-[0_0_15px_rgba(255,0,127,0.8)]';
-  } else if (accuracy >= 80) {
-    grade = 'A';
-    gradeColor = 'text-emerald-400 border-emerald-400';
-  } else if (accuracy >= 70) {
-    grade = 'B';
-    gradeColor = 'text-blue-400 border-blue-400';
-  } else if (accuracy >= 60) {
-    grade = 'C';
-    gradeColor = 'text-yellow-400 border-yellow-400';
-  }
+  const isNewHighScore = !practice && highScoreRecord && scoreState.score >= highScoreRecord.highScore && scoreState.score > 0;
 
-  const isNewHighScore =
-    !practice && highScoreRecord && scoreState.score >= highScoreRecord.highScore && scoreState.score > 0;
-
-  // Keyboard shortcut listener for fast instant retry: [R] or Space
+  // R or Space: straight back in. Caught first, so the game's own R key doesn't restart a second time.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'r' || e.key === 'R' || e.code === 'Space') {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (e.code === 'KeyR' || e.code === 'Space') {
         e.preventDefault();
+        e.stopPropagation();
         onRestart();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [onRestart]);
 
+  const stamp = practice ? 'Practice' : cleared ? 'Cleared!' : 'Defeated';
+  const stampColor = practice ? 'var(--yellow)' : cleared ? 'var(--cyan)' : 'var(--pink)';
+  const why = practice
+    ? `${practiceHits === 0 ? 'No hits taken!' : `You took ${practiceHits} hit${practiceHits === 1 ? '' : 's'} (red on the bar).`} Practice doesn't count toward unlocks or records.`
+    : !cleared && deathReport
+      ? `Killed by a ${deathReport.enemyName} on the ${deathReport.lane}. ${deathReport.reason}`
+      : cleared && boss === 'standing'
+        ? `The ${bossName} survived. Hit back every fist to knock it out.`
+        : cleared
+          ? 'You made it to the end of the song.'
+          : 'An enemy got through.';
+
+  // The progress bar is drawn at a fixed height; scale it to fit the top of the screen
+  const barScale = (unit * 18) / BAR_HEIGHT;
+  const best = runProgress?.previousBest ?? null;
+  const small = `max(10px, ${u(2.3)})`;
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center p-4 overflow-y-auto bg-black/85 backdrop-blur-md">
-      {/* my-auto: centred when it fits, scrolls from the top when it doesn't (short landscape phones) */}
-      <div className="my-auto w-full flex flex-col items-center gap-4">
-        {/* How far the run got: the length of the screen, above the card (capped on very wide screens) */}
-        {runProgress && (
-          <div className="w-full max-w-5xl px-2">
-            <RunProgressBar run={runProgress} heroId={heroId} />
+    <ArcadeScreen label="Results">
+      {/* How far you got */}
+      {runProgress && (
+        <div className="absolute" style={{ left: u(5), right: u(5), top: u(2), height: u(23) }}>
+          <div style={{ width: `${100 / barScale}%`, transform: `scale(${barScale})`, transformOrigin: '0 0' }}>
+            <RunProgressBar run={runProgress} heroId={heroId} hideCaption />
           </div>
-        )}
-        <div
-          className={`w-full max-w-md bg-[#0b0d1e] border rounded-xl shadow-2xl p-6 flex flex-col items-center text-center ${
-            cleared
-              ? 'border-cyan-500/50 shadow-[0_0_40px_rgba(0,243,255,0.2)]'
-              : 'border-pink-500/50 shadow-[0_0_40px_rgba(255,0,127,0.2)]'
-          }`}
-        >
-          {/* Outcome Header */}
-          <div className="w-full flex flex-col items-center mb-5">
-            <div
-              className={`text-2xl md:text-3xl font-black tracking-widest uppercase ${
-                cleared
-                  ? 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400'
-                  : 'text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-red-500'
-              }`}
-            >
-              {practice ? 'Practice Run' : cleared ? 'Track Cleared' : 'Defeated'}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">
-              {practice
-                ? `${practiceHits === 0 ? 'No hits taken!' : `You took ${practiceHits} hit${practiceHits === 1 ? '' : 's'} (red on the bar).`} Practice doesn't count toward unlocks or records.`
-                : cleared
-                  ? 'Flawless rhythm execution'
-                  : 'An enemy breached your strike line!'}
-            </div>
-            {boss === 'ko' && (
-              <div className="mt-3 px-4 py-1.5 rounded-lg bg-amber-400 text-black text-sm font-black tracking-[0.2em] shadow-[0_0_18px_rgba(255,213,74,0.6)]">
-                BOSS KO!
-              </div>
-            )}
-            {boss === 'standing' && cleared && (
-              <div className="mt-3 px-3 py-2 rounded-lg bg-slate-900/80 border border-amber-400/50 text-sm text-slate-200">
-                <span className="font-bold text-amber-300">The {bossName} survived.</span> Hit back every fist to knock it out.
-              </div>
-            )}
-            {!cleared && deathReport && (
-              <div className="mt-3 px-3 py-2 rounded-lg bg-red-950/40 border border-red-500/40 text-sm text-slate-200">
-                <div className="font-bold text-red-300">
-                  Killed by a {deathReport.enemyName} on the {deathReport.lane.toUpperCase()}.
-                </div>
-                <div className="mt-0.5">{deathReport.reason}</div>
-              </div>
-            )}
-          </div>
-
-          {/* Grade Badge */}
-          <div className="relative mb-6">
-            <div
-              className={`w-20 h-20 rounded-2xl border-2 flex items-center justify-center font-black text-4xl font-mono bg-slate-900/80 ${gradeColor}`}
-            >
-              {grade}
-            </div>
-            {isNewHighScore && (
-              <div className="absolute -top-2 -right-3 px-2 py-0.5 rounded-full bg-amber-400 text-black text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,230,0,0.8)]">
-                New PB
-              </div>
-            )}
-          </div>
-
-          {/* Score & Combo Overview */}
-          <div className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-4 mb-5 flex flex-col gap-3">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-400 flex items-center gap-1.5">
-                <Trophy className="w-4 h-4 text-amber-400" />
-                Final Score
-              </span>
-              <span className="font-mono font-bold text-lg text-slate-100 tabular-nums">
-                {scoreState.score.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-400 flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-pink-400" />
-                Max Combo
-              </span>
-              <span className="font-mono font-bold text-lg text-cyan-400 tabular-nums">
-                {scoreState.maxCombo}x
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-400 flex items-center gap-1.5">
-                <Target className="w-4 h-4 text-emerald-400" />
-                Accuracy
-              </span>
-              <span className="font-mono font-bold text-lg text-slate-100 tabular-nums">
-                {accuracy}%
-              </span>
-            </div>
-
-            <div className="h-px bg-slate-800 my-1" />
-
-            {/* Hit Breakdown */}
-            <div className="grid grid-cols-4 gap-2 text-center text-xs font-mono">
-              <div className="flex flex-col">
-                <span className="text-cyan-400 font-bold">{scoreState.perfectCount}</span>
-                <span className="text-[10px] text-slate-500">PERFECT</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-pink-400 font-bold">{scoreState.goodCount}</span>
-                <span className="text-[10px] text-slate-500">GOOD</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-amber-400 font-bold">{scoreState.okCount}</span>
-                <span className="text-[10px] text-slate-500">OK</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-red-400 font-bold">{scoreState.missCount}</span>
-                <span className="text-[10px] text-slate-500">MISS</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Timing feedback: tells players which way they're off, and offers a fix */}
-          {averageTimingErrorMs !== null && (
-            <div className="w-full mb-4 p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-xs text-slate-300">
-              <div className="flex justify-between">
-                <span>Your average timing</span>
-                <span className="font-mono font-bold text-slate-100">
-                  {Math.abs(averageTimingErrorMs) <= 5
-                    ? 'spot on'
-                    : `${Math.abs(averageTimingErrorMs)} ms ${averageTimingErrorMs < 0 ? 'early' : 'late'}`}
-                </span>
-              </div>
-              {showSuggestion && (
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="text-[11px] text-slate-400">
-                    Consistently {averageTimingErrorMs < 0 ? 'early' : 'late'}? Your audio may be delayed.
-                  </span>
-                  <button
-                    onClick={() => {
-                      onApplyLatencyOffset!(suggestion!);
-                      setAppliedOffset(suggestion);
-                    }}
-                    disabled={appliedOffset !== null}
-                    className="shrink-0 px-2.5 py-1.5 rounded bg-cyan-950 border border-cyan-500/50 text-cyan-300 font-mono font-bold hover:bg-cyan-900 disabled:opacity-60 cursor-pointer"
-                  >
-                    {appliedOffset !== null
-                      ? `Offset set to ${appliedOffset} ms`
-                      : `Set offset to ${suggestion} ms`}
-                  </button>
-                </div>
+          <div className="absolute inset-x-0 flex justify-between font-black uppercase tracking-[0.12em]" style={{ top: u(18.6), fontSize: small }}>
+            <span className="text-[color:var(--muted)]">
+              {runProgress.hits ? (
+                `${runProgress.hits.length} hit${runProgress.hits.length === 1 ? '' : 's'} taken`
+              ) : runProgress.cleared ? (
+                'Whole song cleared'
+              ) : (
+                <>
+                  Made it to {formatSongTime(runProgress.reachedSec)} <span className="text-white">· {Math.round(runProgress.fraction * 100)}%</span>
+                </>
               )}
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="w-full flex flex-col gap-2.5">
-            {/* After practice, the main button is the real thing */}
-            {forReal && (
-              <button
-                onClick={onPlayForReal}
-                className="w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                <span>Play for Real</span>
-              </button>
-            )}
-            <button
-              onClick={onRestart}
-              className={
-                forReal
-                  ? 'w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-400/60 font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer'
-                  : 'w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer'
-              }
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>
-                {forReal ? 'Practice Again' : 'Restart Song'}
-                <span className="[@media(pointer:coarse)]:hidden"> (Press Space / R)</span>
-              </span>
-            </button>
-
-            {/* After a real run, learn the song without it ending on a hit */}
-            {!practice && onPractice && (
-              <button
-                onClick={onPractice}
-                title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records"
-                className="w-full py-2.5 rounded-lg bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border border-amber-400/60 font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Shield className="w-4 h-4" />
-                <span>Practice This Song</span>
-              </button>
-            )}
-
-            <button
-              onClick={onOpenSelect}
-              className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Music className="w-4 h-4 text-cyan-400" />
-              <span>Choose Another Track</span>
-            </button>
-
-            <button
-              onClick={onMainMenu}
-              className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Home className="w-4 h-4 text-cyan-400" />
-              <span>Main Menu</span>
-            </button>
+            </span>
+            <span className={runProgress.isNewBest && best !== null ? 'text-[color:var(--yellow)]' : 'text-[color:var(--muted)]'}>
+              {best === null ? 'First attempt' : runProgress.isNewBest ? `New best! Was ${Math.round(best * 100)}%` : `Best ${Math.round(best * 100)}%`}
+            </span>
           </div>
+        </div>
+      )}
 
-          {/* Kept small on purpose: the real offer is in the unlock popup */}
-          {adOffer && (
-            <div className="mt-3 text-[11px] text-slate-500">
-              {adOffer.done ? (
-                <span className="text-amber-300">{adOffer.name} unlocked and equipped!</span>
+      {/* Left: the stamp, why, and the grade */}
+      <div className="absolute flex flex-col items-start" style={{ left: u(6), top: u(31), width: '44%', gap: u(1.4) }}>
+        <div className="arc-display arc-stamp" style={{ fontSize: u(12), color: stampColor, textShadow: `${u(0.6)} ${u(0.6)} 0 #000, ${u(-0.4)} 0 0 var(--cyan)`, transformOrigin: 'left center', ['--tilt' as string]: '-4deg' }}>
+          {stamp}
+        </div>
+        <div className="font-bold text-[#ffc2d6] line-clamp-2" style={{ fontSize: `max(11px, ${u(2.7)})`, lineHeight: 1.25 }}>
+          {why}
+        </div>
+        <div className="flex items-end" style={{ gap: u(2.4), marginTop: u(0.6) }}>
+          <span className="arc-display" style={{ fontSize: u(17), lineHeight: 0.8, color: '#fff', WebkitTextStroke: `${u(0.3)} ${GRADE_COLORS[grade]}`, textShadow: `0 0 ${u(2)} ${GRADE_COLORS[grade]}` }}>
+            {grade}
+          </span>
+          <div className="flex flex-col items-start" style={{ gap: u(0.8), paddingBottom: u(0.4) }}>
+            {isNewHighScore && <span className="arc-tag">NEW BEST</span>}
+            {boss === 'ko' && <span className="arc-tag" style={{ background: 'var(--pink)', color: '#fff' }}>BOSS K.O.!</span>}
+            {adOffer &&
+              (adOffer.done ? (
+                <span className="font-bold text-[color:var(--yellow)]" style={{ fontSize: small }}>
+                  {adOffer.name} unlocked and equipped!
+                </span>
               ) : (
                 <button
                   type="button"
                   onClick={adOffer.onWatch}
                   disabled={adOffer.busy}
-                  className="min-h-8 px-2 text-cyan-300/80 hover:text-cyan-200 underline decoration-dotted underline-offset-2 disabled:opacity-60 cursor-pointer"
+                  className="text-left font-bold text-[color:var(--cyan)] underline decoration-dotted underline-offset-2 disabled:opacity-60 cursor-pointer"
+                  style={{ fontSize: small, minHeight: 32 }}
                 >
-                  {adOffer.busy ? 'Loading ad…' : `▶ Watch an ad to unlock ${adOffer.name} now`}
+                  {adOffer.busy ? 'Loading ad…' : `▶ Watch an ad: unlock ${adOffer.name} now`}
                 </button>
-              )}
-              {adOffer.notice && !adOffer.done && <div className="text-pink-300/80">{adOffer.notice}</div>}
-            </div>
-          )}
+              ))}
+            {adOffer?.notice && !adOffer.done && <span className="text-pink-300" style={{ fontSize: small }}>{adOffer.notice}</span>}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Right: the numbers */}
+      <div className="absolute flex flex-col" style={{ right: u(4), top: u(28), width: '44%', gap: u(1) }}>
+        {(
+          [
+            ['Score', scoreState.score.toLocaleString()],
+            ['Best combo', `${scoreState.maxCombo}×`],
+            ['Accuracy', `${accuracy}%`],
+          ] as const
+        ).map(([label, value], i) => (
+          <div key={label} className="arc-strip arc-in-right flex items-center" style={{ height: u(7.4), padding: `0 ${u(4)}`, animationDelay: `${0.05 + i * 0.05}s` }}>
+            <span className="font-black tracking-[0.16em] uppercase text-[color:var(--muted)]" style={{ fontSize: small }}>
+              {label}
+            </span>
+            <b className="arc-display ml-auto" style={{ fontSize: u(5) }}>
+              {value}
+            </b>
+          </div>
+        ))}
+        <div className="grid grid-cols-4 arc-in-right" style={{ gap: u(0.8), animationDelay: '0.2s' }}>
+          {(
+            [
+              ['Perfect', scoreState.perfectCount, '#00e5ff', '#000'],
+              ['Good', scoreState.goodCount, '#ff1f6d', '#fff'],
+              ['OK', scoreState.okCount, '#ffe600', '#000'],
+              ['Miss', scoreState.missCount, '#2c3250', '#fff'],
+            ] as const
+          ).map(([label, n, bg, fg]) => (
+            <div key={label} className="flex flex-col items-center justify-center font-black uppercase" style={{ height: u(8.6), background: bg, color: fg, transform: 'skewX(-10deg)', fontSize: `max(9px, ${u(1.8)})`, letterSpacing: '0.12em' }}>
+              {label}
+              <b className="arc-display" style={{ fontSize: u(4.2), letterSpacing: 0 }}>
+                {n}
+              </b>
+            </div>
+          ))}
+        </div>
+        {/* Timing: which way you're off, and a fix */}
+        {averageTimingErrorMs !== null && (
+          <div className="flex items-center justify-between" style={{ gap: u(1.6), marginTop: u(0.4), fontSize: small }}>
+            <span className="text-[color:var(--muted)] font-bold">
+              Timing:{' '}
+              <span className="text-white">
+                {Math.abs(averageTimingErrorMs) <= 5 ? 'spot on' : `${Math.abs(averageTimingErrorMs)} ms ${averageTimingErrorMs < 0 ? 'early' : 'late'}`}
+              </span>
+            </span>
+            {showSuggestion && (
+              <SlantButton
+                size="sm"
+                disabled={appliedOffset !== null}
+                onClick={() => {
+                  onApplyLatencyOffset!(suggestion!);
+                  setAppliedOffset(suggestion);
+                }}
+                style={{ fontSize: `max(11px, ${u(2.6)})` }}
+                title="Your presses were consistently off: this moves the timing to match your setup"
+              >
+                {appliedOffset !== null ? `Offset set: ${appliedOffset} ms` : `Fix it: ${suggestion} ms`}
+              </SlantButton>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Buttons */}
+      <div className="absolute flex" style={{ left: u(5), right: u(4), bottom: u(3.5), gap: u(1.2) }}>
+        <SlantButton onClick={onMainMenu} className="flex-1" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
+          Menu
+        </SlantButton>
+        <SlantButton onClick={onOpenSelect} className="flex-1" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
+          Songs
+        </SlantButton>
+        {forReal ? (
+          <>
+            <SlantButton variant="alt" hotkey="R" onClick={onRestart} className="flex-[1.3]" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
+              Practice again
+            </SlantButton>
+            <SlantButton variant="hot" onClick={onPlayForReal} className="flex-[2] arc-pulse" style={{ padding: 0, height: u(12), fontSize: u(6) }}>
+              Fight for real
+            </SlantButton>
+          </>
+        ) : (
+          <>
+            {!practice && onPractice && (
+              <SlantButton
+                variant="alt"
+                onClick={onPractice}
+                className="flex-[1.3]"
+                style={{ padding: 0, height: u(12), fontSize: u(3.8) }}
+                title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records"
+              >
+                Practice
+              </SlantButton>
+            )}
+            <SlantButton variant="hot" hotkey="SPACE" onClick={onRestart} className="flex-[2] arc-pulse" style={{ padding: 0, height: u(12), fontSize: u(6.4) }}>
+              Retry
+            </SlantButton>
+          </>
+        )}
+      </div>
+    </ArcadeScreen>
   );
 };

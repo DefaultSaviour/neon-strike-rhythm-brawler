@@ -25,6 +25,8 @@ interface RunProgressBarProps {
   run: RunProgress;
   /** The hero you played, so the runner is the same character */
   heroId?: HeroId;
+  /** Leave out the line of text under the bar (the results screen writes its own, at its own size) */
+  hideCaption?: boolean;
 }
 
 const HEIGHT = 150;
@@ -40,7 +42,7 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run, heroId }) => {
+export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run, heroId, hideCaption = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -101,23 +103,25 @@ export const RunProgressBar: React.FC<RunProgressBarProps> = ({ run, heroId }) =
         role="img"
         aria-label={`Progress: reached ${formatSongTime(run.reachedSec)} of ${formatSongTime(run.durationSec)}`}
       />
-      <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-[11px] font-mono text-slate-400">
-        <span>
-          {run.hits
-            ? `Practice: ${run.hits.length} hit${run.hits.length === 1 ? '' : 's'} taken`
-            : run.cleared
-              ? 'Cleared the whole song'
-              : `Made it to ${formatSongTime(run.reachedSec)}`}{' '}
-          {!run.hits && <span className="text-slate-200 font-bold">({Math.round(run.fraction * 100)}%)</span>}
-        </span>
-        <span className={run.isNewBest && best !== null ? 'text-amber-300 font-bold' : ''}>
-          {best === null
-            ? 'First attempt'
-            : run.isNewBest
-              ? `New best! (was ${Math.round(best * 100)}%)`
-              : `Best: ${Math.round(best * 100)}%`}
-        </span>
-      </div>
+      {!hideCaption && (
+        <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-[11px] font-mono text-slate-400">
+          <span>
+            {run.hits
+              ? `Practice: ${run.hits.length} hit${run.hits.length === 1 ? '' : 's'} taken`
+              : run.cleared
+                ? 'Cleared the whole song'
+                : `Made it to ${formatSongTime(run.reachedSec)}`}{' '}
+            {!run.hits && <span className="text-slate-200 font-bold">({Math.round(run.fraction * 100)}%)</span>}
+          </span>
+          <span className={run.isNewBest && best !== null ? 'text-amber-300 font-bold' : ''}>
+            {best === null
+              ? 'First attempt'
+              : run.isNewBest
+                ? `New best! (was ${Math.round(best * 100)}%)`
+                : `Best: ${Math.round(best * 100)}%`}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
