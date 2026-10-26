@@ -3,12 +3,13 @@ import { Track, HighScoreRecord } from '../types/game';
 import { PRELOADED_TRACKS, audioEngine } from '../audio/audioEngine';
 import type { HeroId } from '../game/heroes';
 import { ArcadeScreen, difficultyPips, HeroFigure, SlantButton } from './arcade/ui';
+import { useDragScroll } from './arcade/dragScroll';
 
 /**
  * Pick a song, and who to fight as, in one place (arcade style). Your
  * fighter is on the left (‹ › to switch between the ones you've earned);
- * the songs are slanted strips on the right, the picked one white and
- * bigger, with its difficulty, BPM and your best grade. One FIGHT! button
+ * the songs are slanted strips on the right (drag to scroll), the picked one
+ * white and popped out about 10% bigger, with its difficulty, BPM and your best grade. One FIGHT! button
  * plays it, Practice plays it without dying. Your own songs can be imported
  * from the last strip.
  *
@@ -58,6 +59,8 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
   const [importError, setImportError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const listRef = useRef<HTMLDivElement | null>(null);
+  useDragScroll(listRef);
 
   const heroIndex = Math.max(0, unlockedHeroes.indexOf(heroId));
   const switchHero = (step: number) => {
@@ -170,7 +173,8 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
 
       {/* Songs */}
       <div
-        className="absolute arc-scroll flex flex-col"
+        ref={listRef}
+        className="absolute arc-scroll flex flex-col select-none"
         role="listbox"
         aria-label="Songs"
         style={{ left: '36%', right: u(4), top: u(18), bottom: u(21), gap: u(1.2), paddingRight: u(1) }}
@@ -192,7 +196,18 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
               title={t.description}
               onClick={() => (sel ? onPlayTrack(t) : onSelectTrack(t))}
               className={`arc-strip arc-in-right shrink-0 flex items-center text-left cursor-pointer border-0 ${sel ? 'bg-white text-black' : 'text-white hover:bg-[#1b1b29]'}`}
-              style={{ animationDelay: `${Math.min(i, 8) * 0.03}s`, minHeight: 44, height: sel ? u(13) : u(10), padding: `0 ${u(4)}`, gap: u(2.2) }}
+              style={{
+                animationDelay: `${Math.min(i, 8) * 0.03}s`,
+                minHeight: 44,
+                height: sel ? u(13) : u(10),
+                // The picked song pops out: the others sit 4.5% in from each side, so it's 10% wider
+                marginInline: sel ? 0 : '4.5%',
+                padding: `0 ${u(4)}`,
+                gap: u(2.2),
+                // ...with a pink lip along its bottom edge, like it's raised off the list
+                background: sel ? `linear-gradient(to top, var(--pink) ${u(0.9)}, #fff ${u(0.9)})` : undefined,
+                transition: 'margin 0.16s cubic-bezier(0.2, 0.9, 0.2, 1), height 0.16s cubic-bezier(0.2, 0.9, 0.2, 1)',
+              }}
             >
               <span className="arc-display" style={{ fontSize: u(3.6), width: u(5), color: sel ? '#000' : '#3c4363' }}>
                 {String(i + 1).padStart(2, '0')}
@@ -237,7 +252,7 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
           type="button"
           onClick={() => !analyzing && fileRef.current?.click()}
           className="arc-strip shrink-0 flex items-center cursor-pointer border-0 text-[color:var(--yellow)] hover:bg-[#1b1b29]"
-          style={{ minHeight: 44, height: u(10), padding: `0 ${u(4)}`, gap: u(2) }}
+          style={{ minHeight: 44, height: u(10), marginInline: '4.5%', padding: `0 ${u(4)}`, gap: u(2) }}
         >
           <span className="arc-display" style={{ fontSize: u(4.2) }}>
             {analyzing ? `Reading your song… ${Math.round(progress * 100)}%` : '+ Import your own song'}

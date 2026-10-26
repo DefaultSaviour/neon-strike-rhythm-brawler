@@ -563,15 +563,22 @@ export default function App() {
         />
       )}
 
-      {/* Title screen: New Game, Unlocks, Options, Pose Studio */}
+      {/* Title screen: Play, Unlocks, Records, Options, the 1 / 2 button switch */}
       {gameStatus === 'MENU' && !showTrackSelect && !showStudio && !menuScreen && (
         <StartScreen
           onChoose={handleStartChoice}
           heroId={engine.hero.id}
           heroLabel={engine.hero.label}
+          unlockedHeroes={UNLOCK_ORDER.filter((id) => engine.isHeroUnlocked(id))}
+          onSelectHero={(hero) => {
+            handleUpdateSettings({ hero });
+            markSeen('hero', hero);
+          }}
+          stance={engine.enemyMotion}
           songCount={PRELOADED_TRACKS.length + customTracks.length}
           newUnlocks={unseen.hero.length + unseen.stance.length + unseen.backdrop.length}
           oneButtonMode={audioSettings.oneButtonMode}
+          onToggleOneButtonMode={handleToggleOneButtonMode}
           notice={menuNotice}
         />
       )}

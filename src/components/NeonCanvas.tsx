@@ -9,6 +9,7 @@ import { ArenaLayout, computeArenaLayout, FIGHTER_HEIGHT, FLOOR_Y, SPAWN_DISTANC
 import { HIT_WINDOWS } from '../game/timing';
 import { HIT_LOG_FADE_SECONDS, HIT_LOG_SECONDS, hitLogArea, HitLogEntry, HudBox, JUDGEMENT_COLORS } from '../game/hitLog';
 import { Enemy } from '../types/game';
+import type { DebrisPiece } from '../game/debrisPhysics';
 import { enemyPoseFor } from '../game/customAnimation';
 import { getActiveAnimations } from '../game/animationLibrary';
 import { drawEnemyArt } from './enemyArt';
@@ -328,11 +329,20 @@ function drawFloorShadowsAndReflections(ctx: CanvasRenderingContext2D, engine: G
 
 // SHATTERED ENEMY PIECES: rigid sticks, heads and armour shards (see debrisPhysics.ts)
 function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
+  drawDebrisList(ctx, engine.debris);
+}
+
+/**
+ * The pieces struck enemies break into (also used by the title screen's
+ * fight). In the game fresh pieces glow white-hot; `whiteHot: false` keeps
+ * them in their own colour (the title, where the white was distracting).
+ */
+export function drawDebrisList(ctx: CanvasRenderingContext2D, pieces: DebrisPiece[], { whiteHot = true }: { whiteHot?: boolean } = {}) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  for (const p of engine.debris) {
+  for (const p of pieces) {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
@@ -342,7 +352,7 @@ function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
 
     // Same solid-neon look as the bodies they came from. Fresh pieces glow
     // white-hot and cool down to the enemy's colour.
-    const outline = heatColor(p.color, p.heat * 0.85);
+    const outline = whiteHot ? heatColor(p.color, p.heat * 0.85) : p.color;
     // Only fresh (hot) pieces glow; cooled pieces stay quiet in the background.
     const glow = p.heat > 0.15 ? 6 + p.heat * 14 : 0;
     const fill = bodyFill(p.color);
@@ -353,7 +363,7 @@ function drawDebrisPieces(ctx: CanvasRenderingContext2D, engine: GameEngine) {
       ctx.fillRect(p.radius * 0.1, -1.5, p.radius * 0.7, 3); // visor
     } else if (p.shape === 'segment') {
       neonLimb(ctx, { x: -p.halfLength, y: 0 }, { x: p.halfLength, y: 0 }, p.radius * 2, outline, fill, glow);
-      if (p.heat > 0.05) {
+      if (whiteHot && p.heat > 0.05) {
         // Freshly cut ends glow
         ctx.fillStyle = colorWithAlpha('#fff6c0', p.heat);
         ctx.shadowColor = '#fff6c0';

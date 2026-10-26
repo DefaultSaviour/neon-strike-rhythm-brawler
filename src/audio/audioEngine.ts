@@ -258,6 +258,9 @@ class AudioEngine {
   private previewAt = 0;
   private previewPlan: PreviewPlan | null = null;
   private previewPlans: Map<string, PreviewPlan> = new Map();
+  /** Which song the preview is, and whether it plays on to the end (the title screen) or loops 8 bars */
+  private previewTrackId: string | null = null;
+  private previewToEnd = false;
   /** The music's bass and mids, filtered apart, for the menus' music lines (see getScopes) */
   private bassScope: AnalyserNode | null = null;
   private midScope: AnalyserNode | null = null;
@@ -514,10 +517,17 @@ class AudioEngine {
    * Play a song's preview on the song select screen: a loop from a bar before
    * its drop, faded in. Replaces any preview already playing. Does nothing
    * while a song is paused (the audio clock is frozen then).
+   *
+   * With `toEnd` (the title screen's music) it starts at the same place but
+   * plays on to the end of the song, then goes back to the drop. Asking for
+   * the same song the same way while it's playing leaves it playing, so
+   * coming back to the title doesn't restart it.
    */
-  public async playPreview(track: Track): Promise<void> {
+  public async playPreview(track: Track, opts: { toEnd?: boolean } = {}): Promise<void> {
     if (this.paused) return;
     this.initContext();
+    const toEnd = !!opts.toEnd;
+    if (this.previewSource && this.previewTrackId === track.id && this.previewToEnd === toEnd) return;
     this.stopPreview();
     const session = this.previewSession;
     // Charting the song gives its exact beat grid (and is kept, so the song starts faster after)
@@ -538,6 +548,8 @@ class AudioEngine {
     gain.connect(this.musicGain!);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
+    // On to the end of the song, or round the 8 bars
+    if (toEnd) plan = { ...plan, end: buffer.duration };
     source.loop = true;
     source.loopStart = plan.start;
     source.loopEnd = plan.end;
@@ -548,6 +560,8 @@ class AudioEngine {
     this.previewGain = gain;
     this.previewAt = at;
     this.previewPlan = plan;
+    this.previewTrackId = track.id;
+    this.previewToEnd = toEnd;
   }
 
   /** Fade out and stop the song select preview. */
@@ -559,6 +573,7 @@ class AudioEngine {
     this.previewSource = null;
     this.previewGain = null;
     this.previewPlan = null;
+    this.previewTrackId = null;
     if (!source || !gain || !this.ctx) return;
     const now = this.ctx.currentTime;
     try {
@@ -584,14 +599,32 @@ class AudioEngine {
     return this.scopeData;
   }
 
-  /** The beat of the preview the player is hearing now (for the fighter's moves), or null with no preview. */
-  public getPreviewBeat(): { beat: number; since: number } | null {
+  /**
+   * The beat of the preview the player is hearing now (for the fighter's
+   * moves), how long ago it hit, and the seconds per beat; null with no
+   * preview, or before the sound has started (a browser holds it until
+   * the first tap or key).
+   */
+  public getPreviewBeat(): { beat: number; since: number; period: number } | null {
     const plan = this.previewPlan;
     if (!plan || !this.ctx) return null;
     const heard = this.ctx.currentTime - this.previewAt - ((this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0));
     if (heard < 0) return null;
     const loop = plan.end - plan.start;
-    return previewBeatAt(plan, plan.start + (heard % loop));
+    return { ...previewBeatAt(plan, plan.start + (heard % loop)), period: plan.period };
+  }
+
+  /**
+   * Where in the song the preview the player is hearing is (seconds), and
+   * the seconds per beat; null with no preview or before the sound starts.
+   * The title screen's fight times its enemies to the song's chart with it.
+   */
+  public getPreviewSongTime(): { songTime: number; period: number } | null {
+    const plan = this.previewPlan;
+    if (!plan || !this.ctx) return null;
+    const heard = this.ctx.currentTime - this.previewAt - ((this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0));
+    if (heard < 0) return null;
+    return { songTime: plan.start + (heard % (plan.end - plan.start)), period: plan.period };
   }
 
   public stop() {

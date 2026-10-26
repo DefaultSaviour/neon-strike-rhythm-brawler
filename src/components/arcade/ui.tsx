@@ -106,8 +106,8 @@ export const SlantButton: React.FC<SlantButtonProps> = ({ variant = 'dark', size
   </button>
 );
 
-/** The beat being heard (see audioEngine.getPreviewBeat): which beat, and how long ago it hit (s). */
-export type BeatNow = () => { beat: number; since: number } | null;
+/** The beat being heard (see audioEngine.getPreviewBeat): which beat, how long ago it hit (s), and seconds per beat. */
+export type BeatNow = () => { beat: number; since: number; period?: number } | null;
 
 /**
  * Which pose the fighter is in `since` seconds after striking on a beat:
