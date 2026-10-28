@@ -1238,10 +1238,16 @@ export class GameEngine {
     }, 700);
   }
 
+  /** How long this song plays (s): the real audio's length, or sooner when the run is cut short (?short) */
+  get songLength(): number {
+    if (!this.track) return 0;
+    return Math.min(this.track.audioBuffer?.duration ?? this.track.duration, this.songEndAt);
+  }
+
   /** Save how far this run got, and compare it with the best attempt on this song. */
   private recordProgress(cleared: boolean) {
     if (!this.track || this.lastRun) return;
-    const duration = Math.min(this.track.audioBuffer?.duration ?? this.track.duration, this.songEndAt);
+    const duration = this.songLength;
     this.lastRun = this.practice || BOSS_TEST
       ? practiceRunProgress(this.track.id, this.songTime, duration, cleared, this.practiceHits, progressStore())
       : recordRunProgress(this.track.id, this.songTime, duration, cleared, progressStore());

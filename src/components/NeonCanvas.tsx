@@ -42,10 +42,14 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
     let lastTimestamp = performance.now();
     let conveyorOffset = 0;
 
+    // The canvas fills its box (the game's 4:3-limited frame), not the whole window
+    let width = 1;
+    let height = 1;
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
-      const width = window.innerWidth;
-      const height = window.innerHeight;
+      const box = canvas.parentElement;
+      width = Math.max(1, box ? box.clientWidth : window.innerWidth);
+      height = Math.max(1, box ? box.clientHeight : window.innerHeight);
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       canvas.style.width = `${width}px`;
@@ -54,6 +58,8 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
     };
 
     window.addEventListener('resize', resize);
+    const watch = typeof ResizeObserver !== 'undefined' && canvas.parentElement ? new ResizeObserver(resize) : null;
+    if (watch && canvas.parentElement) watch.observe(canvas.parentElement);
     resize();
 
     // Where the HUD's score row is, so the hit lists keep clear of it (re-read now and then)
@@ -66,9 +72,13 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       const r = el?.getBoundingClientRect();
       // Its three blocks: combo, rank, score
       const [combo, rank, score] = el ? [...el.children].map((c) => c.getBoundingClientRect()) : [];
+      // In the canvas's own coordinates (the frame can sit lower down, below a bar)
+      const at = canvas.getBoundingClientRect();
+      const x = (v: number) => v - at.left;
+      const y = (v: number) => v - at.top;
       hud =
         r && r.width > 0 && combo && rank && score
-          ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom, comboRight: combo.right, rankLeft: rank.left, rankRight: rank.right, scoreLeft: score.left }
+          ? { left: x(r.left), right: x(r.right), top: y(r.top), bottom: y(r.bottom), comboRight: x(combo.right), rankLeft: x(rank.left), rankRight: x(rank.right), scoreLeft: x(score.left) }
           : null;
       return hud;
     };
@@ -77,8 +87,6 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
       const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
       lastTimestamp = timestamp;
 
-      const width = window.innerWidth;
-      const height = window.innerHeight;
       const dpr = window.devicePixelRatio || 1;
       const layout = computeArenaLayout(width, height);
 
@@ -165,6 +173,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({ engine, scanlines }) => 
 
     return () => {
       window.removeEventListener('resize', resize);
+      watch?.disconnect();
       cancelAnimationFrame(animationFrameId);
     };
   }, [engine, scanlines]);

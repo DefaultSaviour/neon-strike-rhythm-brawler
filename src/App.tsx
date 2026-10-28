@@ -8,6 +8,7 @@ import { NeonCanvas } from './components/NeonCanvas';
 import { HUD } from './components/HUD';
 import { SongSelectScreen } from './components/SongSelectScreen';
 import { AnimationStudio } from './components/AnimationStudio';
+import { PauseScreen } from './components/PauseScreen';
 import { GameOverModal } from './components/GameOverModal';
 import { StartChoice, StartScreen } from './components/StartScreen';
 import { UnlocksScreen } from './components/UnlocksScreen';
@@ -530,27 +531,37 @@ export default function App() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#060713] text-slate-100 select-none">
       {/* 60FPS Neon Vector Canvas Game Arena */}
-      <NeonCanvas engine={engine} scanlines={audioSettings.scanlines} />
+      {/* The fight and its HUD, never taller than 4:3 (like the menus): dark bars beyond, and in an
+          upright window the top bar says to turn the phone */}
+      <div className="game-frame">
+        <div className="arc-rotate" aria-hidden="true">
+          <span className="on-touch">↻ TURN YOUR PHONE SIDEWAYS</span>
+          <span className="on-mouse">↔ MAKE THE WINDOW WIDER</span>
+        </div>
+        <div className="game-box">
+          <NeonCanvas engine={engine} scanlines={audioSettings.scanlines} />
 
-      {/* In-Game HUD overlay */}
-      {gameStatus === 'PLAYING' && (
-        <HUD
-          track={selectedTrack}
-          scoreState={scoreState}
-          oneButtonMode={audioSettings.oneButtonMode}
-          onToggleOneButtonMode={handleToggleOneButtonMode}
-          practice={engine.practice}
-          onStrike={handleStrike}
-          onOneButtonStrike={handleOneButtonStrike}
-          onPause={handleTogglePause}
-          onRestart={handleRestart}
-          onOpenSelect={() => {
-            engine.pause();
-            setGameStatus('PAUSED');
-            setShowTrackSelect(true);
-          }}
-        />
-      )}
+          {/* In-Game HUD overlay */}
+          {gameStatus === 'PLAYING' && (
+            <HUD
+              track={selectedTrack}
+              scoreState={scoreState}
+              oneButtonMode={audioSettings.oneButtonMode}
+              onToggleOneButtonMode={handleToggleOneButtonMode}
+              practice={engine.practice}
+              onStrike={handleStrike}
+              onOneButtonStrike={handleOneButtonStrike}
+              onPause={handleTogglePause}
+              onRestart={handleRestart}
+              onOpenSelect={() => {
+                engine.pause();
+                setGameStatus('PAUSED');
+                setShowTrackSelect(true);
+              }}
+            />
+          )}
+        </div>
+      </div>
 
       {/* Title screen: Play, Unlocks, Records, Options, the 1 / 2 button switch */}
       {gameStatus === 'MENU' && !showTrackSelect && !showStudio && !menuScreen && (
@@ -633,38 +644,9 @@ export default function App() {
         <OptionsScreen settings={audioSettings} onUpdateSettings={handleUpdateSettings} onClose={closeMenuScreen} />
       )}
 
-      {/* Paused Overlay: resume where you left off, and change options mid-song */}
+      {/* Pause: the fight frozen behind, Resume / Restart / Quit to Menu */}
       {gameStatus === 'PAUSED' && !showTrackSelect && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-md bg-[#0b0d1e] border border-cyan-500/40 rounded-xl p-6 flex flex-col shadow-2xl my-auto">
-            <div className="text-center">
-              <div className="text-2xl font-black tracking-widest text-cyan-400 uppercase">PAUSED</div>
-              <div className="text-xs text-slate-400 mt-1 font-mono">Track: {selectedTrack.title}</div>
-            </div>
-
-            <div className="mt-6 w-full flex flex-col gap-3">
-              <button
-                onClick={handleTogglePause}
-                className="w-full py-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm shadow-[0_0_15px_rgba(0,243,255,0.4)] transition-all cursor-pointer"
-              >
-                Resume ({audioSettings.oneButtonMode ? 'Esc' : 'Space'})
-              </button>
-
-              <button
-                onClick={handleRestart}
-                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm transition-colors cursor-pointer"
-              >
-                Restart Song (R)
-              </button>
-              <button
-                onClick={handleQuitToMenu}
-                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm transition-colors cursor-pointer"
-              >
-                Quit to Main Menu
-              </button>
-            </div>
-          </div>
-        </div>
+        <PauseScreen track={selectedTrack} length={engine.songLength} practice={engine.practice} onResume={handleTogglePause} onRestart={handleRestart} onQuit={handleQuitToMenu} />
       )}
 
       {/* Game Over / Clear Results Modal */}
