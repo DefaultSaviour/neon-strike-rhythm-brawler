@@ -34,12 +34,59 @@
   background: #07070c;
 }
 .game-box {
+  /* The arcade unit and colours, as on .arc-screen, so the HUD uses the same kit */
+  --u: min(1vh, 0.5625vw);
+  --u: min(1dvh, 0.5625vw);
+  --pink: #ff1f6d;
+  --cyan: #00e5ff;
+  --yellow: #ffe600;
+  --panel: #14141f;
+  --muted: #8d95b3;
   position: absolute;
   left: 0;
   right: 0;
   top: calc((100% - var(--h)) / 2);
   height: var(--h);
   overflow: hidden;
+  color: #fff;
+  font-family: Outfit, sans-serif;
+}
+
+/* ---------- The in-song HUD ---------- */
+/* Top-bar buttons: small, but never under 44px for thumbs */
+/* (.arc-btn.… so these win over the base .arc-btn below) */
+.arc-btn.hud-btn, .arc-btn.hud-song {
+  --cut: calc(var(--u) * 1.4);
+  height: max(44px, calc(var(--u) * 6.5));
+  background: rgba(20, 20, 31, 0.88);
+}
+.arc-btn.hud-btn {
+  min-width: max(48px, calc(var(--u) * 8));
+  padding: 0 calc(var(--u) * 2);
+  font-size: max(12px, calc(var(--u) * 2.6));
+}
+.arc-btn.hud-btn.hud-mode { font-size: max(11px, calc(var(--u) * 2.3)); white-space: nowrap; }
+.arc-btn.hud-song {
+  justify-content: flex-start;
+  gap: calc(var(--u) * 1.2);
+  max-width: min(46%, calc(var(--u) * 60));
+  padding: 0 calc(var(--u) * 3) 0 calc(var(--u) * 2.4);
+  font-size: max(13px, calc(var(--u) * 3.4));
+}
+/* The big numbers: tight lines, a hard shadow so they read over the fight */
+.hud-num { line-height: 0.92; }
+.hud-num:not(.arc-split) { text-shadow: 0 calc(var(--u) * 0.5) 0 #000; }
+/* The practice banner only fits over the fight when the game box is at least 520px tall
+   (the box is min(100dvh, 75vw) tall, so a narrow window counts as short too) */
+@media (max-height: 520px), (max-width: 693px) {
+  .hud .practice-banner { display: none; }
+}
+/* The faint key / tap hints at the bottom */
+.hud-hint {
+  font-size: max(11px, calc(var(--u) * 2.4));
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  opacity: 0.45;
 }
 
 /* Over the frozen fight (the pause screen): the game shows through, dimmed */
