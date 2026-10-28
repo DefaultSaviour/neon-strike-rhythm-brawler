@@ -25,6 +25,44 @@
   /* Solid, so the game underneath never shows through the bars */
   background: #07070c;
 }
+/* The fight and its HUD keep the same 4:3 limit as the menus (see App) */
+.game-frame {
+  --h: min(100vh, 75vw);
+  --h: min(100dvh, 75vw);
+  position: fixed;
+  inset: 0;
+  background: #07070c;
+}
+.game-box {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((100% - var(--h)) / 2);
+  height: var(--h);
+  overflow: hidden;
+}
+
+/* Over the frozen fight (the pause screen): the game shows through, dimmed */
+.arc-frame.is-see-through { background: rgba(5, 5, 12, 0.5); }
+.arc-pause .arc-screen { overflow: visible; }
+/* The pause screen's slanted panel, with a pink edge along its slant */
+.arc-pause-panel, .arc-pause-edge {
+  position: absolute;
+  top: calc((var(--h) - 100dvh) / 2 - 1px);
+  bottom: calc((var(--h) - 100dvh) / 2 - 1px);
+  left: 0;
+  width: calc(min(40%, calc(var(--u) * 64)) + var(--u) * 12);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--u) * 16) 100%, 0 100%);
+  pointer-events: none;
+}
+/* Nudged with margin, not transform: the slide-in animation owns transform */
+.arc-pause-edge { background: var(--pink); margin-left: calc(var(--u) * 1.2); }
+.arc-pause-panel {
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px calc(var(--u) * 1.6)),
+    linear-gradient(90deg, rgba(10, 10, 18, 0.97) 60%, rgba(14, 14, 24, 0.93));
+}
+
 /* In an upright window, the bar above says to turn the phone (or widen the window) */
 .arc-rotate { display: none; }
 .arc-rotate .on-touch { display: none; }
