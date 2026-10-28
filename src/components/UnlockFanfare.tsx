@@ -1,23 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { audioEngine } from '../audio/audioEngine';
-import type { BackdropLayer } from '../game/backdrops';
-import { BACKDROP_MILESTONES, BACKDROP_UNLOCK_PATH, scoreToNextBackdrop } from '../game/backdrops';
+import { BACKDROP_LAYERS, BACKDROP_MILESTONES, BACKDROP_UNLOCK_PATH, BackdropLayer, scoreToNextBackdrop } from '../game/backdrops';
 import type { EnemyMotionStyle } from '../game/enemyMotion';
-import type { HeroId } from '../game/heroes';
-import { HERO_UNLOCKS, LifetimeStats } from '../game/heroUnlocks';
+import { HeroId, HEROES } from '../game/heroes';
+import { HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, UNLOCK_ORDER } from '../game/heroUnlocks';
+import { fighterTier } from '../game/fighterTier';
+import { getEnemyStyle } from '../game/enemyStyles';
 import { backdropLayerOf, describeUnlock, RunUnlock } from '../game/runUnlocks';
-import { MINUTES_PER_STANCE } from '../game/stanceUnlocks';
-import { BackdropCanvas } from './BackdropCanvas';
-import { StancePortrait } from './StancePortrait';
-import { HeroPortrait } from './HeroPortrait';
+import { isStanceUnlocked, MINUTES_PER_STANCE } from '../game/stanceUnlocks';
+import { ArcadeScreen, HeroFigure, SlantButton } from './arcade/ui';
+import { EnemyFigure } from './arcade/EnemyFigure';
+import { BackdropReveal } from './arcade/BackdropReveal';
+import { ShowcaseCounter, showcaseCombo } from './arcade/fighterCarousel';
+import { heardBeat, small, u, UnlockCarousel } from './arcade/UnlockCarousel';
+import { RevealKind, revealLength, RevealPhase, revealPhase, spinLeft, spinPlaces } from './arcade/unlockReveal';
+import { CAST, ORDER as STANCE_ORDER } from './StancesScreen';
 
 /**
- * The popup after a song that unlocked something: one card per unlock
- * ("1 / 3"), each with a fanfare (a pop, turning rays, a chime) and an Equip
- * button. When a rewarded ad can unlock something more (The Bride while
- * she's locked, else the next stance or backdrop piece), the last card
- * offers it: watch an ad and it's unlocked and equipped straight away, or
- * "No thanks". Every offer can also be earned by playing, as CrazyGames
+ * The popup after a song that unlocked something, arcade style: one unlock
+ * at a time ("1 / 3"), each revealed with a spin.
+ * - A fighter or a stance: the Fighters / Stances carousel spins fast, slows
+ *   and lands on it; then the fighter fights (the combo climbing) or the
+ *   enemy moves in the stance.
+ * - A backdrop piece: its layer spins alone on a dark stage, lands on the new
+ *   piece, and the rest of your backdrop builds round it.
+ * A tap or click anywhere while it's revealing skips to the end (and does
+ * nothing else). Equip puts it in use and moves straight on to the next.
+ *
+ * When a rewarded ad can unlock something more (The Bride while she's
+ * locked, else the next stance or backdrop piece), the last card offers it,
+ * revealed the same way: watch an ad and it's unlocked and equipped, or "No
+ * thanks". Every offer can also be earned by playing, as CrazyGames
  * requires, and the card says how.
  */
 
@@ -31,7 +44,7 @@ interface UnlockFanfareProps {
   /** Why the last ad gave nothing, if it didn't */
   notice?: string | null;
   stats: LifetimeStats;
-  /** The backdrop in use (a new piece is shown in place on it) */
+  /** The backdrop in use (a new piece is built into it) */
   backdrop: Record<BackdropLayer, string>;
   isEquipped: (u: RunUnlock) => boolean;
   onEquip: (u: RunUnlock) => void;
@@ -39,15 +52,7 @@ interface UnlockFanfareProps {
   onClose: () => void;
 }
 
-/** The unlock itself, drawn big: the hero, an enemy in the stance, or the backdrop with the new piece. */
-const UnlockArt: React.FC<{ unlock: RunUnlock; backdrop: Record<BackdropLayer, string> }> = ({ unlock, backdrop }) => {
-  // Portraits are drawn at card size: shown bigger here
-  const big = 'scale-[1.35] [@media(max-height:479px)]:scale-[0.7]';
-  if (unlock.kind === 'hero') return <div className={big}><HeroPortrait id={unlock.id as HeroId} locked={false} /></div>;
-  if (unlock.kind === 'stance') return <div className={big}><StancePortrait stance={unlock.id as EnemyMotionStyle} band="bass" tier={2} locked={false} /></div>;
-  const layer = backdropLayerOf(unlock.id);
-  return <BackdropCanvas pieces={layer ? { ...backdrop, [layer]: unlock.id } : backdrop} animated closeUp className="w-56 h-32 rounded-lg border border-slate-700" />;
-};
+const FIGHTERS = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
 
 /** How it was earned (on an unlock card). */
 function earnedText(u: RunUnlock): string {
@@ -66,142 +71,302 @@ function earnText(u: RunUnlock, stats: LifetimeStats): string {
   return toGo ? `Or earn it by playing: ${toGo.toLocaleString()} more points.` : 'Or earn it by playing.';
 }
 
+/** What the stamp says as it lands: "New fighter!", "New stance!", "New sky!" */
+function stampText(u: RunUnlock): string {
+  if (u.kind === 'hero') return 'New fighter!';
+  if (u.kind === 'stance') return 'New stance!';
+  const layer = backdropLayerOf(u.id);
+  return `New ${(BACKDROP_LAYERS.find((l) => l.layer === layer)?.label ?? 'backdrop').toLowerCase()}!`;
+}
+
 export const UnlockFanfare: React.FC<UnlockFanfareProps> = ({ unlocks, offer, offerTaken, adBusy, notice, stats, backdrop, isEquipped, onEquip, onWatchOffer, onClose }) => {
   const cards = [...unlocks.map((u) => ({ offer: false, u })), ...(offer ? [{ offer: true, u: offer }] : [])];
   const [step, setStep] = useState(0);
   const card = cards[Math.min(step, cards.length - 1)];
   const last = step >= cards.length - 1;
-  const next = () => (last ? onClose() : setStep((s) => s + 1));
+  const kind: RevealKind = card?.u.kind === 'backdrop' ? 'backdrop' : 'carousel';
+  const [leaving, setLeaving] = useState(false);
+  const next = useCallback(() => {
+    setLeaving(false);
+    if (last) onClose();
+    else setStep((s) => s + 1);
+  }, [last, onClose]);
 
-  // A chime for every new unlock (not for the ad offer, nor while an ad is playing)
+  // The reveal's clock: restarts with each card; a tap moves it to the end
+  const startedAt = useRef(performance.now());
+  const elapsed = useCallback(() => (performance.now() - startedAt.current) / 1000, []);
+  const [phase, setPhase] = useState<RevealPhase>('spin');
+  const [spin, setSpin] = useState(0);
+  const ring = card?.u.kind === 'hero' ? FIGHTERS.length : STANCE_ORDER.length;
+  const places = spinPlaces(ring);
+  const skip = useCallback(() => {
+    startedAt.current = Math.min(startedAt.current, performance.now() - revealLength(kind) * 1000);
+  }, [kind]);
   useEffect(() => {
-    if (card && !card.offer) audioEngine.playUnlockFanfare();
+    startedAt.current = performance.now();
+    setPhase('spin');
+    setSpin(kind === 'carousel' ? places : 0);
+    let raf = 0;
+    let was: RevealPhase = 'spin';
+    const tick = () => {
+      const t = elapsed();
+      const now = revealPhase(kind, t);
+      if (kind === 'carousel') setSpin(spinLeft(t, places));
+      if (now !== was) {
+        // A chime as it lands (not for the ad offer: that one chimes when it's taken)
+        if (was === 'spin' && !card?.offer) audioEngine.playUnlockFanfare();
+        was = now;
+        setPhase(now);
+      }
+      if (now !== 'ready') raf = requestAnimationFrame(tick);
+      else setSpin(0);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (offerTaken) audioEngine.playUnlockFanfare();
   }, [offerTaken]);
+  const ready = phase === 'ready';
+  const landed = phase !== 'spin';
 
-  // Space / Enter: next (on the offer card: no thanks, so an ad never starts by accident). Escape: close.
-  // Captured here so the results screen behind doesn't restart the song.
+  // A fighter that's landed fights, building a combo, as on the Fighters tab
+  const counter = useRef(new ShowcaseCounter());
+  const showcaseBeat = useCallback(() => {
+    const b = heardBeat();
+    return { ...b, beat: counter.current.beatsIn(`${step}`, b.beat) };
+  }, [step]);
+  const [beatsIn, setBeatsIn] = useState(0);
+  useEffect(() => {
+    if (!landed || card?.u.kind !== 'hero') return;
+    let raf = 0;
+    const tick = () => {
+      setBeatsIn(showcaseBeat().beat);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [landed, card?.u.kind, showcaseBeat]);
+  const hits = showcaseCombo(beatsIn);
+  const tier = fighterTier(hits);
+
+  const equip = () => {
+    if (!card || leaving) return;
+    // Put it in use, and move straight on (to the next unlock, or close on the last)
+    onEquip(card.u);
+    setLeaving(true);
+    window.setTimeout(next, 320);
+  };
+
+  // Keys. Space / Enter: skip the reveal, then next (on the offer card: no thanks, so an ad never starts by
+  // accident). Escape: close. Captured here so the results screen behind doesn't restart the song.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.key === 'Enter' || e.key === 'Escape' || e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         e.stopImmediatePropagation();
-        if (adBusy) return;
+        if (adBusy || e.repeat) return;
         if (e.key === 'Escape') onClose();
-        else if (e.code === 'Space' || e.key === 'Enter') next();
+        else if (e.code === 'Space' || e.key === 'Enter') {
+          if (!ready) skip();
+          else if (card?.offer && !offerTaken) onClose();
+          else next();
+        }
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   });
 
-  if (!card) return null;
-  const info = describeUnlock(card.u);
+  const info = card ? describeUnlock(card.u) : null;
+  const layer = card?.u.kind === 'backdrop' ? backdropLayerOf(card.u.id) : null;
+  // The carousel this unlock lands on
+  const focus = useMemo(() => {
+    if (!card) return 0;
+    if (card.u.kind === 'hero') return Math.max(0, FIGHTERS.findIndex((h) => h.id === card.u.id));
+    return Math.max(0, STANCE_ORDER.indexOf(card.u.id as EnemyMotionStyle));
+  }, [card]);
+  if (!card || !info) return null;
   const equipped = isEquipped(card.u);
-  const gold = !card.offer || offerTaken;
+  const isThis = (id: string) => id === card.u.id;
 
   return (
-    // Short screens (a phone held sideways) get a tighter card, and can scroll if it still doesn't fit
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={info.kind}>
-      <div className="flex min-h-full items-center justify-center p-4 [@media(max-height:479px)]:p-1">
-        <div
-          key={`${step}-${offerTaken}`}
-          className={`unlock-pop relative w-full max-w-sm overflow-hidden rounded-2xl border-2 bg-[#0b0d1e] p-5 [@media(max-height:479px)]:p-3 text-center ${
-            gold ? 'border-amber-400/80 shadow-[0_0_60px_rgba(255,194,58,0.35)]' : 'border-cyan-400/70 shadow-[0_0_50px_rgba(0,243,255,0.3)]'
-          }`}
-        >
-          {cards.length > 1 && <div className="absolute top-3 right-4 text-xs font-mono font-bold text-slate-400">{step + 1} / {cards.length}</div>}
-          <div className={`px-10 text-[11px] font-black tracking-[0.25em] uppercase ${gold ? 'text-amber-300' : 'text-cyan-300'}`}>
-            {card.offer ? (offerTaken ? 'Unlocked!' : 'Bonus unlock') : `${info.kind} unlocked!`}
-          </div>
+    <ArcadeScreen label={info.kind} stripes="none">
+      {/* A tap or click anywhere while it's still revealing skips to the end, and does nothing else (so it can't equip by accident) */}
+      {!ready && <div className="absolute inset-0 cursor-pointer" style={{ zIndex: 40 }} onPointerDown={skip} aria-label="Skip" role="button" />}
 
-          {/* The art, with turning rays and a few sparkles behind it */}
-          <div className="relative my-3 h-44 [@media(max-height:479px)]:my-1 [@media(max-height:479px)]:h-24 flex items-center justify-center">
+      {/* Title */}
+      <div className="absolute flex items-baseline" style={{ left: u(5), top: u(4), gap: u(3) }}>
+        <h2 className="arc-display arc-skew arc-split m-0 arc-in-left" style={{ fontSize: u(9) }}>
+          {card.offer ? (offerTaken ? 'Unlocked!' : 'Bonus unlock') : 'Unlocked!'}
+        </h2>
+        {cards.length > 1 && (
+          <span className="font-black tracking-[0.25em] text-[color:var(--muted)]" style={{ fontSize: small }}>
+            {step + 1} / {cards.length}
+          </span>
+        )}
+      </div>
+
+      {/* The reveal */}
+      {kind === 'carousel' ? (
+        <>
+          {/* Turning rays behind it once it's landed */}
+          {landed && (
             <div
-              className="unlock-rays absolute w-72 h-72 rounded-full opacity-40"
+              aria-hidden="true"
+              className="absolute unlock-rays pointer-events-none"
               style={{
-                background: `repeating-conic-gradient(${gold ? 'rgba(255,194,58,0.55)' : 'rgba(0,243,255,0.45)'} 0deg 10deg, transparent 10deg 30deg)`,
-                maskImage: 'radial-gradient(circle, black 20%, transparent 70%)',
-                WebkitMaskImage: 'radial-gradient(circle, black 20%, transparent 70%)',
+                left: `calc(50% - ${u(40)})`,
+                top: u(6),
+                width: u(80),
+                height: u(80),
+                borderRadius: '50%',
+                opacity: 0.35,
+                background: `repeating-conic-gradient(${card.u.kind === 'hero' ? tier.color : getEnemyStyle(CAST[focus % CAST.length][0], CAST[focus % CAST.length][1]).color}88 0deg 10deg, transparent 10deg 30deg)`,
+                maskImage: 'radial-gradient(circle, black 15%, transparent 68%)',
+                WebkitMaskImage: 'radial-gradient(circle, black 15%, transparent 68%)',
               }}
             />
-            {[
-              [12, 18, 0],
-              [82, 24, 0.5],
-              [20, 78, 0.9],
-              [86, 72, 0.3],
-              [50, 6, 1.2],
-            ].map(([x, y, delay], i) => (
-              <span
-                key={i}
-                className={`unlock-twinkle absolute w-2 h-2 rotate-45 ${gold ? 'bg-amber-200' : 'bg-cyan-200'}`}
-                style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${delay}s` }}
-              />
-            ))}
-            <div className="relative">
-              <UnlockArt unlock={card.u} backdrop={backdrop} />
+          )}
+          <UnlockCarousel
+            key={step}
+            label={card.u.kind === 'hero' ? 'Fighters' : 'Stances'}
+            count={ring}
+            focus={focus}
+            onMove={() => {}}
+            spin={spin}
+            still
+            keyAt={(i) => (card.u.kind === 'hero' ? FIGHTERS[i].id : STANCE_ORDER[i])}
+            nameAt={(i) => (card.u.kind === 'hero' ? FIGHTERS[i].label : STANCE_ORDER[i])}
+            floorColor={landed ? (card.u.kind === 'hero' ? tier.color : getEnemyStyle(CAST[focus % CAST.length][0], CAST[focus % CAST.length][1]).color) : '#3a3f58'}
+            render={(i, inFocus) => {
+              if (card.u.kind === 'hero') {
+                const h = FIGHTERS[i];
+                // The unlock (even the ad offer's) is shown in full; the rest as they are for you
+                const locked = !isThis(h.id) && !isHeroUnlocked(h.id, stats);
+                return (
+                  <HeroFigure
+                    id={h.id}
+                    locked={locked}
+                    animate={inFocus && landed}
+                    beatNow={inFocus && landed ? showcaseBeat : undefined}
+                    comboAt={inFocus && landed ? showcaseCombo : undefined}
+                    className="w-full h-full"
+                    style={inFocus && landed ? { filter: `drop-shadow(0 0 ${u(1.4)} ${tier.color}66)` } : undefined}
+                  />
+                );
+              }
+              const id = STANCE_ORDER[i];
+              const [b, t] = CAST[i % CAST.length];
+              return <EnemyFigure stance={id} band={b} tier={t} beatNow={heardBeat} locked={!isThis(id) && !isStanceUnlocked(id, stats)} stomps={inFocus && landed} className="w-full h-full" />;
+            }}
+          />
+          {/* The combo a new fighter builds */}
+          {landed && card.u.kind === 'hero' && (
+            <div className="absolute pointer-events-none arc-in-right" style={{ left: `calc(50% + ${u(19)})`, top: u(19) }} aria-hidden="true">
+              <div className="flex items-baseline" style={{ gap: u(1) }}>
+                <span key={hits} className="arc-display arc-split" style={{ fontSize: u(10), color: 'var(--yellow)', animation: 'arc-stamp 0.18s cubic-bezier(0.2, 0.9, 0.2, 1) both', ['--tilt' as string]: '0deg' }}>
+                  {hits}
+                </span>
+                <span className="arc-display" style={{ fontSize: u(3.4) }}>
+                  HITS
+                </span>
+              </div>
+              <div key={tier.name} className="arc-display arc-stamp whitespace-nowrap" style={{ fontSize: u(3.6), color: tier.color, marginTop: u(0.6), ['--tilt' as string]: '-4deg', textShadow: `${u(0.3)} ${u(0.3)} 0 #000` }}>
+                {tier.name}
+              </div>
             </div>
+          )}
+          {landed && (
+            <span key={`stamp${step}`} className="absolute arc-display arc-stamp pointer-events-none" style={{ right: `calc(50% + ${u(16)})`, top: u(20), fontSize: u(6.4), color: 'var(--yellow)', ['--tilt' as string]: '-7deg', textShadow: `${u(0.4)} ${u(0.4)} 0 #000`, whiteSpace: 'nowrap' }}>
+              {card.offer && !offerTaken ? 'Bonus!' : stampText(card.u)}
+            </span>
+          )}
+        </>
+      ) : (
+        // A backdrop piece: on a stage like the Backdrops tab's
+        <div
+          className="absolute overflow-hidden"
+          style={{
+            left: 0,
+            right: 0,
+            marginInline: 'auto',
+            width: `min(100% - ${u(38)}, ${u(150)})`,
+            top: u(17),
+            height: u(40),
+            clipPath: `polygon(${u(3.4)} 0, 100% 0, calc(100% - ${u(3.4)}) 100%, 0 100%)`,
+            background: `linear-gradient(to top, var(--pink) ${u(0.9)}, #000 ${u(0.9)})`,
+            paddingBottom: u(0.9),
+          }}
+        >
+          <div className="absolute inset-0" style={{ bottom: u(0.9) }}>
+            {layer && <BackdropReveal key={step} layer={layer} id={card.u.id} mix={backdrop} elapsed={elapsed} className="w-full h-full" />}
           </div>
-
-          <div className="text-2xl font-black text-white">{info.name}</div>
-          <div className="mt-1 text-sm [@media(max-height:479px)]:text-xs text-slate-300">{info.description}</div>
-
-          {!card.offer && (
-            <>
-              <div className="mt-2 text-xs text-amber-300/90">{earnedText(card.u)}</div>
-              <div className="mt-4 [@media(max-height:479px)]:mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Equip it and move straight on (to the next card, or close on the last)
-                    onEquip(card.u);
-                    next();
-                  }}
-                  disabled={equipped}
-                  className="flex-1 min-h-11 rounded-lg font-bold text-sm bg-amber-400 text-slate-900 hover:bg-amber-300 disabled:bg-emerald-400 disabled:cursor-default cursor-pointer"
-                >
-                  {equipped ? 'Equipped ✓' : 'Equip'}
-                </button>
-                <button type="button" onClick={next} className="flex-1 min-h-11 rounded-lg font-bold text-sm bg-slate-800 text-slate-100 border border-slate-600 hover:bg-slate-700 cursor-pointer">
-                  {last ? 'Done' : 'Next'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {card.offer && !offerTaken && (
-            <>
-              <div className="mt-3 [@media(max-height:479px)]:mt-1 text-sm [@media(max-height:479px)]:text-xs text-cyan-200">Watch a short ad to unlock it now. It's equipped straight away.</div>
-              <div className="mt-1 text-[11px] text-slate-400">{earnText(card.u, stats)}</div>
-              {notice && <div className="mt-2 text-xs text-pink-300">{notice}</div>}
-              <div className="mt-4 [@media(max-height:479px)]:mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={onWatchOffer}
-                  disabled={adBusy}
-                  className="flex-1 min-h-11 rounded-lg font-bold text-sm bg-cyan-400 text-slate-900 hover:bg-cyan-300 disabled:opacity-60 cursor-pointer"
-                >
-                  {adBusy ? 'Loading ad…' : '▶ Watch ad'}
-                </button>
-                <button type="button" onClick={onClose} disabled={adBusy} className="flex-1 min-h-11 rounded-lg font-bold text-sm bg-slate-800 text-slate-300 border border-slate-600 hover:bg-slate-700 cursor-pointer">
-                  No thanks
-                </button>
-              </div>
-            </>
-          )}
-
-          {card.offer && offerTaken && (
-            <>
-              <div className="mt-2 text-xs text-amber-300/90">Unlocked and equipped. Enjoy!</div>
-              <button type="button" onClick={onClose} className="mt-4 w-full min-h-11 rounded-lg font-bold text-sm bg-amber-400 text-slate-900 hover:bg-amber-300 cursor-pointer">
-                Done
-              </button>
-            </>
+          {landed && (
+            <span key={`stamp${step}`} className="absolute arc-display arc-stamp pointer-events-none" style={{ left: u(6), top: u(3), fontSize: u(6), color: 'var(--yellow)', ['--tilt' as string]: '-7deg', textShadow: `${u(0.4)} ${u(0.4)} 0 #000` }}>
+              {card.offer && !offerTaken ? 'Bonus!' : stampText(card.u)}
+            </span>
           )}
         </div>
-      </div>
-    </div>
+      )}
+
+      {/* About it, and what to do */}
+      <section className="absolute flex flex-col items-center text-center z-20" aria-live="polite" style={{ left: 0, right: 0, marginInline: 'auto', bottom: u(3.5), width: `min(100% - ${u(36)}, ${u(116)})`, gap: u(0.9) }}>
+        {!landed ? (
+          <div className="arc-display arc-blink" style={{ fontSize: u(6), color: 'var(--muted)', marginBottom: u(8) }}>
+            Unlocking…
+          </div>
+        ) : (
+          <>
+            <h3 key={card.u.id} className="arc-display arc-skew arc-split m-0 whitespace-nowrap arc-in-right" style={{ fontSize: u(7.4) }}>
+              {info.name}
+            </h3>
+            <div className="font-bold text-[color:var(--muted)] line-clamp-2 arc-in-left" style={{ fontSize: `max(11px, ${u(2.5)})`, lineHeight: 1.25 }}>
+              {info.description}
+            </div>
+            <div className="font-bold" style={{ fontSize: small, color: card.offer && !offerTaken ? '#9aa3c4' : 'var(--yellow)' }}>
+              {card.offer ? (offerTaken ? 'Unlocked and equipped. Enjoy!' : notice ?? earnText(card.u, stats)) : earnedText(card.u)}
+            </div>
+            <div className="flex arc-in-right" style={{ gap: u(1.6), marginTop: u(0.4), opacity: ready ? 1 : 0.35, transition: 'opacity 0.25s' }}>
+              {!card.offer ? (
+                <>
+                  {equipped ? (
+                    <SlantButton variant="selected" size="sm" aria-disabled="true" style={{ padding: `0 ${u(6)}`, cursor: 'default' }}>
+                      ✓ Equipped
+                    </SlantButton>
+                  ) : (
+                    <SlantButton variant="hot" size="sm" hotkey="ENTER" onClick={equip} style={{ padding: `0 ${u(7)}`, fontSize: u(4.2) }}>
+                      Equip
+                    </SlantButton>
+                  )}
+                  <SlantButton size="sm" onClick={next} style={{ padding: `0 ${u(6)}` }}>
+                    {last ? 'Done' : 'Next ›'}
+                  </SlantButton>
+                </>
+              ) : offerTaken ? (
+                <SlantButton variant="hot" size="sm" onClick={onClose} style={{ padding: `0 ${u(8)}`, fontSize: u(4.2) }}>
+                  Done
+                </SlantButton>
+              ) : (
+                <>
+                  <button type="button" className="arc-btn is-offer is-sm" onClick={onWatchOffer} disabled={adBusy} style={{ padding: `0 ${u(5)}` }}>
+                    <span className="arc-play" aria-hidden="true">
+                      ▶
+                    </span>
+                    <span className="arc-offer-text">
+                      <span>{adBusy ? 'Loading ad…' : 'Unlock now'}</span>
+                      <span className="arc-offer-sub">{adBusy ? 'One moment' : 'Watch an ad · equipped at once'}</span>
+                    </span>
+                  </button>
+                  <SlantButton size="sm" onClick={onClose} disabled={adBusy} style={{ padding: `0 ${u(6)}` }}>
+                    No thanks
+                  </SlantButton>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+    </ArcadeScreen>
   );
 };

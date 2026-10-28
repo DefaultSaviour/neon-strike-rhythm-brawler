@@ -5,6 +5,7 @@ import { enemyPoseFor } from '../../game/customAnimation';
 import { getEnemyStyle } from '../../game/enemyStyles';
 import type { EnemyTier, FrequencyBand } from '../../types/game';
 import { drawEnemyArt } from '../enemyArt';
+import { FOOT_ROOM } from './ui';
 
 /**
  * An enemy moving in a stance, filling the element's height with its feet
@@ -45,12 +46,12 @@ export const EnemyFigure: React.FC<{
       const b = beatRef.current();
       const beatPos = still ? 0.25 : b.beat + b.since / b.period;
       const pose = enemyPoseFor(stance, beatPos, band, tier, getActiveAnimations());
-      // The same scale as a fighter: about 150 units tall, feet at y = 68, near the bottom
+      // The same scale and place as a fighter: about 150 units tall, feet at y = 68, room under them for the stomp ring
       const s = (h * 0.85) / 150;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       ctx.save();
-      ctx.translate(w / 2, h * 0.95 - 68 * s);
+      ctx.translate(w / 2, h - (FOOT_ROOM + 68) * s);
       ctx.scale(s, s);
       // The thump on the floor as a foot lands
       if (stomps && !locked && pose.stomp > 0.02) {

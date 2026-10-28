@@ -27,7 +27,8 @@ export const ArcadeScreen: React.FC<{ children: React.ReactNode; className?: str
       <div className="arc-bg" aria-hidden="true" />
       {/* The dots under the music lines, so they never speckle them */}
       <div className="arc-halftone" aria-hidden="true" />
-      <MusicStripes angle={STRIPE_ANGLES[stripes]} />
+      {/* No stripes at all on some screens (the unlock popup): they keep their angle for the next screen */}
+      {stripes !== 'none' && <MusicStripes angle={STRIPE_ANGLES[stripes]} />}
       {children}
     </div>
   </div>
@@ -264,6 +265,13 @@ export function strikeBlend(since: number): number {
 }
 
 /**
+ * Room left under the feet of a fighter or enemy drawn to fill its box
+ * (world units, as the feet's y = 68): the glow ring round a levelled-up
+ * fighter's feet, and an enemy's stomp ring, reach this far down.
+ */
+export const FOOT_ROOM = 24;
+
+/**
  * A fighter drawn in their fighting stance, filling the element's height,
  * feet at the bottom. With `animate` they breathe and glow like in a song;
  * locked fighters are a black silhouette with a faint outline. With
@@ -300,12 +308,13 @@ export const HeroFigure: React.FC<{
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
       }
-      // A fighter is about 150 units from crest to feet, feet at y = 68: fit that to the height, feet near the bottom
+      // A fighter is about 150 units from crest to feet, feet at y = 68: fit that to the height, feet near the
+      // bottom, with room under them for the glow ring
       const s = (h * 0.85) / 150;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       ctx.save();
-      ctx.translate(w / 2, h * 0.95 - 68 * s);
+      ctx.translate(w / 2, h - (FOOT_ROOM + 68) * s);
       ctx.scale(s, s);
       let pose = hero.idlePose;
       let combo = 0;
