@@ -637,33 +637,80 @@ function drawReturningFists(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.restore();
 }
 
-/** The KO stamp over the fight when the boss falls. */
+/** The arcade font for big canvas text (as on the menus), with fallbacks while it loads */
+const ARCADE_FONT = 'Anton, Impact, "Arial Narrow", sans-serif';
+
+/** The K.O. stamp over the fight when the boss falls: slams in big and tilted, like the menus' stamps. */
 function drawBossKo(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   const boss = engine.boss;
   if (!boss || !boss.ko) return;
   const age = (performance.now() - boss.koAt) / 1000;
   if (age > 2.4) return;
   const gold = BOSS_LOOKS.leaper.accent;
-  const pop = 1 + Math.max(0, 0.6 - age * 3);
+  // From 2.2x down past 1 and back (as .arc-stamp), then a slow drift bigger
+  const t = Math.min(1, age / 0.3);
+  const slam = t < 0.6 ? 2.2 - (2.2 - 0.92) * (t / 0.6) : 0.92 + 0.08 * ((t - 0.6) / 0.4);
   ctx.save();
   ctx.translate(0, -120);
-  ctx.scale(pop, pop);
-  ctx.globalAlpha = Math.min(1, (2.4 - age) / 0.4);
-  ctx.font = '900 38px "Outfit", sans-serif';
+  ctx.rotate((-6 * Math.PI) / 180);
+  ctx.scale(slam + age * 0.03, slam + age * 0.03);
+  ctx.globalAlpha = Math.min(1, age / 0.1, (2.4 - age) / 0.4);
+  ctx.font = `italic 64px ${ARCADE_FONT}`;
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  // The split-colour shadow of the menus' titles, then a hard black drop
+  ctx.fillStyle = '#000000';
+  ctx.fillText('K.O.!', 0, 6);
+  ctx.fillStyle = '#ff1f6d';
+  ctx.fillText('K.O.!', 3, 0);
+  ctx.fillStyle = '#00e5ff';
+  ctx.fillText('K.O.!', -3, 0);
   ctx.fillStyle = gold;
   ctx.shadowColor = gold;
-  ctx.shadowBlur = 30;
-  ctx.fillText('BOSS KO!', 0, 0);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('BOSS KO!', 0, 0);
+  ctx.shadowBlur = 24;
+  ctx.fillText('K.O.!', 0, 0);
   ctx.restore();
 }
 
 /**
+ * How much health each boss bar showed a moment ago: the bar keeps a pale
+ * chunk where the last hit landed, which drains away after a beat (as in
+ * fighting games). Keyed by boss and bar.
+ */
+const bossTrails = new Map<string, { value: number; holdUntil: number; at: number }>();
+
+function trailFor(key: string, share: number, now: number): number {
+  const st = bossTrails.get(key);
+  if (!st || share > st.value + 1e-6) {
+    bossTrails.set(key, { value: share, holdUntil: now, at: now });
+    return share;
+  }
+  if (share < st.value - 1e-6 && st.holdUntil <= st.at) st.holdUntil = now + 380;
+  const dt = (now - st.at) / 1000;
+  st.at = now;
+  if (now >= st.holdUntil) {
+    st.value = Math.max(share, st.value - dt * 0.9);
+    if (st.value <= share + 1e-6) st.holdUntil = 0;
+  }
+  return st.value;
+}
+
+/** A slanted (parallelogram) path, like the menus' buttons */
+function slantPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, cut: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + cut, y);
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x + w - cut, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.closePath();
+}
+
+/**
  * The boss's name and health along the bottom of the screen (clear of the HUD
- * at the top). The twins get a bar each, under their name.
+ * at the top), fighting-game style: a slanted bar in the boss's colour with a
+ * notch for every fist it has (each fist does the same damage), a pale chunk
+ * that drains after each hit, and a BOSS tag by its name. The twins get a bar
+ * each. Sized in the arcade unit, like the HUD.
  */
 function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: number, height: number) {
   const boss = engine.boss;
@@ -671,40 +718,114 @@ function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: n
   if (!bossFigures(boss.plan, engine.songTime, engine.fistFlight)[0].visible) return;
   const look = BOSS_LOOKS[boss.plan.kind];
 
-  const w = Math.min(460, width * 0.5);
+  const u = Math.min(height / 100, width * 0.005625);
+  const now = performance.now();
+  const w = Math.min(84 * u, width * 0.46);
   const left = (width - w) / 2;
-  const y = height - 26;
-  const recentlyHurt = performance.now() - boss.hurtAt < 90;
-  const bar = (x: number, barW: number, share: number, hurt: boolean) => {
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillRect(x - 2, y - 2, barW + 4, 14);
-    ctx.fillStyle = hurt ? '#ffffff' : look.color;
+  const barH = Math.max(10, 3.2 * u);
+  const y = height - Math.max(12, 3.6 * u) - barH;
+  const cut = barH * 0.8;
+  const recentlyHurt = now - boss.hurtAt < 90;
+
+  const bar = (x: number, barW: number, share: number, hurt: boolean, hp: number, key: string) => {
+    const shown = Math.max(0, Math.min(1, share));
+    const trail = trailFor(`${boss.plan.kind}:${key}`, shown, now);
+    // The frame: a black slab a little bigger than the bar, with the boss's accent edge
+    const pad = Math.max(2, 0.5 * u);
+    ctx.fillStyle = 'rgba(5, 5, 12, 0.9)';
+    slantPath(ctx, x - pad, y - pad, barW + pad * 2, barH + pad * 2, cut + pad);
+    ctx.fill();
+    ctx.save();
+    slantPath(ctx, x, y, barW, barH, cut);
+    ctx.clip();
+    ctx.fillStyle = '#1b1b29';
+    ctx.fillRect(x, y, barW, barH);
+    // The pale chunk the last hit took, draining
+    // (each share is a slanted slab, so its end runs parallel to the bar's ends and notches)
+    const slab = (f: number) => slantPath(ctx, x, y, cut + (barW - cut) * f, barH, cut);
+    if (trail > shown) {
+      ctx.fillStyle = 'rgba(255, 241, 168, 0.85)';
+      slab(trail);
+      ctx.fill();
+    }
+    // What's left: the boss's colour, lighter along the top
+    const g = ctx.createLinearGradient(0, y, 0, y + barH);
+    g.addColorStop(0, hurt ? '#ffffff' : colorWithAlpha(look.accent, 1));
+    g.addColorStop(0.45, hurt ? '#ffffff' : look.color);
+    g.addColorStop(1, hurt ? '#ffffff' : colorWithAlpha(look.color, 0.75));
+    ctx.fillStyle = g;
     ctx.shadowColor = look.color;
     ctx.shadowBlur = 12;
-    ctx.fillRect(x, y, barW * Math.max(0, share), 10);
+    if (shown > 0) {
+      slab(shown);
+      ctx.fill();
+    }
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = colorWithAlpha(look.accent, 0.8);
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x - 2, y - 2, barW + 4, 14);
+    // A notch for each fist (only when there are few enough to read)
+    if (hp > 1 && hp <= 40) {
+      ctx.fillStyle = 'rgba(5, 5, 12, 0.55)';
+      const notch = Math.max(1, 0.25 * u);
+      for (let i = 1; i < hp; i++) {
+        const nx = x + ((barW - cut) * i) / hp;
+        ctx.save();
+        ctx.translate(nx, y);
+        ctx.transform(1, 0, -cut / barH, 1, 0, 0);
+        ctx.fillRect(-notch / 2 + cut, 0, notch, barH);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+    ctx.strokeStyle = colorWithAlpha(look.accent, 0.9);
+    ctx.lineWidth = Math.max(1, 0.25 * u);
+    slantPath(ctx, x - pad, y - pad, barW + pad * 2, barH + pad * 2, cut + pad);
+    ctx.stroke();
   };
 
   ctx.save();
-  ctx.font = '900 13px "Outfit", sans-serif';
+  // The name: a yellow BOSS tag, then the name in the arcade font
+  const nameSize = Math.max(14, 4.2 * u);
+  const baseY = y - Math.max(5, 1.6 * u);
+  const tagSize = Math.max(9, 1.9 * u);
+  ctx.font = `900 ${tagSize}px "Outfit", sans-serif`;
+  const tagText = 'BOSS';
+  const spacing = tagSize * 0.18;
+  let tagW = 0;
+  for (const ch of tagText) tagW += ctx.measureText(ch).width + spacing;
+  const tagPadX = tagSize * 0.7;
+  const tagH = tagSize * 1.6;
+  const tagX = left + cut;
+  const tagY = baseY - nameSize * 0.42 - tagH / 2;
+  ctx.fillStyle = '#ffe600';
+  slantPath(ctx, tagX, tagY, tagW + tagPadX * 2, tagH, tagH * 0.35);
+  ctx.fill();
+  ctx.fillStyle = '#000000';
+  ctx.textBaseline = 'middle';
+  let cx = tagX + tagPadX;
+  for (const ch of tagText) {
+    ctx.fillText(ch, cx, tagY + tagH / 2 + tagSize * 0.05);
+    cx += ctx.measureText(ch).width + spacing;
+  }
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `italic ${nameSize}px ${ARCADE_FONT}`;
   ctx.textAlign = 'left';
+  const nameX = tagX + tagW + tagPadX * 2 + Math.max(6, 1.4 * u);
+  ctx.fillStyle = '#000000';
+  ctx.fillText(look.name.toUpperCase(), nameX, baseY + Math.max(2, 0.5 * u));
   ctx.fillStyle = look.accent;
   ctx.shadowColor = look.accent;
   ctx.shadowBlur = 10;
-  ctx.fillText(look.name.toUpperCase(), left, y - 8);
+  ctx.fillText(look.name.toUpperCase(), nameX, baseY);
   ctx.shadowBlur = 0;
+
   if (boss.plan.kind === 'twins') {
-    const gap = 10;
+    const gap = Math.max(10, 2.4 * u);
     const half = (w - gap) / 2;
     for (const side of ['left', 'right'] as const) {
       const full = boss.plan.sideHp[side];
-      bar(side === 'left' ? left : left + half + gap, half, full > 0 ? boss.shownSideHp[side] / full : 0, recentlyHurt && boss.hurtSide === side);
+      bar(side === 'left' ? left : left + half + gap, half, full > 0 ? boss.shownSideHp[side] / full : 0, recentlyHurt && boss.hurtSide === side, full, side);
     }
   } else {
-    bar(left, w, boss.shownHp / boss.plan.maxHp, recentlyHurt);
+    bar(left, w, boss.shownHp / boss.plan.maxHp, recentlyHurt, boss.plan.maxHp, 'all');
   }
   ctx.restore();
 }
