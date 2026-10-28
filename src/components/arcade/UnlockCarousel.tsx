@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { audioEngine } from '../../audio/audioEngine';
-import { AdOffer, AdOfferButton, SlantButton } from './ui';
+import { AdOffer, AdOfferButton, FOOT_ROOM, SlantButton } from './ui';
 import { carouselOffset, placeAt, releaseSteps, TAP_PX, wrapOffset } from './fighterCarousel';
 
 /**
@@ -79,15 +79,25 @@ export const UnlockCarousel: React.FC<{
   render: (i: number, inFocus: boolean) => React.ReactNode;
   /** The glow on the floor under the one in focus */
   floorColor: string;
-}> = ({ label, count, focus, onMove, keyAt, nameAt, isNewAt, render, floorColor }) => {
+  /**
+   * Places still to turn before landing on the one in focus (the unlock
+   * popup spins the carousel): things slide in from the right as it counts
+   * down to 0. While it's set, the carousel can't be dragged or tapped.
+   */
+  spin?: number;
+  /** Hide the ‹ › buttons and ignore drags and taps (the unlock popup) */
+  still?: boolean;
+}> = ({ label, count, focus, onMove, keyAt, nameAt, isNewAt, render, floorColor, spin = 0, still = false }) => {
   // Dragging: how many places the finger has turned the ring so far (fractions too). A drag isn't a tap on a side one.
   const [drag, setDrag] = useState(0);
   const swiped = useRef(false);
   // When the screen opened: things slide in then, but not ones dragged into view later
   const openedAt = useRef(performance.now());
-  const opening = performance.now() - openedAt.current < 900;
+  // ...and not at all when it opens spinning (the spin is its entrance)
+  const slideIn = useRef(spin === 0);
+  const opening = slideIn.current && performance.now() - openedAt.current < 900;
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || still) return;
     const startX = e.clientX;
     // One place is as far apart as the one in focus and the next (in px, for this screen)
     const stepPx = 44 * Math.min(window.innerHeight / 100, window.innerWidth * 0.005625);
@@ -131,7 +141,8 @@ export const UnlockCarousel: React.FC<{
           right: 0,
           marginInline: 'auto',
           animationDelay: '0.06s',
-          bottom: u(BOX_BOTTOM - 3),
+          // Centred on the feet (which stand FOOT_ROOM up from the bottom of their box)
+          bottom: u(BOX_BOTTOM + (FOOT_ROOM * BOX_H * 0.85) / 150 - 3.5),
           width: u(56),
           height: u(7),
           background: `radial-gradient(closest-side, ${floorColor}55, transparent)`,
@@ -149,8 +160,8 @@ export const UnlockCarousel: React.FC<{
       >
         {Array.from({ length: count }, (_, i) => {
           const off = carouselOffset(i, focus, count);
-          // Where it is right now, with the drag (a fraction of a place, or several)
-          const at = wrapOffset(off + drag, count);
+          // Where it is right now, with the drag or the spin (a fraction of a place, or several)
+          const at = wrapOffset(off + drag + spin, count);
           if (Math.abs(at) > 3.5) return null;
           const place = placeAt(at);
           const inFocus = off === 0;
@@ -168,15 +179,15 @@ export const UnlockCarousel: React.FC<{
                 opacity: place.opacity,
                 transformOrigin: '50% 100%',
                 transform: `translateX(${u(place.x)}) scale(${place.scale})`,
-                // Straight under the finger while dragging, then a quick settle
-                transition: drag ? 'none' : 'transform 0.38s cubic-bezier(0.2, 0.9, 0.2, 1), opacity 0.3s',
+                // Straight under the finger while dragging (or turning with the spin), then a quick settle
+                transition: drag || spin ? 'none' : 'transform 0.38s cubic-bezier(0.2, 0.9, 0.2, 1), opacity 0.3s',
               }}
             >
               {/* Slides in when the screen opens, the one in focus first (inside: the outer box is moved by the carousel) */}
               <div className={`w-full h-full ${opening ? 'arc-in-right' : ''}`} style={{ animationDelay: `${0.06 + Math.abs(off) * 0.06}s` }}>
                 {render(i, inFocus)}
               </div>
-              {!inFocus && Math.abs(off) <= 2 && (
+              {!still && !inFocus && Math.abs(off) <= 2 && (
                 <button
                   type="button"
                   tabIndex={-1}
@@ -196,16 +207,20 @@ export const UnlockCarousel: React.FC<{
         })}
       </div>
 
-      <div className="absolute z-20 arc-in-left" style={{ left: u(4), top: u(38), animationDelay: '0.12s' }}>
-        <SlantButton onClick={() => onMove(-1)} aria-label="Previous" style={{ width: u(12), padding: 0 }}>
-          ‹
-        </SlantButton>
-      </div>
-      <div className="absolute z-20 arc-in-right" style={{ right: u(4), top: u(38), animationDelay: '0.12s' }}>
-        <SlantButton onClick={() => onMove(1)} aria-label="Next" style={{ width: u(12), padding: 0 }}>
-          ›
-        </SlantButton>
-      </div>
+      {!still && (
+        <>
+          <div className="absolute z-20 arc-in-left" style={{ left: u(4), top: u(38), animationDelay: '0.12s' }}>
+            <SlantButton onClick={() => onMove(-1)} aria-label="Previous" style={{ width: u(12), padding: 0 }}>
+              ‹
+            </SlantButton>
+          </div>
+          <div className="absolute z-20 arc-in-right" style={{ right: u(4), top: u(38), animationDelay: '0.12s' }}>
+            <SlantButton onClick={() => onMove(1)} aria-label="Next" style={{ width: u(12), padding: 0 }}>
+              ›
+            </SlantButton>
+          </div>
+        </>
+      )}
     </>
   );
 };

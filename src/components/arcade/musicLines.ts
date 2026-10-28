@@ -24,8 +24,9 @@ export const FLAT_ANGLE = 88.8;
 /**
  * Each menu screen's stripe angle (see SLASH_ANGLE): opening one swings the
  * stripes round to it, each a different way. The title and results keep
- * the slash, the Unlocks tabs lie flat, Options leans the other way, and
- * Records and the song list are the shallow slant one way and the other.
+ * the slash, the Unlocks tabs lie flat, Options leans the other way,
+ * and Records and the song list are the shallow slant one way and the other.
+ * (The unlock popup has none: they cut through its reveal.)
  */
 export const STRIPE_ANGLES = {
   slash: SLASH_ANGLE,
@@ -34,7 +35,8 @@ export const STRIPE_ANGLES = {
   records: 60,
   songs: -60,
 } as const;
-export type StripeStyle = keyof typeof STRIPE_ANGLES;
+/** A screen's stripes: one of the angles above, or 'none' for no stripes at all */
+export type StripeStyle = keyof typeof STRIPE_ANGLES | 'none';
 
 export interface StripeLayout {
   /** Where the middle of each stripe crosses the screen, its width, and colour */

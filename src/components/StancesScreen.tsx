@@ -42,11 +42,12 @@ interface StancesScreenProps {
   onClose: () => void;
 }
 
-const ORDER: EnemyMotionStyle[] = [...FREE_STANCES, ...STANCE_UNLOCK_ORDER];
+/** Every stance, the free ones first, then in the order they open (the carousel's order, and the unlock popup's) */
+export const ORDER: EnemyMotionStyle[] = [...FREE_STANCES, ...STANCE_UNLOCK_ORDER];
 const STANCES = ORDER.map((id) => ENEMY_MOTION_STYLES.find((m) => m.id === id)!);
 
 /** A different enemy for each stance, so the carousel shows off the whole cast. */
-const CAST: Array<[FrequencyBand, EnemyTier]> = [
+export const CAST: Array<[FrequencyBand, EnemyTier]> = [
   ['bass', 2],
   ['sub', 1],
   ['high', 1],

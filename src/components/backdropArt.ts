@@ -748,29 +748,40 @@ const HAZE: Record<string, string> = {
 export const DRAWABLE_BACKDROP_IDS = [...Object.keys(SKIES), ...Object.keys(CENTRES), ...Object.keys(SKYLINES), ...Object.keys(FLOORS)];
 
 /** Draw the whole backdrop from the chosen pieces, back to front. */
-export function drawBackdropLayers(f: BackdropFrame, pieces: Record<BackdropLayer, string>) {
-  const { ctx, width, hy, s } = f;
-  (SKIES[pieces.sky] ?? skyDusk)(f);
-  (CENTRES[pieces.centre] ?? centreSun)(f);
-  (SKYLINES[pieces.skyline] ?? skylineCity)(f);
+/**
+ * Draws one layer's piece by itself (the unlock popup shows a new piece
+ * alone before building the rest of the backdrop round it). The floor stays
+ * between the horizon and the conveyors.
+ */
+export function drawBackdropLayer(f: BackdropFrame, layer: BackdropLayer, id: string) {
+  if (layer === 'sky') (SKIES[id] ?? skyDusk)(f);
+  else if (layer === 'centre') (CENTRES[id] ?? centreSun)(f);
+  else if (layer === 'skyline') (SKYLINES[id] ?? skylineCity)(f);
+  else {
+    const { ctx, width, hy } = f;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, hy, width, Math.max(0, f.beltTop - hy));
+    ctx.clip();
+    (FLOORS[id] ?? floorGrid)(f);
+    ctx.restore();
+  }
+}
 
-  // Atmospheric haze: the horizon fades into fog the colour of the sky
-  const hazeRgb = HAZE[pieces.sky] ?? HAZE.dusk;
+/** The atmospheric haze over the horizon, the colour of the sky. */
+function drawHaze(f: BackdropFrame, sky: string) {
+  const { ctx, width, hy, s } = f;
+  const hazeRgb = HAZE[sky] ?? HAZE.dusk;
   const haze = ctx.createLinearGradient(0, hy - 40 * s, 0, hy + 6 * s);
   haze.addColorStop(0, `rgba(${hazeRgb}, 0)`);
   haze.addColorStop(1, `rgba(${hazeRgb}, 0.75)`);
   ctx.fillStyle = haze;
   ctx.fillRect(0, hy - 40 * s, width, 46 * s);
+}
 
-  // The floor, clipped between the horizon and the conveyors
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, hy, width, Math.max(0, f.beltTop - hy));
-  ctx.clip();
-  (FLOORS[pieces.floor] ?? floorGrid)(f);
-  ctx.restore();
-
-  // Thin, soft horizon line
+/** The thin, soft horizon line, and the dark band just behind the conveyors so the fighters separate from the floor. */
+export function drawBackdropFinish(f: BackdropFrame) {
+  const { ctx, width, hy, s } = f;
   ctx.save();
   ctx.strokeStyle = 'rgba(0, 243, 255, 0.45)';
   ctx.shadowColor = '#00f3ff';
@@ -782,10 +793,35 @@ export function drawBackdropLayers(f: BackdropFrame, pieces: Record<BackdropLaye
   ctx.stroke();
   ctx.restore();
 
-  // Dark band just behind the conveyors so the fighters separate from the floor
   const sep = ctx.createLinearGradient(0, f.beltTop - 30 * s, 0, f.beltTop);
   sep.addColorStop(0, 'rgba(6, 7, 19, 0)');
   sep.addColorStop(1, 'rgba(6, 7, 19, 0.6)');
   ctx.fillStyle = sep;
   ctx.fillRect(0, f.beltTop - 30 * s, width, 30 * s);
+}
+
+/**
+ * Draws the whole backdrop, back to front. `fade` (0..1, per layer) draws a
+ * layer see-through: the unlock popup fades the rest in round a new piece.
+ */
+export function drawBackdropLayers(f: BackdropFrame, pieces: Record<BackdropLayer, string>, fade?: Partial<Record<BackdropLayer, number>>) {
+  const { ctx } = f;
+  const layer = (l: BackdropLayer) => {
+    const a = fade?.[l] ?? 1;
+    if (a <= 0) return;
+    ctx.save();
+    ctx.globalAlpha *= a;
+    drawBackdropLayer(f, l, pieces[l]);
+    ctx.restore();
+  };
+  layer('sky');
+  layer('centre');
+  layer('skyline');
+  // The haze belongs with the sky (it's the sky's colour)
+  ctx.save();
+  ctx.globalAlpha *= fade?.sky ?? 1;
+  drawHaze(f, pieces.sky);
+  ctx.restore();
+  layer('floor');
+  drawBackdropFinish(f);
 }
