@@ -68,7 +68,7 @@ export const RecordsScreen: React.FC<RecordsScreenProps> = ({ stats, songs, onCl
   ];
 
   return (
-    <ArcadeScreen label="Records">
+    <ArcadeScreen label="Records" stripes="records">
       {/* Header */}
       <div className="absolute flex items-center" style={{ left: u(5), top: u(4), gap: u(2) }}>
         <SlantButton onClick={onClose} aria-label="Back" className="arc-in-left" style={{ width: u(12), padding: 0 }}>

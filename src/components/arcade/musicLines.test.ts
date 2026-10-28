@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dialStep, FLAT_ANGLE, SLASH_ANGLE, stripeLayout, THROB, throbAfter, waveLevel } from './musicLines';
+import { dialStep, FLAT_ANGLE, SLASH_ANGLE, STRIPE_ANGLES, stripeLayout, THROB, throbAfter, waveLevel } from './musicLines';
 
 describe('the music lines', () => {
   it('throb: jump up on a hit, then ease back down', () => {
@@ -77,5 +77,15 @@ describe('the music lines', () => {
     s = dialStep(s.angle, s.speed, SLASH_ANGLE, 0.25);
     for (let i = 0; i < 120; i++) s = dialStep(s.angle, s.speed, SLASH_ANGLE, 1 / 60);
     expect(s.angle).toBeCloseTo(SLASH_ANGLE, 1);
+  });
+
+  it('give each menu screen its own way round, so every switch turns them', () => {
+    const angles = Object.values(STRIPE_ANGLES);
+    expect(new Set(angles).size).toBe(angles.length);
+    // No two are close (even half a turn apart, which would swap pink and cyan in the same lines)
+    for (const a of angles) for (const b of angles) if (a !== b) expect(Math.abs(a - b)).toBeGreaterThanOrEqual(20);
+    // ...and each still keeps the same widths and gap
+    const gap = (l: ReturnType<typeof stripeLayout>) => Math.hypot(l.stripes[1].x - l.stripes[0].x, l.stripes[1].y - l.stripes[0].y);
+    for (const a of angles) expect(gap(stripeLayout(1366, 768, a))).toBeCloseTo(gap(stripeLayout(1366, 768)), 6);
   });
 });

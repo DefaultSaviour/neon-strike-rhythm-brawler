@@ -128,7 +128,7 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
   };
 
   return (
-    <ArcadeScreen label="Pick your song">
+    <ArcadeScreen label="Pick your song" stripes="songs">
       {/* Header */}
       <div className="absolute flex items-center" style={{ left: u(5), top: u(4), gap: u(2) }}>
         <SlantButton onClick={onClose} aria-label="Back" className="arc-in-left" style={{ width: u(12), padding: 0 }}>
