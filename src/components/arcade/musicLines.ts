@@ -21,6 +21,21 @@ const ANGLE = (115 * Math.PI) / 180;
 export const SLASH_ANGLE = (Math.atan2(-Math.cos(ANGLE), Math.sin(ANGLE)) * 180) / Math.PI;
 export const FLAT_ANGLE = 88.8;
 
+/**
+ * Each menu screen's stripe angle (see SLASH_ANGLE): opening one swings the
+ * stripes round to it, each a different way. The title and results keep
+ * the slash, the Unlocks tabs lie flat, Options leans the other way, and
+ * Records and the song list are the shallow slant one way and the other.
+ */
+export const STRIPE_ANGLES = {
+  slash: SLASH_ANGLE,
+  flat: FLAT_ANGLE,
+  options: -25,
+  records: 60,
+  songs: -60,
+} as const;
+export type StripeStyle = keyof typeof STRIPE_ANGLES;
+
 export interface StripeLayout {
   /** Where the middle of each stripe crosses the screen, its width, and colour */
   stripes: Array<{ x: number; y: number; width: number; color: string; kind: 'bass' | 'mid' }>;

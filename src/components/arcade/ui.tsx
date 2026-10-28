@@ -4,7 +4,7 @@ import { fighterTier } from '../../game/fighterTier';
 import { drawFighter } from '../fighterArt';
 import { getOrientedPose, lerpPose } from '../../game/animations';
 import { audioEngine } from '../../audio/audioEngine';
-import { dialStep, FLAT_ANGLE, SLASH_ANGLE, stripeLayout, THROB, throbAfter, waveLevel } from './musicLines';
+import { dialStep, SLASH_ANGLE, STRIPE_ANGLES, stripeLayout, StripeStyle, THROB, throbAfter, waveLevel } from './musicLines';
 
 /**
  * Shared pieces of the arcade menus (see arcade.css): the full-screen frame
@@ -13,10 +13,10 @@ import { dialStep, FLAT_ANGLE, SLASH_ANGLE, stripeLayout, THROB, throbAfter, wav
 
 /**
  * A full-screen arcade menu: dark, with the music lines and halftone behind.
- * `stripes="flat"` turns the lines to lie across the screen instead of
- * slashing it (they swing round to it when the screen opens).
+ * `stripes` picks the screen's own angle for the lines (see STRIPE_ANGLES):
+ * they swing round to it when the screen opens.
  */
-export const ArcadeScreen: React.FC<{ children: React.ReactNode; className?: string; label?: string; stripes?: 'slash' | 'flat' }> = ({ children, className = '', label, stripes = 'slash' }) => (
+export const ArcadeScreen: React.FC<{ children: React.ReactNode; className?: string; label?: string; stripes?: StripeStyle }> = ({ children, className = '', label, stripes = 'slash' }) => (
   // The frame fills the window; the screen inside is never taller than 4:3 (see .arc-frame)
   <div className="arc-frame">
     <div className="arc-rotate" aria-hidden="true">
@@ -27,7 +27,7 @@ export const ArcadeScreen: React.FC<{ children: React.ReactNode; className?: str
       <div className="arc-bg" aria-hidden="true" />
       {/* The dots under the music lines, so they never speckle them */}
       <div className="arc-halftone" aria-hidden="true" />
-      <MusicStripes angle={stripes === 'flat' ? FLAT_ANGLE : SLASH_ANGLE} />
+      <MusicStripes angle={STRIPE_ANGLES[stripes]} />
       {children}
     </div>
   </div>
