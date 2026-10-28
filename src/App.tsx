@@ -433,7 +433,6 @@ export default function App() {
     <UnlockTabs
       tab={unlockTab}
       onTab={setUnlockTab}
-      arcade={unlockTab !== 'backdrops'}
       counts={{ heroes: unseen.hero.length, stances: unseen.stance.length, backdrops: unseen.backdrop.length }}
     />
   );

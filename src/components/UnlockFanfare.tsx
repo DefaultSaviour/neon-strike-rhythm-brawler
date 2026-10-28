@@ -7,7 +7,7 @@ import type { HeroId } from '../game/heroes';
 import { HERO_UNLOCKS, LifetimeStats } from '../game/heroUnlocks';
 import { backdropLayerOf, describeUnlock, RunUnlock } from '../game/runUnlocks';
 import { MINUTES_PER_STANCE } from '../game/stanceUnlocks';
-import { BackdropCanvas } from './BackdropScreen';
+import { BackdropCanvas } from './BackdropCanvas';
 import { StancePortrait } from './StancePortrait';
 import { HeroPortrait } from './HeroPortrait';
 

@@ -5,6 +5,7 @@ import {
   BACKDROP_LAYERS,
   BACKDROP_MILESTONES,
   BACKDROP_UNLOCK_PATH,
+  backdropGoalScore,
   backdropsAfterRun,
   backdropsEarned,
   DEFAULT_BACKDROP,
@@ -68,5 +69,26 @@ describe('backdrops', () => {
     expect(activeBackdrop({ sky: 'storm' }, EMPTY_STATS).sky).toBe('dusk');
     expect(activeBackdrop({ sky: 'lava' }, all).sky).toBe('dusk'); // a floor isn't a sky
     expect(activeBackdrop({ sky: 'nope' }, all).sky).toBe('dusk');
+  });
+
+  it('says the score that opens each locked piece, the next one matching the countdown', () => {
+    const s = stats({ backdropsUnlocked: 3, totalScore: 80_000 });
+    const next = nextBackdrop(s)!;
+    expect(backdropGoalScore(next.id, s)).toBe(BACKDROP_MILESTONES[3]);
+    expect(backdropGoalScore(next.id, s)! - s.totalScore).toBe(scoreToNextBackdrop(s));
+    expect(backdropGoalScore(BACKDROP_UNLOCK_PATH[5], s)).toBe(BACKDROP_MILESTONES[5]);
+    // Open and free pieces have no goal
+    expect(backdropGoalScore(BACKDROP_UNLOCK_PATH[0], s)).toBeNull();
+    expect(backdropGoalScore('dusk', s)).toBeNull();
+  });
+
+  it('moves the goals along when ads have opened pieces early', () => {
+    const s = stats({ backdropsUnlocked: 3, backdropAds: 2, totalScore: 80_000 });
+    const next = nextBackdrop(s)!;
+    expect(next.id).toBe(BACKDROP_UNLOCK_PATH[5]);
+    expect(backdropGoalScore(next.id, s)).toBe(BACKDROP_MILESTONES[3]);
+    expect(backdropGoalScore(BACKDROP_UNLOCK_PATH[6], s)).toBe(BACKDROP_MILESTONES[4]);
+    // The very last piece has the last milestone still to come at most
+    expect(backdropGoalScore(BACKDROP_UNLOCK_PATH[15], s)).toBe(BACKDROP_MILESTONES[13]);
   });
 });
