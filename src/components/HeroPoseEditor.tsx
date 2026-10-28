@@ -347,7 +347,7 @@ export function HeroPoseEditor({ onClose, modeSwitch }: { onClose: () => void; m
   const hint = playing
     ? 'Previewing the move as it plays in the game. Click the figure or press Space to stop and edit.'
     : hover
-      ? HANDLE_HINTS[hover].replace('timing zone so the enemy stays in time', 'shaded zone so the hero stays on his spot')
+      ? HANDLE_HINTS[hover].replace('timing zone so the enemy stays in time', 'shaded zone so the fighter stays on their spot')
       : 'Drag any circle to pose: blue = body, yellow = hands and feet, pink = elbows and knees.';
 
   // --- layout --------------------------------------------------------------
@@ -364,7 +364,7 @@ export function HeroPoseEditor({ onClose, modeSwitch }: { onClose: () => void; m
         <div className="flex items-center gap-4">
           <div>
             <div className="text-lg font-black tracking-widest text-cyan-400">POSE STUDIO</div>
-            <div className="text-[11px] text-slate-500">Reshape any hero's moves</div>
+            <div className="text-[11px] text-slate-500">Reshape any fighter's moves</div>
           </div>
           {modeSwitch(confirmDiscard)}
         </div>
@@ -411,7 +411,7 @@ export function HeroPoseEditor({ onClose, modeSwitch }: { onClose: () => void; m
           <div ref={wrapRef} className="relative flex-1 min-h-[300px] rounded-xl border border-slate-800 overflow-hidden">
             <canvas
               ref={canvasRef}
-              aria-label="Pose editor: drag the joints to pose the hero"
+              aria-label="Pose editor: drag the joints to pose the fighter"
               className="absolute inset-0 w-full h-full"
               style={{ touchAction: 'none', cursor: dragRef.current ? 'grabbing' : hover ? 'grab' : 'default' }}
               onPointerDown={onPointerDown}

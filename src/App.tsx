@@ -36,7 +36,7 @@ import { markFirstSongDone, needsFirstSong } from './game/firstSong';
 import { BOSS_LOOKS } from './game/boss';
 import { midgameAdDue } from './game/adPacing';
 import { ENEMY_MOTION_STYLES, EnemyMotionStyle } from './game/enemyMotion';
-import { getHero, HeroId } from './game/heroes';
+import { HeroId } from './game/heroes';
 import { adOffer, backdropLayerOf, describeUnlock, RunUnlock } from './game/runUnlocks';
 import { UNLOCK_ORDER } from './game/heroUnlocks';
 import { UnlockFanfare } from './components/UnlockFanfare';
@@ -370,19 +370,6 @@ export default function App() {
     });
   }, [watchRewardedAd, engine, handleUpdateSettings]);
 
-  /** Watch a rewarded ad to unlock an ad-only hero (The Bride), then play as her. */
-  const handleWatchHeroAd = useCallback(
-    (hero: HeroId) => {
-      void watchRewardedAd(() => {
-        if (engine.unlockHeroWithAd(hero)) {
-          handleUpdateSettings({ hero });
-          setMenuNotice(`New hero unlocked: ${getHero(hero).label}!`);
-        }
-      });
-    },
-    [watchRewardedAd, engine, handleUpdateSettings]
-  );
-
   useEffect(() => {
     if (!menuNotice) return;
     const t = setTimeout(() => setMenuNotice(null), 3500);
@@ -446,6 +433,7 @@ export default function App() {
     <UnlockTabs
       tab={unlockTab}
       onTab={setUnlockTab}
+      arcade={unlockTab !== 'backdrops'}
       counts={{ heroes: unseen.hero.length, stances: unseen.stance.length, backdrops: unseen.backdrop.length }}
     />
   );
@@ -611,8 +599,7 @@ export default function App() {
           isNew={(id) => unseen.hero.includes(id)}
           onSeen={(id) => markSeen('hero', id)}
           onSelect={(hero) => handleUpdateSettings({ hero })}
-          onWatchAd={adAvailable ? handleWatchHeroAd : undefined}
-          adBusy={adBusy}
+          adOffer={endOffer ? { name: describeUnlock(endOffer).name, busy: adBusy, done: offerTaken !== null, onWatch: () => takeOffer(endOffer) } : undefined}
           notice={menuNotice}
           onClose={closeMenuScreen}
         />
@@ -757,6 +744,7 @@ export default function App() {
             handleUpdateSettings({ hero });
             markSeen('hero', hero);
           }}
+          adOffer={endOffer ? { name: describeUnlock(endOffer).name, busy: adBusy, done: offerTaken !== null, notice: menuNotice, onWatch: () => takeOffer(endOffer) } : undefined}
           onSelectTrack={(t) => {
             setSelectedTrack(t);
           }}

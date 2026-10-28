@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { LifetimeStats } from '../game/heroUnlocks';
 import { byCombo, byScore, playTime, shortNumber, SongRecord } from '../game/records';
-import { ArcadeScreen, ArcadeSwitch, SlantButton } from './arcade/ui';
+import { ArcadeScreen, ArcadeSwitch, FitText, SlantButton } from './arcade/ui';
 import { useDragScroll } from './arcade/dragScroll';
 
 /**
@@ -165,9 +165,9 @@ export const RecordsScreen: React.FC<RecordsScreenProps> = ({ stats, songs, onCl
                 <span className="arc-display shrink-0" style={{ fontSize: top ? u(5) : u(3.6), width: u(6), color: top ? 'var(--pink)' : i < 3 ? 'var(--yellow)' : '#3c4363' }}>
                   {top ? '★1' : i + 1}
                 </span>
-                <span className="arc-display truncate" style={{ fontSize: top ? u(5.2) : u(4.2), flex: 1, minWidth: 0 }}>
+                <FitText className="arc-display" style={{ fontSize: top ? u(5.2) : u(4.2), flex: 1 }}>
                   {s.title}
-                </span>
+                </FitText>
                 <span className="arc-display shrink-0 text-center" style={{ fontSize: u(3.8), width: u(6), color: top ? '#9a9cab' : 'var(--muted)' }} aria-label={`Grade ${s.grade}`}>
                   {s.grade}
                 </span>
