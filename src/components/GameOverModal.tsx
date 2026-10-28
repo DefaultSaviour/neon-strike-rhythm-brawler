@@ -258,31 +258,44 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             </div>
           ))}
         </div>
-        {/* Timing: which way you're off, and a fix */}
-        {averageTimingErrorMs !== null && (
-          <div className="flex items-center justify-between" style={{ gap: u(1.6), marginTop: u(0.4), fontSize: small }}>
-            <span className="text-[color:var(--muted)] font-bold">
+        {/* Timing: when your presses were steadily off, one big button that fixes it (which way
+            you were off is on the button); otherwise just a line saying how close you were */}
+        {averageTimingErrorMs !== null &&
+          (showSuggestion ? (
+            <button
+              type="button"
+              disabled={appliedOffset !== null}
+              onClick={() => {
+                onApplyLatencyOffset!(suggestion!);
+                setAppliedOffset(suggestion);
+              }}
+              className="arc-btn arc-in-right w-full"
+              style={{
+                height: u(9.4),
+                justifyContent: 'space-between',
+                padding: `0 ${u(4)}`,
+                marginTop: u(0.6),
+                animationDelay: '0.25s',
+                background: appliedOffset !== null ? 'var(--panel)' : 'var(--cyan)',
+                color: appliedOffset !== null ? 'var(--cyan)' : '#000',
+              }}
+              title="Your presses were steadily off: this moves the timing to match your setup"
+            >
+              <span className="font-black uppercase whitespace-nowrap not-italic" style={{ fontFamily: 'Outfit, sans-serif', fontSize: `max(10px, ${u(2.2)})`, letterSpacing: '0.14em' }}>
+                {Math.abs(averageTimingErrorMs)} ms {averageTimingErrorMs < 0 ? 'early' : 'late'}
+              </span>
+              <span className="whitespace-nowrap" style={{ fontSize: u(4.6) }}>
+                {appliedOffset !== null ? `✓ Timing fixed: ${appliedOffset} ms` : `Fix my timing: ${suggestion} ms`}
+              </span>
+            </button>
+          ) : (
+            <div className="font-bold" style={{ marginTop: u(0.6), fontSize: `max(11px, ${u(2.8)})`, color: 'var(--muted)' }}>
               Timing:{' '}
               <span className="text-white">
                 {Math.abs(averageTimingErrorMs) <= 5 ? 'spot on' : `${Math.abs(averageTimingErrorMs)} ms ${averageTimingErrorMs < 0 ? 'early' : 'late'}`}
               </span>
-            </span>
-            {showSuggestion && (
-              <SlantButton
-                size="sm"
-                disabled={appliedOffset !== null}
-                onClick={() => {
-                  onApplyLatencyOffset!(suggestion!);
-                  setAppliedOffset(suggestion);
-                }}
-                style={{ fontSize: `max(11px, ${u(2.6)})` }}
-                title="Your presses were consistently off: this moves the timing to match your setup"
-              >
-                {appliedOffset !== null ? `Offset set: ${appliedOffset} ms` : `Fix it: ${suggestion} ms`}
-              </SlantButton>
-            )}
-          </div>
-        )}
+            </div>
+          ))}
       </div>
 
       {/* Buttons */}

@@ -1,11 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { GameScoreState, Track, Lane } from '../types/game';
 import { audioEngine } from '../audio/audioEngine';
-import { Pause, RotateCcw, Volume2, Music } from 'lucide-react';
+import { formatSongTime } from '../game/runProgress';
+import { Pause, RotateCcw, Music } from 'lucide-react';
+import { FitText } from './arcade/ui';
+import { fighterTier } from '../game/fighterTier';
+
+const u = (n: number) => `calc(var(--u) * ${n})`;
+
+/**
+ * The in-song HUD, arcade style. Everything is sized in the arcade unit, so
+ * it looks the same at every resolution and stays inside the 16:9 middle.
+ * - Top: the song (tap for the song list), PRACTICE, the 1-button switch,
+ *   restart and pause, then how far through the song you are.
+ * - Score row (data-hud-scores): combo, rank and score. The canvas reads
+ *   where these three blocks sit to keep the hit lists clear of them, and on
+ *   a phone on its side it puts the lists in the gaps between them.
+ * - Bottom: the tap zones for touch screens, with faint key hints.
+ */
 
 interface HUDProps {
   track: Track | null;
   scoreState: GameScoreState;
+  /** How long the song plays (s) */
+  length?: number;
   oneButtonMode?: boolean;
   onToggleOneButtonMode?: () => void;
   /** A practice run: shows a PRACTICE tag by the song name */
@@ -17,9 +35,28 @@ interface HUDProps {
   onOpenSelect: () => void;
 }
 
+/** The letter rank for this run so far, and its colour */
+function rankFor(accuracy: number, misses: number): { grade: string; color: string } {
+  if (accuracy >= 98 && misses === 0) return { grade: 'SSS', color: 'var(--yellow)' };
+  if (accuracy >= 94) return { grade: 'SS', color: 'var(--cyan)' };
+  if (accuracy >= 90) return { grade: 'S', color: 'var(--pink)' };
+  if (accuracy >= 80) return { grade: 'A', color: '#3dff9a' };
+  if (accuracy >= 70) return { grade: 'B', color: '#6f9bff' };
+  if (accuracy >= 60) return { grade: 'C', color: '#ffb020' };
+  return { grade: 'D', color: 'var(--muted)' };
+}
+
+/** A small square slanted button in the top bar (44px at least, for thumbs) */
+const BarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ className = '', children, ...rest }) => (
+  <button type="button" {...rest} className={`arc-btn hud-btn ${className}`}>
+    {children}
+  </button>
+);
+
 export const HUD: React.FC<HUDProps> = ({
   track,
   scoreState,
+  length,
   oneButtonMode = false,
   onToggleOneButtonMode,
   practice = false,
@@ -44,51 +81,17 @@ export const HUD: React.FC<HUDProps> = ({
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  const totalHits =
-    scoreState.perfectCount + scoreState.goodCount + scoreState.okCount + scoreState.missCount;
+  const totalHits = scoreState.perfectCount + scoreState.goodCount + scoreState.okCount + scoreState.missCount;
   const accuracy =
     totalHits > 0
-      ? Math.round(
-          ((scoreState.perfectCount * 100 +
-            scoreState.goodCount * 70 +
-            scoreState.okCount * 40) /
-            (totalHits * 100)) *
-            100
-        )
+      ? Math.round(((scoreState.perfectCount * 100 + scoreState.goodCount * 70 + scoreState.okCount * 40) / (totalHits * 100)) * 100)
       : 100;
+  const { grade, color: gradeColor } = rankFor(accuracy, scoreState.missCount);
 
-  // Grade calculation
-  let grade = 'D';
-  let gradeColor = 'text-slate-400';
-  if (accuracy >= 98 && scoreState.missCount === 0) {
-    grade = 'SSS';
-    gradeColor = 'text-amber-300 drop-shadow-[0_0_12px_rgba(255,230,0,0.8)]';
-  } else if (accuracy >= 94) {
-    grade = 'SS';
-    gradeColor = 'text-cyan-300 drop-shadow-[0_0_10px_rgba(0,243,255,0.7)]';
-  } else if (accuracy >= 90) {
-    grade = 'S';
-    gradeColor = 'text-pink-400 drop-shadow-[0_0_8px_rgba(255,0,127,0.7)]';
-  } else if (accuracy >= 80) {
-    grade = 'A';
-    gradeColor = 'text-emerald-400';
-  } else if (accuracy >= 70) {
-    grade = 'B';
-    gradeColor = 'text-blue-400';
-  } else if (accuracy >= 60) {
-    grade = 'C';
-    gradeColor = 'text-yellow-400';
-  }
-
-  const duration = track?.duration || 60;
-  const progressRatio = Math.min(1, playbackTime / duration);
+  const duration = length && length > 0 ? length : track?.duration || 60;
+  const progressRatio = Math.min(1, Math.max(0, playbackTime / duration));
   const multiplier = 1 + Math.floor(scoreState.combo / 10) * 0.5;
-
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
+  const tier = fighterTier(scoreState.combo);
 
   const handleLeftDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -115,216 +118,163 @@ export const HUD: React.FC<HUDProps> = ({
     setTimeout(() => setSingleActive(false), 90);
   };
 
+  const label: React.CSSProperties = { fontSize: `max(9px, ${u(1.9)})`, letterSpacing: '0.2em', color: 'var(--muted)', fontWeight: 900 };
+
   return (
-    <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10">
-      {/* Practice: a big banner, up the whole song, so nobody misses that it's practice.
-          Short screens (phones on their side) have no room for it over the fight, so there
-          only the PRACTICE tag in the top bar shows. */}
-      {practice && (
-        <div className="practice-banner absolute inset-x-0 top-[22%] flex flex-col items-center text-center px-4 [@media(max-height:520px)]:hidden">
-          <div className="px-6 py-2 rounded-xl bg-amber-400 text-black text-2xl md:text-4xl font-black tracking-[0.25em] shadow-[0_0_40px_rgba(255,194,58,0.6)]">
-            PRACTICE
-          </div>
-          <div className="mt-2 text-sm md:text-base font-bold text-amber-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-            Getting hit won't end the song. Nothing counts toward unlocks.
-          </div>
-        </div>
-      )}
-      {/* Top Header & Song Progress */}
-      <div className="w-full max-w-4xl mx-auto flex flex-col gap-2 pointer-events-auto">
-        <div className="flex items-center justify-between text-xs tracking-wider text-slate-300">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenSelect}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-900/80 border border-slate-700/80 hover:border-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer text-xs font-semibold"
-              title="Select Track"
-            >
-              <Music className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="truncate max-w-[140px] md:max-w-[200px]">
-                {track?.title || 'Track'}
-              </span>
-            </button>
-            {practice && (
-              <span className="px-3 py-1.5 rounded bg-amber-400 text-black text-xs font-black tracking-[0.2em] shadow-[0_0_14px_rgba(255,194,58,0.6)]">
-                PRACTICE
-              </span>
-            )}
-
-            <span className="hidden md:inline text-slate-500 font-mono text-xs">
-              {track?.artist} · {track?.bpm} BPM
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {onToggleOneButtonMode && (
-              <button
-                onClick={onToggleOneButtonMode}
-                className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                  oneButtonMode
-                    ? 'bg-amber-400/20 border-amber-400 text-amber-300 shadow-[0_0_8px_rgba(255,230,0,0.35)]'
-                    : 'bg-slate-900/80 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:border-cyan-400'
-                }`}
-                title="Toggle One-Button Mode (Auto-targets nearest beat enemy)"
-              >
-                <span>Mode:</span>
-                <span className={oneButtonMode ? 'text-amber-300 font-black' : 'text-cyan-400 font-semibold'}>
-                  {oneButtonMode ? '1-Button' : '2-Button'}
-                </span>
-              </button>
-            )}
-
-            <button
-              onClick={onRestart}
-              className="p-1.5 rounded bg-slate-900/80 border border-slate-700/80 hover:border-pink-500 hover:text-pink-400 transition-colors cursor-pointer"
-              title="Restart Track (R)"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={onPause}
-              className="p-1.5 rounded bg-slate-900/80 border border-slate-700/80 hover:border-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
-              title="Pause (Esc / Space)"
-            >
-              <Pause className="w-3.5 h-3.5" />
-            </button>
-
-            <div className="font-mono text-xs text-slate-400 ml-1">
-              <span className="text-slate-200">{formatTime(playbackTime)}</span> / {formatTime(duration)}
-            </div>
-          </div>
-        </div>
-
-        {/* Neon Progress Bar */}
-        <div className="w-full h-1.5 bg-slate-900/90 rounded-full overflow-hidden border border-slate-800 relative">
-          <div
-            className="h-full bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-300 transition-all duration-100 shadow-[0_0_10px_rgba(0,243,255,0.8)]"
-            style={{ width: `${progressRatio * 100}%` }}
-          />
-        </div>
-
-        {/* Acoustic Frequency Band Legend */}
-        <div className="flex items-center justify-center gap-3 sm:gap-6 text-[10px] tracking-wider uppercase font-mono font-semibold text-slate-400 select-none py-0.5">
-          <div className="flex items-center gap-1.5" title="Sub & Kicks (36-145 Hz) • Titan, Breaker, Rammer">
-            <span className="w-2 h-2 rounded-full bg-[#ff1744] shadow-[0_0_8px_#ff1744]" />
-            <span className="text-[#ff8a80]">Sub / Kick</span>
-          </div>
-          <span className="text-slate-700">·</span>
-          <div className="flex items-center gap-1.5" title="Bassline (105-300 Hz) • Warlord, Ronin, Acid Dancer">
-            <span className="w-2 h-2 rounded-full bg-[#d84dff] shadow-[0_0_8px_#d84dff]" />
-            <span className="text-[#e1c4ff]">Bassline</span>
-          </div>
-          <span className="text-slate-700">·</span>
-          <div className="flex items-center gap-1.5" title="Highs & Leads (800-6500 Hz) • Speeder, Wraith, Seraph">
-            <span className="w-2 h-2 rounded-full bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]" />
-            <span className="text-[#a5f3fc]">Highs</span>
-          </div>
-        </div>
-
-        {/* Dynamic In-Game HUD: Score, Combo, Grade (the canvas keeps the hit lists clear of it) */}
-        <div data-hud-scores className="flex items-center justify-between mt-2">
-          {/* Left: Combo Counter */}
-          <div className="flex flex-col">
-            <div className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-              Chain Combo
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span
-                className={`text-3xl md:text-4xl font-extrabold tracking-tight font-mono tabular-nums transition-all ${
-                  scoreState.combo > 20
-                    ? 'text-cyan-400 drop-shadow-[0_0_12px_rgba(0,243,255,0.9)]'
-                    : scoreState.combo > 0
-                    ? 'text-pink-400 drop-shadow-[0_0_8px_rgba(255,0,127,0.8)]'
-                    : 'text-slate-600'
-                }`}
-              >
-                {scoreState.combo}x
-              </span>
-              {multiplier > 1 && (
-                <span className="text-xs font-mono font-bold text-amber-300">
-                  {multiplier.toFixed(1)}x Bonus
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Center: Letter Grade */}
-          <div className="flex flex-col items-center">
-            <div className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-              Rank
-            </div>
-            <div className={`text-2xl md:text-3xl font-black font-mono tracking-tighter ${gradeColor}`}>
-              {grade}
-            </div>
-            <div className="text-[11px] font-mono text-slate-400">
-              {accuracy}% Acc
-            </div>
-          </div>
-
-          {/* Right: Score */}
-          <div className="flex flex-col items-end">
-            <div className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-              Score
-            </div>
-            <div className="text-2xl md:text-3xl font-black font-mono tabular-nums text-slate-100 tracking-wider">
-              {scoreState.score.toLocaleString()}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Touch Strike Zones for Mobile / Touch Screen */}
+    <div className="hud absolute inset-0 pointer-events-none z-10 flex flex-col">
+      {/* Tap zones fill the whole screen behind the bars (a tap anywhere below the top bar strikes) */}
       {oneButtonMode ? (
-        <div className="w-full flex-1 flex pointer-events-auto mt-6">
-          <div
-            onPointerDown={handleSingleDown}
-            className={`w-full flex-1 flex flex-col justify-end items-center pb-8 border-t border-amber-500/20 cursor-pointer select-none touch-none transition-colors ${
-              singleActive ? 'bg-amber-400/20' : ''
-            }`}
-          >
-            <div className="flex items-center gap-3 text-amber-300 text-xs font-bold tracking-widest uppercase bg-slate-950/80 px-4 py-2 rounded-full border border-amber-400/50 shadow-[0_0_15px_rgba(255,230,0,0.3)]">
-              <span className="px-2.5 py-1 rounded bg-amber-950/80 border border-amber-400/80 text-[11px] font-mono font-black text-amber-300">
-                <span className="[@media(pointer:coarse)]:hidden">[SPACE] · </span>[TAP ANYWHERE]
-              </span>
-              <span>One-Button Strike (Auto-Targets Nearest Beat)</span>
-            </div>
+        <div
+          onPointerDown={handleSingleDown}
+          className="absolute inset-0 pointer-events-auto select-none touch-none cursor-pointer"
+          style={{ background: singleActive ? 'rgba(255, 230, 0, 0.1)' : undefined }}
+        >
+          <div className="absolute inset-x-0 flex justify-center" style={{ bottom: u(4) }}>
+            <span className="arc-display hud-hint" style={{ color: 'var(--yellow)' }}>
+              <span className="[@media(pointer:coarse)]:hidden">Space · </span>Tap anywhere to strike
+            </span>
           </div>
         </div>
       ) : (
-        <div className="w-full flex-1 flex pointer-events-auto mt-6">
-          {/* Left Strike Zone */}
+        <div className="absolute inset-0 flex pointer-events-auto select-none touch-none">
           <div
             onPointerDown={handleLeftDown}
-            className={`flex-1 flex flex-col justify-end pb-8 pl-6 border-r border-cyan-500/10 cursor-pointer select-none touch-none transition-colors ${
-              leftActive ? 'bg-cyan-500/15' : ''
-            }`}
+            className="flex-1 relative cursor-pointer"
+            style={{ background: leftActive ? 'linear-gradient(90deg, rgba(0, 229, 255, 0.16), transparent 80%)' : undefined }}
           >
-            <div className="flex items-center gap-2 opacity-50 text-cyan-400 text-xs font-bold tracking-widest uppercase">
-              <span className="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono [@media(pointer:coarse)]:hidden">
-                [←] or [A]
-              </span>
-              <span className="[@media(pointer:coarse)]:hidden">Strike Left</span>
-              <span className="hidden [@media(pointer:coarse)]:inline">Tap to strike</span>
-            </div>
+            <span className="arc-display hud-hint absolute" style={{ left: u(5), bottom: u(4), color: 'var(--cyan)' }}>
+              <span className="[@media(pointer:coarse)]:hidden">◀ A · Strike left</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">◀ Tap to strike</span>
+            </span>
           </div>
-
-          {/* Right Strike Zone */}
           <div
             onPointerDown={handleRightDown}
-            className={`flex-1 flex flex-col justify-end pb-8 pr-6 items-end border-l border-pink-500/10 cursor-pointer select-none touch-none transition-colors ${
-              rightActive ? 'bg-pink-500/15' : ''
-            }`}
+            className="flex-1 relative cursor-pointer"
+            style={{ background: rightActive ? 'linear-gradient(270deg, rgba(255, 31, 109, 0.16), transparent 80%)' : undefined }}
           >
-            <div className="flex items-center gap-2 opacity-50 text-pink-400 text-xs font-bold tracking-widest uppercase">
-              <span className="[@media(pointer:coarse)]:hidden">Strike Right</span>
-              <span className="hidden [@media(pointer:coarse)]:inline">Tap to strike</span>
-              <span className="px-2 py-1 rounded bg-pink-950/80 border border-pink-500/40 text-[10px] font-mono [@media(pointer:coarse)]:hidden">
-                [→] or [D]
-              </span>
-            </div>
+            <span className="arc-display hud-hint absolute" style={{ right: u(5), bottom: u(4), color: 'var(--pink)' }}>
+              <span className="[@media(pointer:coarse)]:hidden">Strike right · D ▶</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">Tap to strike ▶</span>
+            </span>
           </div>
         </div>
       )}
+
+      {/* Practice: a big banner, up the whole song, so nobody misses that it's practice.
+          A short game box (a phone on its side, or upright) has no room for it over the fight,
+          so there only the PRACTICE tag in the top bar shows (see .hud .practice-banner). */}
+      {practice && (
+        <div className="practice-banner absolute inset-x-0 flex flex-col items-center text-center" style={{ top: u(35), gap: u(0.8) }}>
+          <span className="arc-tag" style={{ fontSize: u(3.6), padding: `${u(0.5)} ${u(2.6)}`, letterSpacing: '0.3em' }}>
+            PRACTICE
+          </span>
+          <span className="font-black" style={{ fontSize: u(2.2), color: 'var(--yellow)', textShadow: '0 2px 4px #000' }}>
+            Getting hit won't end the song. Nothing counts toward unlocks.
+          </span>
+        </div>
+      )}
+
+      {/* The top, kept to the 16:9 middle */}
+      <div className="relative mx-auto w-full flex flex-col" style={{ maxWidth: u(178), padding: `${u(3)} ${u(4)} 0`, gap: u(1.2) }}>
+        <div className="flex items-center pointer-events-auto" style={{ gap: u(1.4) }}>
+          <button type="button" onClick={onOpenSelect} className="arc-btn hud-song min-w-0" title="Pick another song">
+            <Music className="shrink-0" style={{ width: u(2.6), height: u(2.6), minWidth: 13, minHeight: 13, color: 'var(--cyan)' }} />
+            <FitText className="arc-display" style={{ fontSize: 'inherit' }}>{track?.title || 'Song'}</FitText>
+          </button>
+          {practice && <span className="arc-tag shrink-0">PRACTICE</span>}
+          <div className="flex-1" />
+          {onToggleOneButtonMode && (
+            <BarButton onClick={onToggleOneButtonMode} className={`hud-mode ${oneButtonMode ? 'is-alt' : ''}`} title="Switch between one button and left & right">
+              {oneButtonMode ? '1 Button' : 'Left & Right'}
+            </BarButton>
+          )}
+          <BarButton onClick={onRestart} title="Restart the song (R)" aria-label="Restart">
+            <RotateCcw style={{ width: '42%', height: '42%' }} />
+          </BarButton>
+          <BarButton onClick={onPause} title="Pause (Esc / Space)" aria-label="Pause">
+            <Pause style={{ width: '42%', height: '42%' }} />
+          </BarButton>
+        </div>
+
+        {/* How far through the song */}
+        <div className="flex items-center" style={{ gap: u(1.6) }}>
+          <div className="arc-strip relative flex-1" style={{ height: `max(6px, ${u(1.5)})`, background: 'rgba(20, 20, 31, 0.9)' }} aria-hidden="true">
+            <div className="absolute inset-y-0 left-0" style={{ width: `${progressRatio * 100}%`, background: 'linear-gradient(90deg, var(--cyan), var(--pink) 60%, var(--yellow))' }} />
+          </div>
+          <span className="font-black tabular-nums whitespace-nowrap" style={{ fontSize: `max(10px, ${u(2.2)})`, color: 'var(--muted)' }}>
+            <span style={{ color: '#fff' }}>{formatSongTime(playbackTime)}</span> / {formatSongTime(duration)}
+          </span>
+        </div>
+
+        {/* What the enemies' colours mean */}
+        <div className="flex items-center justify-center font-black uppercase select-none" style={{ gap: u(3), fontSize: `max(9px, ${u(1.8)})`, letterSpacing: '0.16em' }}>
+          {[
+            ['#ff1744', 'Sub / Kick', 'Sub & kicks (36–145 Hz): Titan, Breaker, Rammer'],
+            ['#d84dff', 'Bassline', 'Bassline (105–300 Hz): Warlord, Ronin, Acid Dancer'],
+            ['#00e5ff', 'Highs', 'Highs & leads (800–6500 Hz): Speeder, Wraith, Seraph'],
+          ].map(([c, name, tip]) => (
+            <span key={name} className="flex items-center" style={{ gap: u(0.8), color: c }} title={tip}>
+              <span style={{ width: u(1.2), height: u(1.2), minWidth: 6, minHeight: 6, background: c, transform: 'skewX(-14deg)', boxShadow: `0 0 ${u(1)} ${c}` }} />
+              {name}
+            </span>
+          ))}
+        </div>
+
+        {/* Combo, rank, score (the canvas reads where these three sit: keep them as the row's only children) */}
+        <div data-hud-scores className="flex items-start justify-between" style={{ marginTop: u(0.4) }}>
+          {/* The combo, as on the Fighters screen: a big yellow count that pops on every hit, and
+              the fighter's tier name under it (the same tiers the fighter levels up through) */}
+          <div className="flex flex-col items-start">
+            <div className="flex items-baseline" style={{ gap: u(1) }}>
+              <span
+                key={scoreState.combo}
+                className="arc-display arc-split tabular-nums hud-num"
+                style={{
+                  fontSize: u(9),
+                  color: scoreState.combo > 0 ? 'var(--yellow)' : '#4a4f66',
+                  animation: scoreState.combo > 0 ? 'arc-stamp 0.18s cubic-bezier(0.2, 0.9, 0.2, 1) both' : undefined,
+                  ['--tilt' as string]: '0deg',
+                }}
+              >
+                {scoreState.combo}
+              </span>
+              <span className="arc-display" style={{ fontSize: u(3), color: scoreState.combo > 0 ? '#fff' : '#4a4f66' }}>
+                Hits
+              </span>
+            </div>
+            <span
+              key={tier.name}
+              className="arc-display arc-stamp whitespace-nowrap"
+              style={{ fontSize: u(3.2), color: scoreState.combo > 0 ? tier.color : '#4a4f66', marginTop: u(0.5), ['--tilt' as string]: '-4deg', textShadow: `${u(0.3)} ${u(0.3)} 0 #000` }}
+            >
+              {tier.name}
+            </span>
+          </div>
+
+          <div className="flex flex-col items-center">
+            <span style={label}>RANK</span>
+            <span className="arc-display arc-split hud-num" style={{ fontSize: u(7.5), color: gradeColor }}>
+              {grade}
+            </span>
+            <span className="font-black tabular-nums" style={{ fontSize: `max(9px, ${u(2)})`, color: 'var(--muted)' }}>
+              {accuracy}% ACC
+            </span>
+          </div>
+
+          <div className="flex flex-col items-end">
+            <span style={label}>SCORE</span>
+            <span className="arc-display tabular-nums hud-num" style={{ fontSize: u(6), color: '#fff' }}>
+              {scoreState.score.toLocaleString()}
+            </span>
+            {/* The combo's score bonus */}
+            {multiplier > 1 && (
+              <span className="arc-tag" style={{ fontSize: `max(9px, ${u(1.9)})`, padding: `${u(0.2)} ${u(1)}`, letterSpacing: '0.1em', marginTop: u(0.6) }}>
+                ×{multiplier.toFixed(1)}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -546,6 +546,7 @@ export default function App() {
             <HUD
               track={selectedTrack}
               scoreState={scoreState}
+              length={engine.songLength}
               oneButtonMode={audioSettings.oneButtonMode}
               onToggleOneButtonMode={handleToggleOneButtonMode}
               practice={engine.practice}
