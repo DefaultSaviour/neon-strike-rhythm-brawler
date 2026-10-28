@@ -163,7 +163,7 @@ export function AnimationStudio({ onClose }: { onClose: () => void }) {
           onClick={() => m !== mode && confirmDiscard() && setMode(m)}
           className={`px-3 py-1.5 rounded font-bold capitalize cursor-pointer ${mode === m ? 'bg-cyan-400 text-black' : 'text-slate-400 hover:text-slate-200'}`}
         >
-          {m}
+          {m === 'heroes' ? 'Fighters' : 'Enemies'}
         </button>
       ))}
     </div>

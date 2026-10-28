@@ -35,7 +35,7 @@ interface BackdropScreenProps {
   isNew?: (id: string) => boolean;
   /** The player tapped on a piece */
   onSeen?: (id: string) => void;
-  /** The Heroes / Stances / Backdrops tab bar, shown under the header */
+  /** The Fighters / Stances / Backdrops tab bar, shown under the header */
   tabs?: React.ReactNode;
   onClose: () => void;
 }

@@ -52,11 +52,11 @@ export function backdropLayerOf(id: string) {
   return BACKDROP_ITEMS.find((b) => b.id === id)?.layer ?? null;
 }
 
-/** What to call an unlock in the popup: the kind ("New hero"), its name and what it is. */
+/** What to call an unlock in the popup: the kind ("New fighter"), its name and what it is. */
 export function describeUnlock(u: RunUnlock): { kind: string; name: string; description: string } {
   if (u.kind === 'hero') {
     const hero = getHero(u.id as HeroId);
-    return { kind: 'New hero', name: hero.label, description: hero.tagline };
+    return { kind: 'New fighter', name: hero.label, description: hero.tagline };
   }
   if (u.kind === 'stance') {
     const stance = ENEMY_MOTION_STYLES.find((m) => m.id === u.id);

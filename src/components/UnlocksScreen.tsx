@@ -1,215 +1,174 @@
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import { NewTag } from './NewBadge';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HeroId, HEROES } from '../game/heroes';
 import { LifetimeStats, progressText, UNLOCK_ORDER, unlockProgress } from '../game/heroUnlocks';
 import { fighterTier } from '../game/fighterTier';
-import { drawFighter } from './fighterArt';
+import { AdOffer, ArcadeScreen, FitText, HeroFigure, SlantButton } from './arcade/ui';
+import { ShowcaseCounter, showcaseCombo, wrapIndex } from './arcade/fighterCarousel';
+import { GoalBar, heardBeat, InfoName, InfoTags, u, UnlockCarousel, UnlockFooter, UnlockHeader, UnlockInfo, useCarouselKeys, useSeenAfterLook } from './arcade/UnlockCarousel';
 
 /**
- * Every hero in the order they're earned: unlocked ones drawn in their
- * stance with a Select button, locked ones as dark silhouettes with their
- * goal and progress. Your lifetime totals sit at the top.
+ * The Fighters tab of Unlocks, arcade style: every fighter in a carousel, in
+ * the order they're earned (it wraps round). The one in focus stands big in
+ * the middle and fights to the music, building a combo: the hit count climbs
+ * and they level up through the glow tiers to their top form, then start
+ * again. Locked fighters are black silhouettes, with their goal and progress.
+ * The pink offer (what an ad would unlock now) sits in the header between
+ * the title and the tabs, so it's always there.
+ *
+ * Swipe, tap a fighter at the side, or use the ‹ › buttons to move.
+ * Keys: Left / Right move, Enter or Space picks, Escape goes back.
  */
 
 interface UnlocksScreenProps {
   stats: LifetimeStats;
-  /** The hero you'll play as */
+  /** The fighter you'll play as */
   selectedHero: HeroId;
   isUnlocked: (id: HeroId) => boolean;
   onSelect: (id: HeroId) => void;
-  /** Watch a rewarded ad for an ad-only hero; present only when an ad can be shown here */
-  onWatchAd?: (id: HeroId) => void;
-  adBusy?: boolean;
+  /** What a rewarded ad would unlock now (only when ads can play) */
+  adOffer?: AdOffer;
   /** A message after watching an ad (unlocked, or why not) */
   notice?: string | null;
-  /** Open but not yet tapped on: these wear a NEW tag */
+  /** Open but not yet looked at: these wear a NEW tag */
   isNew?: (id: HeroId) => boolean;
-  /** The player tapped on a card */
+  /** The player has looked at this fighter */
   onSeen?: (id: HeroId) => void;
-  /** The Heroes / Stances / Backdrops tab bar, shown under the header */
+  /** The Fighters / Stances / Backdrops tab bar, shown top right */
   tabs?: React.ReactNode;
   onClose: () => void;
 }
 
-/**
- * One line of text that always stays on one line: it shrinks just enough
- * to fit a narrow card (a phone), so short lines keep the full size.
- */
-const FitLine: React.FC<{ text: string; title?: string; className?: string; max?: number }> = ({ text, title, className = '', max = 11 }) => {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      el.style.fontSize = `${max}px`;
-      // A little slack, so an italic last letter isn't clipped
-      const ratio = (el.clientWidth - 3) / Math.max(1, el.scrollWidth);
-      if (ratio < 1) el.style.fontSize = `${Math.max(8, Math.floor(max * ratio * 10) / 10)}px`;
-    };
-    fit();
-    const watch = new ResizeObserver(fit);
-    watch.observe(el);
-    return () => watch.disconnect();
-  }, [text, max]);
-  return (
-    <div ref={ref} title={title} className={`w-full whitespace-nowrap overflow-hidden ${className}`}>
-      {text}
-    </div>
-  );
-};
+export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, adOffer, notice, isNew, onSeen, tabs, onClose }) => {
+  const fighters = useMemo(() => [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id)), []);
+  const count = fighters.length;
+  const earned = fighters.filter((h) => isUnlocked(h.id)).length;
 
-/** A hero drawn in their fighting stance (dark and grey when still locked). */
-export const HeroPortrait: React.FC<{ id: HeroId; locked: boolean }> = ({ id, locked }) => {
-  const ref = useRef<HTMLCanvasElement | null>(null);
+  // Open on a new fighter you haven't looked at yet, if there is one, or else on yours
+  const [focus, setFocus] = useState(() => {
+    const fresh = fighters.findIndex((h) => isUnlocked(h.id) && isNew?.(h.id));
+    return fresh >= 0 ? fresh : Math.max(0, fighters.findIndex((h) => h.id === selectedHero));
+  });
+  const move = useCallback((step: number) => setFocus((f) => wrapIndex(f, step, count)), [count]);
+  // A new fighter of yours (picked, or just unlocked with the ad offer and equipped): bring them into focus
+  const firstSelected = useRef(true);
   useEffect(() => {
-    const canvas = ref.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = 120;
-    const h = 150;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    const hero = HEROES.find((x) => x.id === id)!;
-    ctx.save();
-    ctx.translate(w / 2, 100);
-    ctx.scale(0.95, 0.95);
-    if (locked) {
-      ctx.filter = 'grayscale(1) brightness(0.35)';
-      ctx.globalAlpha = 0.8;
+    if (firstSelected.current) {
+      firstSelected.current = false;
+      return;
     }
-    drawFighter(ctx, hero.idlePose, { tier: fighterTier(0), facing: 1, time: 0.4, hero: id, random: () => 0.5 });
-    ctx.restore();
-  }, [id, locked]);
-  return <canvas ref={ref} style={{ width: 120, height: 150 }} aria-hidden="true" />;
-};
+    const i = fighters.findIndex((h) => h.id === selectedHero);
+    if (i >= 0) setFocus(i);
+  }, [selectedHero, fighters]);
 
-export const UnlocksScreen: React.FC<UnlocksScreenProps> = ({ stats, selectedHero, isUnlocked, onSelect, onWatchAd, adBusy, notice, isNew, onSeen, tabs, onClose }) => {
-  const heroes = [...HEROES].sort((a, b) => UNLOCK_ORDER.indexOf(a.id) - UNLOCK_ORDER.indexOf(b.id));
-  const unlockedCount = heroes.filter((h) => isUnlocked(h.id)).length;
+  const hero = fighters[focus];
+  const unlocked = isUnlocked(hero.id);
+  const chosen = hero.id === selectedHero;
+  const progress = unlockProgress(hero.id, stats);
+  const fresh = unlocked && !!isNew?.(hero.id);
+  useSeenAfterLook(hero.id, fresh, onSeen);
+  useCarouselKeys(move, unlocked && !chosen ? () => onSelect(hero.id) : null, onClose);
 
+  // The showcase: beats since this fighter came into focus, shared by the drawing and the hit counter
+  const counter = useRef(new ShowcaseCounter());
+  const focusKey = useRef(hero.id);
+  focusKey.current = hero.id;
+  const showcaseBeat = useCallback(() => {
+    const b = heardBeat();
+    return { ...b, beat: counter.current.beatsIn(focusKey.current, b.beat) };
+  }, []);
+  const [beatsIn, setBeatsIn] = useState(0);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') onClose();
+    let raf = 0;
+    const tick = () => {
+      setBeatsIn(showcaseBeat().beat);
+      raf = requestAnimationFrame(tick);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const totals: Array<[string, number]> = [
-    ['Enemies defeated', stats.enemiesDefeated],
-    ['PERFECT hits', stats.perfects],
-    ['Best combo', stats.bestCombo],
-    ['Songs cleared', stats.songsCleared],
-  ];
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [showcaseBeat]);
+  const hits = showcaseCombo(beatsIn);
+  const tier = fighterTier(hits);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-4xl bg-[#0b0d1e] border border-amber-400/30 rounded-xl shadow-[0_0_40px_rgba(255,194,58,0.15)] flex flex-col overflow-hidden h-[min(92vh,880px)]">
-        <div className="flex items-center justify-between px-6 py-4 min-h-[128px] sm:min-h-[112px] lg:min-h-[88px] border-b border-slate-800 bg-slate-900/50">
-          <div>
-            <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-500 to-cyan-400">
-              UNLOCKS
-            </div>
-            <div className="text-xs text-slate-400">
-              {unlockedCount} of {heroes.length} heroes earned
-            </div>
+    <ArcadeScreen label="Fighters" stripes="flat">
+      <UnlockHeader title="Fighters" onClose={onClose} offer={adOffer} tabs={tabs} />
+
+      <UnlockCarousel
+        label="Fighters"
+        count={count}
+        focus={focus}
+        onMove={move}
+        keyAt={(i) => fighters[i].id}
+        nameAt={(i) => fighters[i].label}
+        isNewAt={(i) => isUnlocked(fighters[i].id) && !!isNew?.(fighters[i].id)}
+        floorColor={unlocked ? tier.color : '#3a3f58'}
+        render={(i, inFocus) => {
+          const h = fighters[i];
+          const locked = !isUnlocked(h.id);
+          return (
+            <HeroFigure
+              id={h.id}
+              locked={locked}
+              animate={!locked}
+              beatNow={inFocus ? showcaseBeat : undefined}
+              // Locked fighters show their moves, but they don't level up
+              comboAt={inFocus ? (locked ? () => 0 : showcaseCombo) : undefined}
+              className="w-full h-full"
+              style={inFocus && !locked ? { filter: `drop-shadow(0 0 ${u(1.4)} ${tier.color}66)` } : undefined}
+            />
+          );
+        }}
+      />
+
+      {/* The combo the fighter in focus is building */}
+      {unlocked && (
+        <div className="absolute pointer-events-none arc-in-right" style={{ left: `calc(50% + ${u(19)})`, top: u(19), animationDelay: '0.2s' }} aria-hidden="true">
+          <div className="flex items-baseline" style={{ gap: u(1) }}>
+            <span key={hits} className="arc-display arc-split" style={{ fontSize: u(10), color: 'var(--yellow)', animation: 'arc-stamp 0.18s cubic-bezier(0.2, 0.9, 0.2, 1) both', ['--tilt' as string]: '0deg' }}>
+              {hits}
+            </span>
+            <span className="arc-display" style={{ fontSize: u(3.4) }}>
+              HITS
+            </span>
           </div>
-          <div className="hidden sm:grid grid-cols-4 gap-4 text-right font-mono">
-            {totals.map(([label, value]) => (
-              <div key={label}>
-                <div className="text-[10px] text-slate-500 uppercase">{label}</div>
-                <div className="text-sm font-bold text-slate-100 tabular-nums">{value.toLocaleString()}</div>
-              </div>
-            ))}
+          <div key={tier.name} className="arc-display arc-stamp whitespace-nowrap" style={{ fontSize: u(3.6), color: tier.color, marginTop: u(0.6), ['--tilt' as string]: '-4deg', textShadow: `${u(0.3)} ${u(0.3)} 0 #000` }}>
+            {tier.name}
           </div>
         </div>
+      )}
 
-        {tabs}
-
-        {notice && (
-          <div role="status" className="px-6 py-2 text-sm font-bold text-amber-200 bg-amber-500/10 border-b border-amber-400/30">
-            {notice}
-          </div>
+      {/* About the fighter in focus */}
+      <UnlockInfo>
+        <InfoTags index={focus} count={count} fresh={fresh} locked={!unlocked} notice={notice} />
+        <InfoName name={hero.label} locked={!unlocked} />
+        {unlocked ? (
+          <>
+            <FitText className="font-bold italic text-[color:var(--muted)]" style={{ fontSize: `max(11px, ${u(2.6)})` }} title={hero.description}>
+              {hero.tagline}
+            </FitText>
+            {chosen ? (
+              <SlantButton variant="selected" size="sm" aria-disabled="true" style={{ padding: `0 ${u(6)}`, cursor: 'default', marginTop: u(0.6) }}>
+                ✓ Your fighter
+              </SlantButton>
+            ) : (
+              <SlantButton variant="hot" size="sm" hotkey="ENTER" onClick={() => onSelect(hero.id)} style={{ padding: `0 ${u(8)}`, fontSize: u(4.2), marginTop: u(0.6) }}>
+                Pick
+              </SlantButton>
+            )}
+          </>
+        ) : (
+          progress && (
+            <>
+              <div className="font-bold text-[color:var(--yellow)]" style={{ fontSize: `max(11px, ${u(2.6)})` }}>
+                {progress.goal.label}
+              </div>
+              <GoalBar fraction={progress.current / progress.goal.target} text={progressText(progress.goal, progress.current)} />
+            </>
+          )
         )}
-        <div className="flex-1 min-h-0 content-start p-3 sm:p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-          {heroes.map((h) => {
-            const unlocked = isUnlocked(h.id);
-            const progress = unlockProgress(h.id, stats);
-            const chosen = h.id === selectedHero;
-            return (
-              <div
-                key={h.id}
-                onClick={() => unlocked && onSeen?.(h.id)}
-                className={`relative rounded-xl border p-2 sm:p-3 flex flex-col items-center text-center gap-2 ${
-                  chosen
-                    ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_18px_rgba(0,243,255,0.25)]'
-                    : unlocked
-                      ? 'border-slate-700 bg-slate-900/50'
-                      : 'border-slate-800 bg-slate-950/70'
-                }`}
-              >
-                {unlocked && isNew?.(h.id) && <NewTag />}
-                <HeroPortrait id={h.id} locked={!unlocked} />
-                <div className={`text-sm font-bold ${unlocked ? 'text-slate-100' : 'text-slate-500'}`}>
-                  {!unlocked && <span aria-hidden="true">🔒 </span>}
-                  {h.label}
-                </div>
-                {unlocked ? (
-                  <>
-                    <FitLine text={h.tagline} title={h.description} className="flex-1 italic text-slate-400" />
-                    <button
-                      type="button"
-                      onClick={() => onSelect(h.id)}
-                      disabled={chosen}
-                      className={`w-full min-h-11 rounded-md text-sm font-bold transition-colors ${
-                        chosen ? 'bg-cyan-400 text-black cursor-default' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer'
-                      }`}
-                    >
-                      {chosen ? 'Selected' : 'Select'}
-                    </button>
-                  </>
-                ) : (
-                  progress && (
-                    <div className="w-full flex flex-col gap-1 flex-1 justify-end">
-                      <div className="text-[11px] text-amber-300/90">{progress.goal.label}</div>
-                      <div className="w-full h-1.5 rounded bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-amber-400/80" style={{ width: `${(progress.current / progress.goal.target) * 100}%` }} />
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-500">
-                        {progressText(progress.goal, progress.current)}
-                      </div>
-                      {/* The ad hero can also be unlocked straight away (hidden when ads can't play here) */}
-                      {progress.goal.ad && onWatchAd && (
-                        <button
-                          type="button"
-                          onClick={() => onWatchAd(h.id)}
-                          disabled={adBusy}
-                          className="w-full mt-1 py-1.5 rounded-md bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-black text-xs font-black tracking-wide cursor-pointer"
-                        >
-                          or ▶ Watch ad to unlock now
-                        </button>
-                      )}
-                    </div>
-                  )
-                )}
-              </div>
-            );
-          })}
-        </div>
+      </UnlockInfo>
 
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/50 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide cursor-pointer"
-          >
-            Back
-          </button>
-        </div>
-      </div>
-    </div>
+      <UnlockFooter earned={earned} count={count} />
+    </ArcadeScreen>
   );
 };

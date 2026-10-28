@@ -1,33 +1,94 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { HeroId, HEROES } from '../../game/heroes';
 import { fighterTier } from '../../game/fighterTier';
 import { drawFighter } from '../fighterArt';
 import { getOrientedPose, lerpPose } from '../../game/animations';
 import { audioEngine } from '../../audio/audioEngine';
-import { stripeLayout, THROB, throbAfter, waveLevel } from './musicLines';
+import { dialStep, FLAT_ANGLE, SLASH_ANGLE, stripeLayout, THROB, throbAfter, waveLevel } from './musicLines';
 
 /**
  * Shared pieces of the arcade menus (see arcade.css): the full-screen frame
  * with its slashes, slanted buttons, and a hero drawn big in their stance.
  */
 
-/** A full-screen arcade menu: dark, with the music lines and halftone behind. */
-export const ArcadeScreen: React.FC<{ children: React.ReactNode; className?: string; label?: string }> = ({ children, className = '', label }) => (
-  <div className={`arc-screen ${className}`} role="dialog" aria-label={label}>
-    <div className="arc-bg" aria-hidden="true" />
-    <MusicStripes />
-    <div className="arc-halftone" aria-hidden="true" />
-    {children}
+/**
+ * A full-screen arcade menu: dark, with the music lines and halftone behind.
+ * `stripes="flat"` turns the lines to lie across the screen instead of
+ * slashing it (they swing round to it when the screen opens).
+ */
+export const ArcadeScreen: React.FC<{ children: React.ReactNode; className?: string; label?: string; stripes?: 'slash' | 'flat' }> = ({ children, className = '', label, stripes = 'slash' }) => (
+  // The frame fills the window; the screen inside is never taller than 4:3 (see .arc-frame)
+  <div className="arc-frame">
+    <div className="arc-rotate" aria-hidden="true">
+      <span className="on-touch">↻ TURN YOUR PHONE SIDEWAYS</span>
+      <span className="on-mouse">↔ MAKE THE WINDOW WIDER</span>
+    </div>
+    <div className={`arc-screen ${className}`} role="dialog" aria-label={label}>
+      <div className="arc-bg" aria-hidden="true" />
+      {/* The dots under the music lines, so they never speckle them */}
+      <div className="arc-halftone" aria-hidden="true" />
+      <MusicStripes angle={stripes === 'flat' ? FLAT_ANGLE : SLASH_ANGLE} />
+      {children}
+    </div>
   </div>
 );
+
+/**
+ * One line of text that shrinks to fit its space instead of being cut off
+ * (down to `min` of its size; only past that does it end in "…"). It leaves
+ * room for an italic last letter's lean. Give it its size with `style`.
+ */
+export const FitText: React.FC<{ children: string; className?: string; style?: React.CSSProperties; min?: number; title?: string }> = ({ children, className = '', style, min = 0.55, title }) => {
+  const outer = useRef<HTMLSpanElement | null>(null);
+  const inner = useRef<HTMLSpanElement | null>(null);
+  useLayoutEffect(() => {
+    const box = outer.current;
+    const text = inner.current;
+    if (!box || !text) return;
+    // The width it settled at, so its own shrinking doesn't set off another fit
+    let settled = -1;
+    const fit = () => {
+      text.style.fontSize = '';
+      box.style.textOverflow = '';
+      box.style.overflow = '';
+      const room = box.clientWidth;
+      const natural = text.getBoundingClientRect().width;
+      const scale = room > 0 && natural > room ? room / natural : 1;
+      if (scale < 1) text.style.fontSize = `${Math.max(min, scale * 0.98)}em`;
+      if (scale < min) {
+        box.style.overflow = 'hidden';
+        box.style.textOverflow = 'ellipsis';
+      }
+      settled = box.clientWidth;
+    };
+    fit();
+    const watch = new ResizeObserver(() => {
+      if (Math.abs(box.clientWidth - settled) > 0.5) fit();
+    });
+    watch.observe(box);
+    // The display font arriving late changes every width
+    void document.fonts?.ready.then(fit);
+    return () => watch.disconnect();
+  }, [children, min]);
+  return (
+    <span ref={outer} className={`arc-fit ${className}`} style={style} title={title}>
+      <span ref={inner}>{children}</span>
+    </span>
+  );
+};
 
 /**
  * The two colour slashes behind the menus, throbbing with the music (see
  * musicLines): pink with the bass, cyan with the mids, each up to 30%
  * fatter on a hit. Plain when nothing's playing, and when the player has
  * asked for less motion.
+ *
+ * They're one pair of lines however many screens draw them: each screen
+ * has its own angle, and opening a screen swings them round to it from
+ * wherever the last screen left them, like a dial (straight there when
+ * the player has asked for less motion).
  */
-export const MusicStripes: React.FC = () => {
+export const MusicStripes: React.FC<{ angle?: number }> = ({ angle = SLASH_ANGLE }) => {
   const ref = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -61,7 +122,9 @@ export const MusicStripes: React.FC = () => {
         const level = (rms - usual[kind]) / Math.max(kind === 'bass' ? 0.01 : 0.005, peak[kind] - usual[kind]);
         throb[kind] = throbAfter(throb[kind], level, dt);
       }
-      const layout = stripeLayout(w, h);
+      if (still) dial = { angle, speed: 0 };
+      else dial = dialStep(dial.angle, dial.speed, angle, dt);
+      const layout = stripeLayout(w, h, dial.angle);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       ctx.lineCap = 'butt';
@@ -82,9 +145,12 @@ export const MusicStripes: React.FC = () => {
       cancelAnimationFrame(raf);
       resized.disconnect();
     };
-  }, []);
+  }, [angle]);
   return <canvas ref={ref} className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.85 }} aria-hidden="true" />;
 };
+
+/** Where the stripes are now, and how fast they're turning: kept between screens, so the next one turns them on from here */
+let dial = { angle: SLASH_ANGLE, speed: 0 };
 
 type SlantButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   /** hot: the yellow main action. alt: yellow text on dark (Practice). selected: white */
@@ -105,6 +171,53 @@ export const SlantButton: React.FC<SlantButtonProps> = ({ variant = 'dark', size
     {hotkey && <span className="arc-key [@media(pointer:coarse)]:hidden">{hotkey}</span>}
   </button>
 );
+
+/** What a rewarded ad would unlock now, for the pink offer button (results and song select) */
+export interface AdOffer {
+  /** The unlock's name */
+  name: string;
+  /** The ad is loading or playing */
+  busy: boolean;
+  /** Watched: unlocked and equipped */
+  done: boolean;
+  /** Why the last ad didn't unlock anything, if it didn't */
+  notice?: string | null;
+  onWatch: () => void;
+}
+
+/**
+ * The pink offer button: watch an ad to unlock the next thing now (every
+ * one can be earned by playing too). Once watched it says what it
+ * unlocked; a note above says why an ad didn't count, if one didn't.
+ */
+export const AdOfferButton: React.FC<{ offer: AdOffer; className?: string; style?: React.CSSProperties }> = ({ offer, className = '', style }) => {
+  const small = 'max(10px, calc(var(--u) * 2.3))';
+  if (offer.done) {
+    return (
+      <span className={`font-bold text-[color:var(--yellow)] text-center ${className}`} style={{ fontSize: small }}>
+        {offer.name} unlocked and equipped!
+      </span>
+    );
+  }
+  return (
+    <>
+      {offer.notice && (
+        <span className="text-pink-300 text-center" style={{ fontSize: small }}>
+          {offer.notice}
+        </span>
+      )}
+      <button type="button" onClick={offer.onWatch} disabled={offer.busy} className={`arc-btn is-offer ${className}`} style={{ height: 'calc(var(--u) * 10)', padding: '0 calc(var(--u) * 4)', fontSize: 'calc(var(--u) * 3.4)', ...style }}>
+        <span className="arc-play" aria-hidden>
+          ▶
+        </span>
+        <span className="arc-offer-text min-w-0">
+          <FitText>{offer.busy ? 'Loading ad…' : `Unlock ${offer.name}`}</FitText>
+          <FitText className="arc-offer-sub">{offer.busy ? 'One moment' : 'Watch an ad · now'}</FitText>
+        </span>
+      </button>
+    </>
+  );
+};
 
 const SWITCH_SLANT = 'polygon(calc(var(--u) * 2) 0, 100% 0, calc(100% - calc(var(--u) * 2)) 100%, 0 100%)';
 
@@ -151,23 +264,27 @@ export function strikeBlend(since: number): number {
 }
 
 /**
- * A hero drawn in their fighting stance, filling the element's height, feet
- * at the bottom. With `animate` they breathe and glow like in a song;
- * locked heroes are a dark silhouette. With `beatNow` they fight to the
- * music: each beat they throw their next move, left then right, and they
- * level up through the glow tiers as the bars go by.
+ * A fighter drawn in their fighting stance, filling the element's height,
+ * feet at the bottom. With `animate` they breathe and glow like in a song;
+ * locked fighters are a black silhouette with a faint outline. With
+ * `beatNow` they fight to the music: each beat they throw their next move,
+ * left then right, and they level up through the glow tiers as the bars go
+ * by (`comboAt` says what the combo is on each beat, if not two a beat).
  */
-export const HeroFigure: React.FC<{ id: HeroId; animate?: boolean; locked?: boolean; beatNow?: BeatNow; className?: string; style?: React.CSSProperties }> = ({
-  id,
-  animate = false,
-  locked = false,
-  beatNow,
-  className = '',
-  style,
-}) => {
+export const HeroFigure: React.FC<{
+  id: HeroId;
+  animate?: boolean;
+  locked?: boolean;
+  beatNow?: BeatNow;
+  comboAt?: (beat: number) => number;
+  className?: string;
+  style?: React.CSSProperties;
+}> = ({ id, animate = false, locked = false, beatNow, comboAt, className = '', style }) => {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const beatRef = useRef(beatNow);
   beatRef.current = beatNow;
+  const comboRef = useRef(comboAt);
+  comboRef.current = comboAt;
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext('2d');
@@ -190,10 +307,6 @@ export const HeroFigure: React.FC<{ id: HeroId; animate?: boolean; locked?: bool
       ctx.save();
       ctx.translate(w / 2, h * 0.95 - 68 * s);
       ctx.scale(s, s);
-      if (locked) {
-        ctx.filter = 'grayscale(1) brightness(0.35)';
-        ctx.globalAlpha = 0.85;
-      }
       let pose = hero.idlePose;
       let combo = 0;
       const beat = beatRef.current?.();
@@ -205,7 +318,7 @@ export const HeroFigure: React.FC<{ id: HeroId; animate?: boolean; locked?: bool
         const stance = facing === 1 ? hero.idlePose : getOrientedPose(hero.idlePose, 'left');
         pose = lerpPose(stance, getOrientedPose(move.pose, lane), t);
         // Climbs a tier every few bars, like a combo building up
-        combo = beat.beat * 2;
+        combo = comboRef.current ? comboRef.current(beat.beat) : beat.beat * 2;
       } else if (facing === -1) {
         pose = getOrientedPose(hero.idlePose, 'left');
       }
@@ -239,7 +352,9 @@ export const HeroFigure: React.FC<{ id: HeroId; animate?: boolean; locked?: bool
     };
     // beatNow is read through a ref; only whether there is one changes the loop
   }, [id, animate, locked, !!beatNow]);
-  return <canvas ref={ref} className={`block ${className}`} style={style} aria-hidden="true" />;
+  // Locked: black, outlined faintly so it shows on the dark screen (a CSS filter: canvas filters don't work in Safari)
+  const look = locked ? { ...style, filter: `brightness(0) drop-shadow(0 0 1px rgba(160,170,210,0.9)) drop-shadow(0 0 calc(var(--u) * 1.2) rgba(160,170,210,0.35))` } : style;
+  return <canvas ref={ref} className={`block ${className}`} style={look} aria-hidden="true" />;
 };
 
 /** The arcade unit (--u) in pixels, kept up to date as the window changes (for scaling canvases to fit). */

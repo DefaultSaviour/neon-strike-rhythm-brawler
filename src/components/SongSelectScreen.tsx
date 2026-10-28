@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Track, HighScoreRecord } from '../types/game';
 import { PRELOADED_TRACKS, audioEngine } from '../audio/audioEngine';
 import type { HeroId } from '../game/heroes';
-import { ArcadeScreen, difficultyPips, HeroFigure, SlantButton } from './arcade/ui';
+import { AdOffer, AdOfferButton, ArcadeScreen, difficultyPips, FitText, HeroFigure, SlantButton } from './arcade/ui';
 import { useDragScroll } from './arcade/dragScroll';
 
 /**
@@ -11,7 +11,8 @@ import { useDragScroll } from './arcade/dragScroll';
  * the songs are slanted strips on the right (drag to scroll), the picked one
  * white and popped out about 10% bigger, with its difficulty, BPM and your best grade. One FIGHT! button
  * plays it, Practice plays it without dying. Your own songs can be imported
- * from the last strip.
+ * from the last strip. When an ad can unlock something, the pink offer
+ * button sits right on top of Practice and FIGHT!, as on the results screen.
  *
  * Keys: Up / Down pick a song, Left / Right switch fighter, Enter or Space
  * fight, P practice, Escape back.
@@ -32,6 +33,8 @@ interface SongSelectScreenProps {
   heroLabel: string;
   unlockedHeroes: HeroId[];
   onSelectHero: (id: HeroId) => void;
+  /** What a rewarded ad would unlock now (only when ads can play) */
+  adOffer?: AdOffer;
   onClose: () => void;
 }
 
@@ -50,6 +53,7 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
   heroLabel,
   unlockedHeroes,
   onSelectHero,
+  adOffer,
   onClose,
 }) => {
   const tracks = [...PRELOADED_TRACKS, ...customTracks];
@@ -177,7 +181,8 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
         className="absolute arc-scroll flex flex-col select-none"
         role="listbox"
         aria-label="Songs"
-        style={{ left: '36%', right: u(4), top: u(18), bottom: u(21), gap: u(1.2), paddingRight: u(1) }}
+        // Room under the list for the buttons, and the offer on top of them when there is one
+        style={{ left: '36%', right: u(4), top: u(18), bottom: adOffer ? `calc(${u(22.4)} + max(44px, ${u(10)}))` : u(21), gap: u(1.2), paddingRight: u(1) }}
       >
         {tracks.map((t, i) => {
           const sel = t.id === selected.id;
@@ -212,9 +217,9 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
               <span className="arc-display" style={{ fontSize: u(3.6), width: u(5), color: sel ? '#000' : '#3c4363' }}>
                 {String(i + 1).padStart(2, '0')}
               </span>
-              <span className="arc-display truncate" style={{ fontSize: sel ? u(5.8) : u(4.4), flex: 1, minWidth: 0 }}>
+              <FitText className="arc-display" style={{ fontSize: sel ? u(5.8) : u(4.4), flex: 1 }}>
                 {t.title}
-              </span>
+              </FitText>
               {t.isCustom && sel && (
                 <span
                   role="button"
@@ -262,14 +267,17 @@ export const SongSelectScreen: React.FC<SongSelectScreenProps> = ({
         <input ref={fileRef} type="file" accept="audio/mp3,audio/wav,audio/ogg,audio/mpeg" className="hidden" onChange={importFile} />
       </div>
 
-      {/* Fight */}
-      <div className="absolute flex" style={{ right: u(4), bottom: u(4), gap: u(1.6) }}>
-        <SlantButton variant="alt" size="lg" hotkey="P" onClick={() => onPracticeTrack(selected)} style={{ fontSize: u(4.2) }} title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records">
-          Practice
-        </SlantButton>
-        <SlantButton variant="hot" size="lg" hotkey="ENTER" onClick={() => onPlayTrack(selected)} className="arc-pulse" style={{ padding: `0 ${u(7)}`, fontSize: u(7.4) }}>
-          Fight!
-        </SlantButton>
+      {/* Fight, with the ad offer (when there is one) sitting right on top, the same width */}
+      <div className="absolute flex flex-col items-stretch" style={{ right: u(4), bottom: u(4), gap: u(1.2) }}>
+        {adOffer && <AdOfferButton offer={adOffer} />}
+        <div className="flex justify-end" style={{ gap: u(1.6) }}>
+          <SlantButton variant="alt" size="lg" hotkey="P" onClick={() => onPracticeTrack(selected)} style={{ fontSize: u(4.2) }} title="Practice: getting hit doesn't end the song, and nothing counts toward unlocks or records">
+            Practice
+          </SlantButton>
+          <SlantButton variant="hot" size="lg" hotkey="ENTER" onClick={() => onPlayTrack(selected)} className="arc-pulse" style={{ padding: `0 ${u(7)}`, fontSize: u(7.4) }}>
+            Fight!
+          </SlantButton>
+        </div>
       </div>
     </ArcadeScreen>
   );

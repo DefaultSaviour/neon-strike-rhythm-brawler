@@ -10,7 +10,49 @@
 
 /* In the components layer, so Tailwind utility classes can still override these */
 @layer components {
+/*
+ * The full-window backdrop each arcade screen sits in. The screen itself is
+ * never taller than 4:3 (a tall window, a phone held upright): past that it
+ * sits in the middle with plain dark bars above and below, instead of its
+ * top and bottom drifting apart.
+ */
+.arc-frame {
+  --h: min(100vh, 75vw);
+  --h: min(100dvh, 75vw);
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  /* Solid, so the game underneath never shows through the bars */
+  background: #07070c;
+}
+/* In an upright window, the bar above says to turn the phone (or widen the window) */
+.arc-rotate { display: none; }
+.arc-rotate .on-touch { display: none; }
+@media (pointer: coarse) {
+  .arc-rotate .on-touch { display: inline; }
+  .arc-rotate .on-mouse { display: none; }
+}
+@media (orientation: portrait) {
+  .arc-rotate {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: calc((100% - var(--h)) / 2);
+    padding: 0 16px;
+    color: var(--yellow, #ffe600);
+    font-family: Outfit, sans-serif;
+    font-weight: 900;
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    text-align: center;
+  }
+}
+
 .arc-screen {
+  /* The same unit as before: the 4:3 limit only trims empty space, it never shrinks the design */
   --u: min(1vh, 0.5625vw);
   --u: min(1dvh, 0.5625vw);
   --pink: #ff1f6d;
@@ -19,9 +61,11 @@
   --panel: #14141f;
   --panel-2: #1b1b29;
   --muted: #8d95b3;
-  position: fixed;
-  inset: 0;
-  z-index: 50;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((100% - var(--h)) / 2);
+  height: var(--h);
   /* Clip, not hide: the hatching is drawn bigger than the screen, and a hidden overflow can still be
      scrolled (focusing a button can slide the whole screen sideways). A clipped one can't. */
   overflow: hidden;
@@ -29,7 +73,6 @@
   color: #fff;
   font-family: Outfit, sans-serif;
   font-size: calc(var(--u) * 3);
-  background: rgba(7, 7, 12, 0.9);
 }
 
 /* The hatching and halftone behind every arcade screen */
@@ -178,6 +221,10 @@
   font-weight: 900;
   font-size: max(10px, calc(var(--u) * 2.4));
 }
+
+/* One line that shrinks to fit (FitText): never wraps, and leaves room for an italic last letter's lean */
+.arc-fit { display: block; min-width: 0; max-width: 100%; white-space: nowrap; }
+.arc-fit > span { display: inline-block; padding-right: 0.22em; }
 
 /* A slanted strip (song rows, stat rows) */
 .arc-strip {

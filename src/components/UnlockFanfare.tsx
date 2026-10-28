@@ -8,8 +8,8 @@ import { HERO_UNLOCKS, LifetimeStats } from '../game/heroUnlocks';
 import { backdropLayerOf, describeUnlock, RunUnlock } from '../game/runUnlocks';
 import { MINUTES_PER_STANCE } from '../game/stanceUnlocks';
 import { BackdropCanvas } from './BackdropScreen';
-import { StancePortrait } from './StancesScreen';
-import { HeroPortrait } from './UnlocksScreen';
+import { StancePortrait } from './StancePortrait';
+import { HeroPortrait } from './HeroPortrait';
 
 /**
  * The popup after a song that unlocked something: one card per unlock

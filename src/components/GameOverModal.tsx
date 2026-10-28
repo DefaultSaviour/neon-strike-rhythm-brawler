@@ -5,7 +5,7 @@ import type { DeathReport } from '../game/timing';
 import { formatSongTime, RunProgress } from '../game/runProgress';
 import type { HeroId } from '../game/heroes';
 import { RunProgressBar } from './RunProgressBar';
-import { ArcadeScreen, SlantButton, useArcadeUnit } from './arcade/ui';
+import { AdOffer, AdOfferButton, ArcadeScreen, SlantButton, useArcadeUnit } from './arcade/ui';
 
 /**
  * The results screen, arcade style, all on one screen (no scrolling, even
@@ -42,7 +42,7 @@ interface GameOverModalProps {
    * A small, quiet offer: what a rewarded ad would unlock now (the big one
    * is the last card of the unlock popup). `done` once watched.
    */
-  adOffer?: { name: string; busy: boolean; done: boolean; notice?: string | null; onWatch: () => void };
+  adOffer?: AdOffer;
   /** A practice run (nothing was saved), and how many hits were taken */
   practice?: boolean;
   practiceHits?: number;
@@ -289,29 +289,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       <div className="absolute flex items-end" style={{ left: u(5), right: u(4), bottom: u(3.5), gap: u(1.2) }}>
         {/* Menu and Songs, with the ad offer (when there is one) sitting right on top of them */}
         <div className="flex-[2] min-w-0 flex flex-col" style={{ gap: u(1.2) }}>
-          {adOffer &&
-            (adOffer.done ? (
-              <span className="font-bold text-[color:var(--yellow)] text-center" style={{ fontSize: small }}>
-                {adOffer.name} unlocked and equipped!
-              </span>
-            ) : (
-              <>
-                {adOffer.notice && (
-                  <span className="text-pink-300 text-center" style={{ fontSize: small }}>
-                    {adOffer.notice}
-                  </span>
-                )}
-                <button type="button" onClick={adOffer.onWatch} disabled={adOffer.busy} className="arc-btn is-offer" style={{ height: u(10), padding: `0 ${u(4)}`, fontSize: u(3.4) }}>
-                  <span className="arc-play" aria-hidden>
-                    ▶
-                  </span>
-                  <span className="arc-offer-text">
-                    {adOffer.busy ? 'Loading ad…' : `Unlock ${adOffer.name}`}
-                    <span className="arc-offer-sub">{adOffer.busy ? 'One moment' : 'Watch an ad · now'}</span>
-                  </span>
-                </button>
-              </>
-            ))}
+          {adOffer && <AdOfferButton offer={adOffer} />}
           <div className="flex" style={{ gap: u(1.2) }}>
             <SlantButton onClick={onMainMenu} className="flex-1" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
               Menu
