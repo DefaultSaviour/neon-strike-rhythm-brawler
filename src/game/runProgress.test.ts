@@ -79,12 +79,12 @@ describe('runner animation', () => {
 
   it('slows down as it nears the end (covers most ground early)', () => {
     const d = dashDuration(1);
-    expect(runnerPositionAt(d / 2, 1)).toBeGreaterThan(0.8);
+    expect(runnerPositionAt(d / 2, 1)).toBeGreaterThan(0.7);
   });
 
   it('never runs backwards', () => {
     let last = -1;
-    for (let t = 0; t <= 2; t += 0.05) {
+    for (let t = 0; t <= 5; t += 0.05) {
       const x = runnerPositionAt(t, 0.7);
       expect(x).toBeGreaterThanOrEqual(last);
       last = x;

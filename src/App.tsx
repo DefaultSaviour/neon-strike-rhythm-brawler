@@ -272,6 +272,8 @@ export default function App() {
     // The unlock popup, if the song unlocked anything, with an ad offer on the end where ads can play
     const celebrate = () => {
       if (unlockedHero) happytime();
+      // A new record gets a jingle, unless the unlock popup is about to play its own
+      if (engine.lastScore?.newBest && engine.runUnlocks.length === 0) audioEngine.playUnlockFanfare();
       if (engine.runUnlocks.length > 0) setFanfare({ unlocks: engine.runUnlocks, offer: adsOnRef.current ? adOffer(engine.lifetimeStats) : null });
     };
     // Practice play counts toward the next ad too (adClockSeconds)
@@ -701,7 +703,7 @@ export default function App() {
           bossName={engine.boss ? BOSS_LOOKS[engine.boss.plan.kind].name : undefined}
           track={selectedTrack}
           scoreState={scoreState}
-          highScoreRecord={engine.getHighScore(selectedTrack.id)}
+          scoreRecord={engine.practice ? null : engine.lastScore}
           onRestart={handleRestart}
           onOpenSelect={() => {
             setGameStatus('MENU');

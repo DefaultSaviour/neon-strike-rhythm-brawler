@@ -106,6 +106,36 @@ export const SlantButton: React.FC<SlantButtonProps> = ({ variant = 'dark', size
   </button>
 );
 
+const SWITCH_SLANT = 'polygon(calc(var(--u) * 2) 0, 100% 0, calc(100% - calc(var(--u) * 2)) 100%, 0 100%)';
+
+/** A row of choices with a yellow block that slides to the one that's on (like the title's Controls switch). At least 44px tall. */
+export function ArcadeSwitch<T extends string>({ label, options, value, onChange }: { label: string; options: Array<{ id: T; label: string }>; value: T; onChange: (id: T) => void }) {
+  const index = Math.max(0, options.findIndex((o) => o.id === value));
+  const share = 100 / options.length;
+  return (
+    <div role="radiogroup" aria-label={label} className="relative grid" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)`, height: `calc(var(--u) * 9)`, minHeight: 44, background: '#0b0b14', clipPath: SWITCH_SLANT }}>
+      <span
+        aria-hidden="true"
+        className="absolute top-0 bottom-0"
+        style={{ left: `${index * share}%`, width: `${share}%`, background: 'var(--yellow)', clipPath: SWITCH_SLANT, transition: 'left 0.18s cubic-bezier(0.2, 0.9, 0.2, 1)' }}
+      />
+      {options.map((o, i) => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={i === index}
+          onClick={() => onChange(o.id)}
+          className="relative arc-display whitespace-nowrap cursor-pointer"
+          style={{ fontSize: 'calc(var(--u) * 3.4)', color: i === index ? '#000' : '#8d95b3', transition: 'color 0.18s', background: 'none', border: 0, padding: '0 calc(var(--u) * 0.8)' }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** The beat being heard (see audioEngine.getPreviewBeat): which beat, how long ago it hit (s), and seconds per beat. */
 export type BeatNow = () => { beat: number; since: number; period?: number } | null;
 

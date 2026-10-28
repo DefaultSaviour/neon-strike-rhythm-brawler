@@ -1,11 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { LifetimeStats } from '../game/heroUnlocks';
-import { byCombo, byScore, SongRecord } from '../game/records';
+import { byCombo, byScore, playTime, shortNumber, SongRecord } from '../game/records';
+import { ArcadeScreen, ArcadeSwitch, SlantButton } from './arcade/ui';
+import { useDragScroll } from './arcade/dragScroll';
 
 /**
- * The player's own records, in three tabs: best single-song score, total
- * score over every song, and biggest combo. (On CrazyGames, the best
- * single-song score also goes to the site's leaderboard.)
+ * Your records, arcade style, on one screen (only the song list scrolls,
+ * and you can drag it): your lifetime totals in a slanted panel on the
+ * left, and every song you've played ranked on the right, by best score or
+ * by biggest combo. Number one is picked out in white. (On CrazyGames, your
+ * best song score also goes on the site's leaderboard.)
+ *
+ * Keys: Left / Right switch the ranking, Up / Down scroll, Escape goes back.
  */
 
 interface RecordsScreenProps {
@@ -15,128 +21,174 @@ interface RecordsScreenProps {
   onClose: () => void;
 }
 
-type Tab = 'song' | 'total' | 'combo';
+type Rank = 'score' | 'combo';
 
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'song', label: 'Best Song' },
-  { id: 'total', label: 'Total Score' },
-  { id: 'combo', label: 'Biggest Combo' },
+const RANKS: Array<{ id: Rank; label: string }> = [
+  { id: 'score', label: 'Best score' },
+  { id: 'combo', label: 'Best combo' },
 ];
 
-/** The big headline number at the top of a tab. */
-const Headline: React.FC<{ label: string; value: string; sub?: string }> = ({ label, value, sub }) => (
-  <div className="flex flex-col items-center text-center py-4">
-    <div className="text-[11px] uppercase tracking-widest text-slate-400">{label}</div>
-    <div className="text-4xl md:text-5xl font-black font-mono tabular-nums text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-200 to-amber-400 drop-shadow-[0_0_18px_rgba(255,194,58,0.35)]">
-      {value}
-    </div>
-    {sub && <div className="mt-1 text-xs text-slate-400">{sub}</div>}
-  </div>
-);
-
-/** A ranked list of songs, showing one number per song. */
-const SongList: React.FC<{ songs: SongRecord[]; value: (s: SongRecord) => string }> = ({ songs, value }) => (
-  <ol className="flex flex-col gap-2">
-    {songs.map((s, i) => (
-      <li key={s.trackId} className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border ${i === 0 ? 'border-amber-400/50 bg-amber-400/10' : 'border-slate-800 bg-slate-900/50'}`}>
-        <span className={`w-6 text-center font-black font-mono ${i === 0 ? 'text-amber-300' : 'text-slate-500'}`}>{i + 1}</span>
-        <span className="flex-1 font-bold text-slate-100 truncate">{s.title}</span>
-        <span className="text-[11px] font-mono text-slate-500">{s.grade}</span>
-        <span className="font-black font-mono tabular-nums text-slate-100">{value(s)}</span>
-      </li>
-    ))}
-  </ol>
-);
+const u = (n: number) => `calc(var(--u) * ${n})`;
+const small = `max(10px, ${u(2.3)})`;
 
 export const RecordsScreen: React.FC<RecordsScreenProps> = ({ stats, songs, onClose }) => {
-  const [tab, setTab] = useState<Tab>('song');
+  const [rank, setRank] = useState<Rank>('score');
+  const listRef = useRef<HTMLOListElement | null>(null);
+  useDragScroll(listRef);
+  // A new ranking starts from number one
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [rank]);
 
+  // Keys. Caught first (capture) so the game's own keys never fire here too.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') onClose();
+      let handled = true;
+      if (e.code === 'Escape' || e.code === 'Backspace') onClose();
+      else if (e.code === 'ArrowRight' || e.code === 'KeyD') setRank('combo');
+      else if (e.code === 'ArrowLeft' || e.code === 'KeyA') setRank('score');
+      else if (e.code === 'ArrowDown' || e.code === 'KeyS') listRef.current?.scrollBy({ top: 120, behavior: 'smooth' });
+      else if (e.code === 'ArrowUp' || e.code === 'KeyW') listRef.current?.scrollBy({ top: -120, behavior: 'smooth' });
+      else handled = false;
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const ranked = byScore(songs);
-  const best = ranked[0];
-  const hours = Math.floor(stats.playSeconds / 3600);
-  const minutes = Math.floor((stats.playSeconds % 3600) / 60);
+  const ranked = rank === 'score' ? byScore(songs) : byCombo(songs);
+  const tiles: Array<[string, string, string]> = [
+    ['Songs cleared', shortNumber(stats.songsCleared), 'var(--cyan)'],
+    ['Enemies down', shortNumber(stats.enemiesDefeated), 'var(--pink)'],
+    ['Perfect hits', shortNumber(stats.perfects), 'var(--yellow)'],
+    ['Time played', playTime(stats.playSeconds), '#fff'],
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="w-full max-w-2xl bg-[#0b0d1e] border border-amber-400/30 rounded-xl shadow-[0_0_40px_rgba(255,194,58,0.15)] flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-          <div>
-            <div className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-500 to-cyan-400">RECORDS</div>
-            <div className="text-xs text-slate-400">Your best runs. Your best song score also goes on the CrazyGames leaderboard.</div>
-          </div>
-        </div>
+    <ArcadeScreen label="Records">
+      {/* Header */}
+      <div className="absolute flex items-center" style={{ left: u(5), top: u(4), gap: u(2) }}>
+        <SlantButton onClick={onClose} aria-label="Back" className="arc-in-left" style={{ width: u(12), padding: 0 }}>
+          ‹
+        </SlantButton>
+        <h2 className="arc-display arc-skew m-0 arc-in-left" style={{ fontSize: u(8.4), textShadow: `${u(0.4)} 0 0 var(--pink)` }}>
+          Records
+        </h2>
+      </div>
 
-        {/* Full width, and at least 44px tall: easy to hit with a thumb on a phone */}
-        <div className="px-3 md:px-6 py-2.5 border-b border-slate-800 bg-slate-900/30">
-          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-700 bg-slate-950/60 p-1.5" role="tablist">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                onClick={() => setTab(t.id)}
-                className={`min-h-11 rounded-lg text-xs sm:text-sm md:text-base font-black tracking-wide uppercase cursor-pointer transition-colors ${
-                  tab === t.id ? 'bg-amber-400 text-black shadow-[0_0_14px_rgba(255,194,58,0.4)]' : 'text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                {t.label}
-              </button>
+      {/* Lifetime totals */}
+      <section
+        className="absolute arc-in-left"
+        aria-label="Lifetime"
+        style={{ left: 0, top: u(18), bottom: 0, width: '36%', background: 'linear-gradient(160deg, #1a0b18, rgba(7,7,12,0) 75%)', clipPath: 'polygon(0 0, 100% 0, 84% 100%, 0 100%)' }}
+      >
+        <div className="absolute flex flex-col" style={{ left: u(5), right: u(9), top: u(3), gap: u(2.4) }}>
+          <div className="font-black tracking-[0.25em] text-[color:var(--pink)]" style={{ fontSize: small }}>
+            LIFETIME
+          </div>
+          <div>
+            <div className="font-black uppercase tracking-[0.16em] text-[color:var(--muted)]" style={{ fontSize: small }}>
+              Total score
+            </div>
+            <div className="arc-display arc-skew text-[color:var(--yellow)]" style={{ fontSize: u(9.5), textShadow: `${u(0.5)} ${u(0.5)} 0 #000` }}>
+              {stats.totalScore.toLocaleString()}
+            </div>
+          </div>
+          <div className="grid grid-cols-2" style={{ gap: u(1) }}>
+            {tiles.map(([label, value, color]) => (
+              <div key={label} className="arc-strip flex flex-col justify-center" style={{ height: u(12), minHeight: 44, padding: `0 ${u(3)}` }}>
+                <span className="font-black uppercase tracking-[0.12em] text-[color:var(--muted)] whitespace-nowrap" style={{ fontSize: `max(9px, ${u(1.9)})` }}>
+                  {label}
+                </span>
+                <b className="arc-display whitespace-nowrap" style={{ fontSize: u(5), color }}>
+                  {value}
+                </b>
+              </div>
             ))}
           </div>
+          <div>
+            <div className="font-black uppercase tracking-[0.16em] text-[color:var(--muted)]" style={{ fontSize: small }}>
+              Biggest combo
+            </div>
+            <div className="arc-display arc-skew" style={{ fontSize: u(8), color: 'var(--cyan)', textShadow: `${u(0.5)} ${u(0.5)} 0 #000` }}>
+              {stats.bestCombo.toLocaleString()}×
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div className="p-6 overflow-y-auto">
-          {songs.length === 0 ? (
-            <div className="py-10 text-center text-slate-400">No records yet: play a song to set your first.</div>
-          ) : tab === 'song' ? (
-            <>
-              <Headline label="Best single song" value={best.score.toLocaleString()} sub={best.title} />
-              <SongList songs={ranked} value={(s) => s.score.toLocaleString()} />
-            </>
-          ) : tab === 'total' ? (
-            <>
-              <Headline label="Total score, every song" value={stats.totalScore.toLocaleString()} />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono">
-                {[
-                  ['Songs cleared', stats.songsCleared.toLocaleString()],
-                  ['Enemies defeated', stats.enemiesDefeated.toLocaleString()],
-                  ['PERFECT hits', stats.perfects.toLocaleString()],
-                  ['Time played', hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg border border-slate-800 bg-slate-900/50 py-3">
-                    <div className="text-[10px] uppercase text-slate-500">{label}</div>
-                    <div className="text-lg font-bold text-slate-100 tabular-nums">{value}</div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <Headline label="Biggest combo ever" value={`${stats.bestCombo.toLocaleString()}x`} />
-              <SongList songs={byCombo(songs)} value={(s) => `${s.combo.toLocaleString()}x`} />
-            </>
-          )}
+      {/* Your songs, ranked */}
+      {songs.length > 0 && (
+        <div className="absolute arc-in-right" style={{ left: '38%', right: u(4), top: u(5) }}>
+          <ArcadeSwitch label="Rank songs by" options={RANKS} value={rank} onChange={setRank} />
         </div>
+      )}
 
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/50 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-sm tracking-wide cursor-pointer"
-          >
-            Back
-          </button>
+      {songs.length === 0 ? (
+        <div className="absolute grid place-items-center text-center" style={{ left: '38%', right: u(4), top: u(18), bottom: u(12) }}>
+          <div>
+            <div className="arc-display arc-skew" style={{ fontSize: u(6) }}>
+              No records yet
+            </div>
+            <div className="font-bold text-[color:var(--muted)]" style={{ fontSize: `max(11px, ${u(2.6)})`, marginTop: u(1.4) }}>
+              Play a song to set your first.
+            </div>
+          </div>
+        </div>
+      ) : (
+        <ol
+          ref={listRef}
+          className="absolute arc-scroll flex flex-col select-none m-0 p-0 list-none"
+          aria-label={rank === 'score' ? 'Songs by best score' : 'Songs by best combo'}
+          style={{ left: '38%', right: u(4), top: u(18), bottom: u(10), gap: u(1.2), paddingRight: u(1) }}
+        >
+          {ranked.map((s, i) => {
+            const top = i === 0;
+            const value = rank === 'score' ? s.score.toLocaleString() : `${s.combo.toLocaleString()}×`;
+            return (
+              <li
+                key={s.trackId}
+                className={`arc-strip arc-in-right shrink-0 flex items-center ${top ? 'text-black' : 'text-white'}`}
+                style={{
+                  animationDelay: `${Math.min(i, 8) * 0.03}s`,
+                  minHeight: 44,
+                  height: top ? u(12) : u(9.5),
+                  marginInline: top ? 0 : '3%',
+                  padding: `0 ${u(4)}`,
+                  gap: u(2.2),
+                  background: top ? `linear-gradient(to top, var(--pink) ${u(0.9)}, #fff ${u(0.9)})` : undefined,
+                }}
+              >
+                <span className="arc-display shrink-0" style={{ fontSize: top ? u(5) : u(3.6), width: u(6), color: top ? 'var(--pink)' : i < 3 ? 'var(--yellow)' : '#3c4363' }}>
+                  {top ? '★1' : i + 1}
+                </span>
+                <span className="arc-display truncate" style={{ fontSize: top ? u(5.2) : u(4.2), flex: 1, minWidth: 0 }}>
+                  {s.title}
+                </span>
+                <span className="arc-display shrink-0 text-center" style={{ fontSize: u(3.8), width: u(6), color: top ? '#9a9cab' : 'var(--muted)' }} aria-label={`Grade ${s.grade}`}>
+                  {s.grade}
+                </span>
+                <b className="arc-display shrink-0 text-right" style={{ fontSize: top ? u(5.6) : u(4.4), minWidth: u(16) }}>
+                  {value}
+                </b>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      {/* Where your best goes, and the keys */}
+      <div className="absolute flex items-end justify-between" style={{ left: '38%', right: u(4), bottom: u(3.5), gap: u(3) }}>
+        <div className="font-bold text-[color:var(--muted)]" style={{ fontSize: `max(10px, ${u(2.2)})` }}>
+          Your best song score also goes on the CrazyGames leaderboard.
+        </div>
+        <div className="arc-blink font-black tracking-[0.3em] text-[color:var(--yellow)] whitespace-nowrap [@media(pointer:coarse)]:hidden" style={{ fontSize: `max(10px, ${u(2.2)})` }}>
+          ←→ RANK · ESC BACK
         </div>
       </div>
-    </div>
+    </ArcadeScreen>
   );
 };

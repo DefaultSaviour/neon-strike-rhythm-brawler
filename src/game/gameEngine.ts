@@ -26,6 +26,7 @@ import { comboDuration, comboFrame } from './combo';
 import { FLOOR_Y, SPAWN_DISTANCE } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { practiceRunProgress, recordRunProgress, RunProgress } from './runProgress';
+import { compareScore, ScoreComparison } from './records';
 import { DEFAULT_ENEMY_MOTION, ENEMY_MOTION_STYLES, EnemyMotionStyle } from './enemyMotion';
 import { enemyPoseFor } from './customAnimation';
 import { getActiveAnimations } from './animationLibrary';
@@ -267,6 +268,11 @@ export class GameEngine {
    * stats or unlocks, no best progress, no high score.
    */
   public practice = false;
+  /**
+   * How this run's score compared with the song's best before it (for the
+   * results screen's NEW RECORD), or null until a real run ends.
+   */
+  public lastScore: ScoreComparison | null = null;
   /** The end-of-song boss for this song, or null when the song has none */
   public boss: BossState | null = null;
   /** Fists the player hit back, flying at the boss */
@@ -438,6 +444,7 @@ export class GameEngine {
     this.hitOffsets = [];
     this.recentPresses = [];
     this.lastRun = null;
+    this.lastScore = null;
     this.runCounted = false;
     this.newUnlocks = [];
     this.runUnlocks = [];
@@ -1290,6 +1297,7 @@ export class GameEngine {
       const key = `neon_strike_highscores_v1`;
       const current = JSON.parse(progressStore()?.getItem(key) || '{}');
       const prevBest: HighScoreRecord | undefined = current[this.track.id];
+      this.lastScore = compareScore(record.highScore, record.maxCombo, prevBest ?? null);
 
       if (!prevBest || record.highScore > prevBest.highScore) {
         // A new best run, keeping the song's best combo even if this run's was lower
