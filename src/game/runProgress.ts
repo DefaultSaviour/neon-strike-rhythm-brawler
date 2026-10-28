@@ -115,21 +115,22 @@ export function formatSongTime(sec: number): string {
 }
 
 /**
- * Duration of the runner's trip along the bar (seconds). Longer runs take a
- * little longer, so there's time to see his chain of attacks.
+ * Duration of the runner's trip along the bar (seconds). Longer runs take
+ * longer, so there's time to watch him go and see his chain of attacks.
  */
 export function dashDuration(fraction: number): number {
-  return 0.8 + 1.6 * Math.min(1, Math.max(0, fraction));
+  return 1.4 + 2.6 * Math.min(1, Math.max(0, fraction));
 }
 
 /**
  * Where the runner is (0..1 along the bar) `elapsed` seconds into the dash.
- * Fast start, slowing as it nears the end point, so the stop lands with weight.
+ * Quicker at the start, easing in to the end point so the stop lands with
+ * weight (gently, so the start isn't a blur).
  */
 export function runnerPositionAt(elapsed: number, target: number): number {
   const d = dashDuration(target);
   const t = Math.min(1, Math.max(0, elapsed / d));
-  const eased = 1 - Math.pow(1 - t, 3);
+  const eased = 1 - Math.pow(1 - t, 2);
   return target * eased;
 }
 
@@ -155,8 +156,8 @@ export function levelUpTimes(target: number): Array<{ position: number; elapsed:
   const out: Array<{ position: number; elapsed: number; combo: number }> = [];
   for (const q of [0.25, 0.5, 0.75]) {
     if (q > target + 1e-9) break;
-    // Invert runnerPositionAt: position = target * (1 - (1 - t)^3)
-    const t = 1 - Math.cbrt(Math.max(0, 1 - q / target));
+    // Invert runnerPositionAt: position = target * (1 - (1 - t)^2)
+    const t = 1 - Math.sqrt(Math.max(0, 1 - q / target));
     out.push({ position: q, elapsed: t * d, combo: runnerTierCombo(q) });
   }
   return out;

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { GameScoreState, Track, HighScoreRecord } from '../types/game';
+import { GameScoreState, Track } from '../types/game';
+import type { ScoreComparison } from '../game/records';
 import type { DeathReport } from '../game/timing';
 import { formatSongTime, RunProgress } from '../game/runProgress';
 import type { HeroId } from '../game/heroes';
@@ -18,7 +19,8 @@ interface GameOverModalProps {
   cleared: boolean;
   track: Track | null;
   scoreState: GameScoreState;
-  highScoreRecord: HighScoreRecord | null;
+  /** How this run's score compared with the song's old best (null for practice): drives NEW RECORD */
+  scoreRecord?: ScoreComparison | null;
   onRestart: () => void;
   onOpenSelect: () => void;
   /** Back to the title screen */
@@ -72,7 +74,7 @@ const BAR_HEIGHT = 150;
 export const GameOverModal: React.FC<GameOverModalProps> = ({
   cleared,
   scoreState,
-  highScoreRecord,
+  scoreRecord = null,
   onRestart,
   onOpenSelect,
   onMainMenu,
@@ -114,7 +116,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   else if (accuracy >= 70) grade = 'B';
   else if (accuracy >= 60) grade = 'C';
 
-  const isNewHighScore = !practice && highScoreRecord && scoreState.score >= highScoreRecord.highScore && scoreState.score > 0;
+  // Beat your old best on this song: a NEW RECORD stamp, and the score row lit up with how much by.
+  // (The first time you play a song it's just your first score.)
+  const newRecord = !practice && !!scoreRecord?.newBest;
+  const beatBy = newRecord && scoreRecord?.previousBest != null ? scoreState.score - scoreRecord.previousBest : 0;
+  const firstScore = !practice && scoreRecord?.previousBest === null && scoreState.score > 0;
+  const newCombo = !practice && !!scoreRecord?.newCombo;
 
   // R or Space: straight back in. Caught first, so the game's own R key doesn't restart a second time.
   useEffect(() => {
@@ -176,8 +183,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
       {/* Left: the stamp, why, and the grade */}
       <div className="absolute flex flex-col items-start" style={{ left: u(6), top: u(31), width: '44%', gap: u(1.4) }}>
-        <div className="arc-display arc-stamp" style={{ fontSize: u(12), color: stampColor, textShadow: `${u(0.6)} ${u(0.6)} 0 #000, ${u(-0.4)} 0 0 var(--cyan)`, transformOrigin: 'left center', ['--tilt' as string]: '-4deg' }}>
-          {stamp}
+        <div className="flex items-center" style={{ gap: u(2.4) }}>
+          <div className="arc-display arc-stamp" style={{ fontSize: u(12), color: stampColor, textShadow: `${u(0.6)} ${u(0.6)} 0 #000, ${u(-0.4)} 0 0 var(--cyan)`, transformOrigin: 'left center', ['--tilt' as string]: '-4deg' }}>
+            {stamp}
+          </div>
+          {/* Slams in just after the stamp */}
+          {newRecord && (
+            <div
+              className="arc-display arc-stamp whitespace-nowrap"
+              style={{ fontSize: u(4.6), lineHeight: 1, color: '#000', background: 'var(--yellow)', padding: `${u(1)} ${u(1.8)}`, boxShadow: `${u(0.6)} ${u(0.6)} 0 #000, 0 0 ${u(3)} rgba(255,230,0,0.55)`, animationDelay: '0.35s', ['--tilt' as string]: '6deg' }}
+            >
+              New record!
+            </div>
+          )}
         </div>
         <div className="font-bold text-[#ffc2d6] line-clamp-2" style={{ fontSize: `max(11px, ${u(2.7)})`, lineHeight: 1.25 }}>
           {why}
@@ -187,25 +205,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             {grade}
           </span>
           <div className="flex flex-col items-start" style={{ gap: u(0.8), paddingBottom: u(0.4) }}>
-            {isNewHighScore && <span className="arc-tag">NEW BEST</span>}
+            {firstScore && <span className="arc-tag">FIRST SCORE</span>}
             {boss === 'ko' && <span className="arc-tag" style={{ background: 'var(--pink)', color: '#fff' }}>BOSS K.O.!</span>}
-            {adOffer &&
-              (adOffer.done ? (
-                <span className="font-bold text-[color:var(--yellow)]" style={{ fontSize: small }}>
-                  {adOffer.name} unlocked and equipped!
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={adOffer.onWatch}
-                  disabled={adOffer.busy}
-                  className="text-left font-bold text-[color:var(--cyan)] underline decoration-dotted underline-offset-2 disabled:opacity-60 cursor-pointer"
-                  style={{ fontSize: small, minHeight: 32 }}
-                >
-                  {adOffer.busy ? 'Loading ad…' : `▶ Watch an ad: unlock ${adOffer.name} now`}
-                </button>
-              ))}
-            {adOffer?.notice && !adOffer.done && <span className="text-pink-300" style={{ fontSize: small }}>{adOffer.notice}</span>}
           </div>
         </div>
       </div>
@@ -214,15 +215,27 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       <div className="absolute flex flex-col" style={{ right: u(4), top: u(28), width: '44%', gap: u(1) }}>
         {(
           [
-            ['Score', scoreState.score.toLocaleString()],
-            ['Best combo', `${scoreState.maxCombo}×`],
-            ['Accuracy', `${accuracy}%`],
+            ['Score', newRecord ? 'New record' : 'Score', scoreState.score.toLocaleString(), newRecord],
+            ['Combo', newCombo ? 'New best combo' : 'Best combo', `${scoreState.maxCombo}×`, false],
+            ['Accuracy', 'Accuracy', `${accuracy}%`, false],
           ] as const
-        ).map(([label, value], i) => (
-          <div key={label} className="arc-strip arc-in-right flex items-center" style={{ height: u(7.4), padding: `0 ${u(4)}`, animationDelay: `${0.05 + i * 0.05}s` }}>
-            <span className="font-black tracking-[0.16em] uppercase text-[color:var(--muted)]" style={{ fontSize: small }}>
+        ).map(([key, label, value, lit], i) => (
+          <div
+            key={key}
+            className="arc-strip arc-in-right flex items-center"
+            style={{ height: u(7.4), padding: `0 ${u(4)}`, gap: u(2), animationDelay: `${0.05 + i * 0.05}s`, background: lit ? 'var(--yellow)' : undefined, color: lit ? '#000' : undefined }}
+          >
+            <span
+              className="font-black tracking-[0.16em] uppercase whitespace-nowrap"
+              style={{ fontSize: small, color: lit ? '#000' : key === 'Combo' && newCombo ? 'var(--cyan)' : 'var(--muted)' }}
+            >
               {label}
             </span>
+            {lit && beatBy > 0 && (
+              <span className="arc-display whitespace-nowrap" style={{ fontSize: u(3.4), lineHeight: 1, color: 'var(--yellow)', background: '#000', padding: `${u(0.6)} ${u(1.2)}`, transform: 'skewX(-10deg)' }}>
+                +{beatBy.toLocaleString()}
+              </span>
+            )}
             <b className="arc-display ml-auto" style={{ fontSize: u(5) }}>
               {value}
             </b>
@@ -273,13 +286,41 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       </div>
 
       {/* Buttons */}
-      <div className="absolute flex" style={{ left: u(5), right: u(4), bottom: u(3.5), gap: u(1.2) }}>
-        <SlantButton onClick={onMainMenu} className="flex-1" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
-          Menu
-        </SlantButton>
-        <SlantButton onClick={onOpenSelect} className="flex-1" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
-          Songs
-        </SlantButton>
+      <div className="absolute flex items-end" style={{ left: u(5), right: u(4), bottom: u(3.5), gap: u(1.2) }}>
+        {/* Menu and Songs, with the ad offer (when there is one) sitting right on top of them */}
+        <div className="flex-[2] min-w-0 flex flex-col" style={{ gap: u(1.2) }}>
+          {adOffer &&
+            (adOffer.done ? (
+              <span className="font-bold text-[color:var(--yellow)] text-center" style={{ fontSize: small }}>
+                {adOffer.name} unlocked and equipped!
+              </span>
+            ) : (
+              <>
+                {adOffer.notice && (
+                  <span className="text-pink-300 text-center" style={{ fontSize: small }}>
+                    {adOffer.notice}
+                  </span>
+                )}
+                <button type="button" onClick={adOffer.onWatch} disabled={adOffer.busy} className="arc-btn is-offer" style={{ height: u(10), padding: `0 ${u(4)}`, fontSize: u(3.4) }}>
+                  <span className="arc-play" aria-hidden>
+                    ▶
+                  </span>
+                  <span className="arc-offer-text">
+                    {adOffer.busy ? 'Loading ad…' : `Unlock ${adOffer.name}`}
+                    <span className="arc-offer-sub">{adOffer.busy ? 'One moment' : 'Watch an ad · now'}</span>
+                  </span>
+                </button>
+              </>
+            ))}
+          <div className="flex" style={{ gap: u(1.2) }}>
+            <SlantButton onClick={onMainMenu} className="flex-1" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
+              Menu
+            </SlantButton>
+            <SlantButton onClick={onOpenSelect} className="flex-1" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>
+              Songs
+            </SlantButton>
+          </div>
+        </div>
         {forReal ? (
           <>
             <SlantButton variant="alt" hotkey="R" onClick={onRestart} className="flex-[1.3]" style={{ padding: 0, height: u(12), fontSize: u(3.8) }}>

@@ -22,7 +22,10 @@
   position: fixed;
   inset: 0;
   z-index: 50;
+  /* Clip, not hide: the hatching is drawn bigger than the screen, and a hidden overflow can still be
+     scrolled (focusing a button can slide the whole screen sideways). A clipped one can't. */
   overflow: hidden;
+  overflow: clip;
   color: #fff;
   font-family: Outfit, sans-serif;
   font-size: calc(var(--u) * 3);
@@ -113,6 +116,33 @@
 }
 .arc-btn.is-alt { color: var(--yellow); }
 .arc-btn.is-selected { background: #fff; color: #000; }
+/* An offer (watch an ad to unlock): pink, so it stands out without competing with the yellow main button */
+.arc-btn.is-offer { background: var(--pink); color: #fff; }
+.arc-btn.is-offer:hover, .arc-btn.is-offer:focus-visible { background: #ff5a93; color: #fff; }
+.arc-btn.is-offer .arc-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: calc(var(--u) * 5);
+  height: calc(var(--u) * 5);
+  min-width: 22px;
+  min-height: 22px;
+  background: #000;
+  color: var(--pink);
+  transform: skewX(-10deg);
+  font-style: normal;
+  font-size: max(10px, calc(var(--u) * 2.4));
+}
+.arc-btn.is-offer .arc-offer-text { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--u) * 0.4); }
+.arc-btn.is-offer .arc-offer-sub {
+  font-family: Outfit, sans-serif;
+  font-style: normal;
+  font-weight: 800;
+  font-size: max(9px, calc(var(--u) * 1.9));
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.78);
+}
 .arc-btn.is-lg { height: calc(var(--u) * 14); font-size: calc(var(--u) * 6.6); }
 .arc-btn.is-sm { height: calc(var(--u) * 9); font-size: calc(var(--u) * 3.4); padding: 0 calc(var(--u) * 3); }
 .arc-btn .arc-key {
