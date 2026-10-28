@@ -118,6 +118,17 @@ export function scoreToNextBackdrop(stats: LifetimeStats): number | null {
   return next === undefined ? null : Math.max(0, next - stats.totalScore);
 }
 
+/**
+ * The total score that opens a locked piece (null once it's open, or for a
+ * free one). Pieces open in path order, one score milestone each; pieces
+ * opened with ads skip ahead, so the milestones left move along with them.
+ */
+export function backdropGoalScore(id: string, stats: LifetimeStats): number | null {
+  const at = BACKDROP_UNLOCK_PATH.indexOf(id);
+  if (at < 0 || isBackdropUnlocked(id, stats)) return null;
+  return BACKDROP_MILESTONES[at - backdropsEarned(stats) + stats.backdropsUnlocked] ?? null;
+}
+
 /** The chosen pieces, with anything not (or no longer) unlocked falling back to the free piece for that layer. */
 export function activeBackdrop(chosen: Partial<Record<BackdropLayer, string>> | undefined, stats: LifetimeStats): Record<BackdropLayer, string> {
   const out = { ...DEFAULT_BACKDROP };
