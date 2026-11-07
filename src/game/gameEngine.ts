@@ -495,6 +495,10 @@ export class GameEngine {
     this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
     this.fistFlight = fistFlightSec(this.beatGrid.bpm, this.approachDuration);
 
+    // Every enemy walks in from beyond the edge of the screen. One due before it could
+    // make that walk would already be standing on the floor when the song starts: leave it out.
+    notes = notes.filter((n) => n.time >= this.approachDuration);
+
     // The end-of-song boss: it takes over the last stretch, turning those notes into its fists.
     const bossKind = bossKindFor(track.id, PRELOADED_TRACKS.map((t) => t.id));
     const bossPlan = planBoss(notes, this.beatGrid.bpm, bossKind);
@@ -1031,7 +1035,9 @@ export class GameEngine {
       const t = timeRemaining / (enemy.bossAttack ? this.fistFlight : this.approachDuration);
 
       const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      // Every screen: the same start point and speed (see SPAWN_DISTANCE). Boss fists start at the boss.
+      // Every screen: the same speed, reaching SPAWN_DISTANCE one approach before the beat. Before
+      // that they are further out, so on wide screens they walk in from the edge, not appear.
+      // Boss fists start at the boss.
       const spawnDistance = enemy.bossAttack && this.boss ? standX(this.boss.plan.kind) : SPAWN_DISTANCE;
       const spawnX = enemy.lane === 'left' ? -spawnDistance : spawnDistance;
 

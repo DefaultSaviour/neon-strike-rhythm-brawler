@@ -31,12 +31,13 @@ const FLOOR_SCREEN_FRACTION = 0.8;
 /** Target fighter height as a fraction of screen height */
 const FIGHTER_SCREEN_FRACTION = 0.34;
 /**
- * The arena looks and plays the same on every screen: enemies always start
- * SPAWN_DISTANCE from the centre and cross to the strike line at the same
- * speed. At least VISIBLE_HALF_WIDTH either side of the centre is always on
- * screen (exactly that on a 16:9 screen), so the approach can always be seen;
- * narrower screens (tablets, phones) shrink the fighters a little to fit it,
- * wider ones show extra floor and the enemies fade in at the spawn point.
+ * The arena looks and plays the same on every screen: enemies always pass
+ * SPAWN_DISTANCE from the centre one approach before their beat, and cross to
+ * the strike line at the same speed. At least VISIBLE_HALF_WIDTH either side
+ * of the centre is always on screen (exactly that on a 16:9 screen), so the
+ * approach can always be seen; narrower screens (tablets, phones) shrink the
+ * fighters a little to fit it, wider ones show extra floor, and the enemies
+ * walk in across it from beyond the edge at the same speed.
  */
 export const VISIBLE_HALF_WIDTH = 380;
 /** Where enemies start, from the centre: just off the edge of a 16:9 screen */
