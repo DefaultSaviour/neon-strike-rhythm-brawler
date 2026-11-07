@@ -15,7 +15,7 @@ import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes'
 import { RunUnlock, unlocksBetween } from './runUnlocks';
 import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats, withAdHero } from './heroUnlocks';
 import { isStanceUnlocked, nextStance } from './stanceUnlocks';
-import { audioEngine, PRELOADED_TRACKS } from '../audio/audioEngine';
+import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
 import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
 import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
@@ -34,7 +34,21 @@ import { progressStore } from '../platform/crazyGames';
 import { activeBackdrop, BACKDROP_ITEMS, BackdropItem, BackdropLayer, isBackdropUnlocked, nextBackdrop } from './backdrops';
 import { loadSeen, saveSeen, UnlockKind, unlockKey, unseen } from './seenUnlocks';
 import { addHitLog, HitLogEntry, liveHitLog } from './hitLog';
-import { BOSS_LOOKS, BOSS_SCALE, BossFigure, bossFigures, bossKindFor, BossPlan, fistFlightSec, HP_PER_ATTACK, planBoss, standX } from './boss';
+import {
+  approachSecFor,
+  BOSS_KINDS,
+  BOSS_LOOKS,
+  BOSS_SCALE,
+  BossFigure,
+  bossFigures,
+  BossKind,
+  BossPlan,
+  fistFlightSec,
+  fistPath,
+  HP_PER_ATTACK,
+  pickBossKind,
+  planBoss,
+} from './boss';
 
 /** The end-of-song boss while a song is playing (see boss.ts). */
 export interface BossState {
@@ -56,6 +70,8 @@ export interface BossState {
   /** Health as the bar shows it: it drops when a hit-back fist lands, a moment after the hit */
   shownHp: number;
   shownSideHp: Record<Lane, number>;
+  /** performance.now() when it got angry (halfway through, see boss.ts), 0 = not yet */
+  ragedAt: number;
 }
 
 /** A fist the player hit back, flying at the boss (see returnedFistPosition). */
@@ -71,6 +87,8 @@ export interface ReturningFist {
 
 /** How long a hit-back fist takes to reach the boss (ms). */
 export const RETURN_MS = 280;
+/** After the killing blow lands, the results wait this long so the K.O. plays (ms). */
+export const KO_HOLD_MS = 1300;
 
 export interface GameEngineCallbacks {
   onScoreUpdate: (score: GameScoreState) => void;
@@ -93,9 +111,10 @@ export const CROWD_POP_SEC = 0.3;
 const SHORT_TEST_SEC =
   import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('short') ? 120 : 0;
 
-/** Dev builds only: ?boss starts every song a few seconds before its boss. */
+/** Dev builds only: ?boss starts every song a few seconds before its boss (?boss=twins picks which). */
 const BOSS_TEST =
   import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('boss');
+const BOSS_TEST_KIND = BOSS_TEST ? (new URLSearchParams(location.search).get('boss') as BossKind) : null;
 
 /** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
 const HIT_STOP: Record<TimingJudgementType, number> = { PERFECT: 0.06, GOOD: 0.04, OK: 0.025, MISS: 0 };
@@ -277,8 +296,12 @@ export class GameEngine {
   public boss: BossState | null = null;
   /** Fists the player hit back, flying at the boss */
   public returningFists: ReturningFist[] = [];
+  /** The boss met last song: the next one is a different one */
+  private lastBossKind: BossKind | null = null;
   /** Song time the song is cut off at (only with the dev ?short switch) */
   private songEndAt = Infinity;
+  /** performance.now() to end the song at: the music is over and the boss's K.O. is playing out (0 = not waiting) */
+  private finishAt = 0;
   /** Song times (s) of the hits taken this practice run */
   public practiceHits: number[] = [];
   /** Seconds played in practice this visit (only for pacing midgame ads, see adClockSeconds) */
@@ -434,6 +457,7 @@ export class GameEngine {
     this.boss = null;
     this.returningFists = [];
     this.songEndAt = Infinity;
+    this.finishAt = 0;
     this.practice = practice;
     this.practiceHits = [];
     this.isRunning = false;
@@ -491,17 +515,18 @@ export class GameEngine {
     const grid = gridForNotes(track.notes, track.bpm, 0.01);
     this.beatGrid = grid.strength > 0.15 ? grid : { bpm: track.bpm, offset: 0, strength: 0 };
 
-    const beatSec = 60 / this.beatGrid.bpm;
-    this.approachDuration = Math.max(1.1, Math.min(2.2, beatSec * 4)); // Exactly 4 musical beats (1 bar) approach
-    this.fistFlight = fistFlightSec(this.beatGrid.bpm, this.approachDuration);
+    this.approachDuration = approachSecFor(this.beatGrid.bpm); // Exactly 4 musical beats (1 bar) approach
 
     // Every enemy walks in from beyond the edge of the screen. One due before it could
     // make that walk would already be standing on the floor when the song starts: leave it out.
     notes = notes.filter((n) => n.time >= this.approachDuration);
 
     // The end-of-song boss: it takes over the last stretch, turning those notes into its fists.
-    const bossKind = bossKindFor(track.id, PRELOADED_TRACKS.map((t) => t.id));
+    // A different one at random each time.
+    const bossKind = BOSS_TEST_KIND && BOSS_KINDS.includes(BOSS_TEST_KIND) ? BOSS_TEST_KIND : pickBossKind(this.lastBossKind);
+    this.fistFlight = fistFlightSec(this.beatGrid.bpm, this.approachDuration, bossKind);
     const bossPlan = planBoss(notes, this.beatGrid.bpm, bossKind);
+    if (bossPlan) this.lastBossKind = bossKind;
     this.boss = bossPlan
       ? {
           plan: bossPlan,
@@ -520,22 +545,25 @@ export class GameEngine {
           finalFistAll: -1,
           shownHp: bossPlan.maxHp,
           shownSideHp: { ...bossPlan.sideHp },
+          ragedAt: 0,
         }
       : null;
-    this.scoreState.totalNotes = bossPlan ? bossPlan.keep.filter(Boolean).length : notes.length;
-
     this.enemies = notes.flatMap((note, index) => {
       if (bossPlan && !bossPlan.keep[index]) return [];
       const { band, tier } = resolveBandTier(note);
       const color = getEnemyStyle(band, tier).color;
       const lane = bossPlan ? bossPlan.lanes[index] : note.lane;
+      const bossMove = bossPlan?.attack[index] ? bossPlan.moves[index] ?? 'fist' : undefined;
+      const flight = bossMove ? fistFlightSec(this.beatGrid.bpm, this.approachDuration, bossKind, bossMove) : this.approachDuration;
 
       return {
         id: `enemy_${index}_${note.time}`,
         lane,
-        bossAttack: bossPlan?.attack[index] ?? false,
+        bossAttack: !!bossMove,
+        bossMove,
+        flight: bossMove ? flight : undefined,
         targetTime: note.time,
-        spawnTime: Math.max(0, note.time - (bossPlan?.attack[index] ? this.fistFlight : this.approachDuration)),
+        spawnTime: Math.max(0, note.time - flight),
         speed: 1.0,
         x: lane === 'left' ? -9999 : 9999,
         y: 0,
@@ -551,6 +579,7 @@ export class GameEngine {
         pitchHz: note.pitchHz,
       };
     }) as Enemy[];
+    this.scoreState.totalNotes = this.enemies.length;
 
     // Dev ?boss: skip straight to a few seconds before the boss arrives.
     let startAt = 0;
@@ -1019,7 +1048,14 @@ export class GameEngine {
     const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
     this.songTime = effectiveTime;
-    if (effectiveTime >= this.songEndAt) {
+    if (this.finishAt) {
+      // The music is over: only the K.O. is left to play
+      if (performance.now() >= this.finishAt) {
+        this.finishAt = 0;
+        this.finishSong(true);
+        return;
+      }
+    } else if (effectiveTime >= this.songEndAt) {
       this.finishSong(true);
       return;
     }
@@ -1032,18 +1068,22 @@ export class GameEngine {
       if (enemy.defeated) continue;
 
       const timeRemaining = enemy.targetTime - effectiveTime;
-      const t = timeRemaining / (enemy.bossAttack ? this.fistFlight : this.approachDuration);
+      const t = timeRemaining / (enemy.flight ?? this.approachDuration);
 
-      const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
-      // Every screen: the same speed, reaching SPAWN_DISTANCE one approach before the beat. Before
-      // that they are further out, so on wide screens they walk in from the edge, not appear.
-      // Boss fists start at the boss.
-      const spawnDistance = enemy.bossAttack && this.boss ? standX(this.boss.plan.kind) : SPAWN_DISTANCE;
-      const spawnX = enemy.lane === 'left' ? -spawnDistance : spawnDistance;
-
-      enemy.x = hitX + (spawnX - hitX) * t;
+      if (enemy.bossMove && this.boss) {
+        // Boss fists start at the boss: straight at the player, or lobbed over them (see fistPath)
+        const at = fistPath(this.boss.plan.kind, enemy.bossMove, enemy.lane, this.hitLineOffset, t);
+        enemy.x = at.x;
+        enemy.lift = at.lift;
+      } else {
+        const hitX = enemy.lane === 'left' ? -this.hitLineOffset : this.hitLineOffset;
+        // Every screen: the same speed, reaching SPAWN_DISTANCE one approach before the beat. Before
+        // that they are further out, so on wide screens they walk in from the edge, not appear.
+        const spawnX = enemy.lane === 'left' ? -SPAWN_DISTANCE : SPAWN_DISTANCE;
+        enemy.x = hitX + (spawnX - hitX) * t;
+      }
       // Late enemies press in but never walk through the player.
-      if (Math.abs(enemy.x) < minX) enemy.x = Math.sign(enemy.x || (enemy.lane === 'left' ? -1 : 1)) * minX;
+      if (enemy.bossMove !== 'lob' && Math.abs(enemy.x) < minX) enemy.x = Math.sign(enemy.x || (enemy.lane === 'left' ? -1 : 1)) * minX;
 
       // Motion cycle in beats, so every motion style moves on the beat
       // (double-time for the speeder units).
@@ -1058,6 +1098,14 @@ export class GameEngine {
         this.triggerPlayerDeath(enemy);
         return;
       }
+    }
+
+    // Halfway through, the boss gets angry (a beat-long roar as it throws its first angry fist)
+    if (this.boss && !this.boss.ko && !this.boss.ragedAt && effectiveTime >= this.boss.plan.rageAt - this.fistFlight) {
+      this.boss.ragedAt = performance.now();
+      const shakeMode = this.settings.screenShake || 'subtle';
+      const shakeAmount = shakeMode === 'none' ? 0 : shakeMode === 'subtle' ? 0.5 : 1;
+      this.screenShake = Math.max(this.screenShake, 7 * shakeAmount);
     }
 
     // Fists the player hit back reach the boss
@@ -1261,6 +1309,12 @@ export class GameEngine {
 
   private finishSong(cleared: boolean) {
     if (!this.isRunning) return;
+    // The last fist often lands right as the music ends: let the killing blow reach the
+    // boss and the K.O. play before the results come up
+    if (cleared && !this.finishAt && this.boss && this.returningFists.some((f) => f.final)) {
+      this.finishAt = performance.now() + RETURN_MS + KO_HOLD_MS;
+      return;
+    }
     this.isRunning = false;
     this.recordProgress(cleared);
     this.countRun(cleared);

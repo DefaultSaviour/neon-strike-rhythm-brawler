@@ -66,6 +66,12 @@ export interface Enemy {
   pitchHz?: number;
   /** A fist thrown by the end-of-song boss (see boss.ts), not a walking enemy */
   bossAttack?: boolean;
+  /** Boss fists: thrown straight, lobbed over the player onto the far side, or a slow lightning bolt */
+  bossMove?: 'fist' | 'lob' | 'bolt';
+  /** Boss fists: seconds in the air */
+  flight?: number;
+  /** Boss fists: height above the straight fists' flight line (lobs) */
+  lift?: number;
 }
 
 export interface Particle {
