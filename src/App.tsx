@@ -94,7 +94,7 @@ export default function App() {
     screenShake: 'subtle',
     oneButtonMode: false,
     enemyMotion: 'run',
-    hitSound: 'both',
+    hitSound: 'surge',
     hero: 'striker',
   });
 
@@ -647,7 +647,16 @@ export default function App() {
 
       {/* Pause: the fight frozen behind, Resume / Restart / Quit to Menu */}
       {gameStatus === 'PAUSED' && !showTrackSelect && (
-        <PauseScreen track={selectedTrack} length={engine.songLength} practice={engine.practice} onResume={handleTogglePause} onRestart={handleRestart} onQuit={handleQuitToMenu} />
+        <PauseScreen
+          track={selectedTrack}
+          length={engine.songLength}
+          practice={engine.practice}
+          volume={audioSettings.volume}
+          onVolume={(volume) => handleUpdateSettings({ volume })}
+          onResume={handleTogglePause}
+          onRestart={handleRestart}
+          onQuit={handleQuitToMenu}
+        />
       )}
 
       {/* Game Over / Clear Results Modal */}

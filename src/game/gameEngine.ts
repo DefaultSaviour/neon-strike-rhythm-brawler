@@ -119,6 +119,9 @@ const BOSS_TEST_KIND = BOSS_TEST ? (new URLSearchParams(location.search).get('bo
 /** Freeze-frame length on impact, by judgement (seconds). Sells the weight of a hit. */
 const HIT_STOP: Record<TimingJudgementType, number> = { PERFECT: 0.06, GOOD: 0.04, OK: 0.025, MISS: 0 };
 
+/** Bumped when a default setting changes and old saves should move to it (see loadSettings) */
+const SETTINGS_VERSION = 2;
+
 export class GameEngine {
   public track: Track | null = null;
   public enemies: Enemy[] = [];
@@ -191,7 +194,8 @@ export class GameEngine {
     oneButtonMode: false,
     enemyMotion: DEFAULT_ENEMY_MOTION,
     hero: DEFAULT_HERO,
-    hitSound: 'both',
+    hitSound: 'surge',
+    settingsVersion: SETTINGS_VERSION,
   };
 
   /** True while the song is paused (audio clock frozen, nothing moves) */
@@ -427,7 +431,12 @@ export class GameEngine {
     try {
       const saved = progressStore()?.getItem('neon_strike_settings');
       if (saved) {
-        this.settings = { ...this.settings, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved) as Partial<AudioSettings>;
+        this.settings = { ...this.settings, ...parsed };
+        // Version 2: hits no longer play a note by default (players found it grating), just the
+        // song boost. Saves still on the old default move over once; a later pick of Both stays.
+        if ((parsed.settingsVersion ?? 1) < 2 && this.settings.hitSound === 'both') this.settings.hitSound = 'surge';
+        this.settings.settingsVersion = SETTINGS_VERSION;
         // Settings saved by older versions (or edited by hand) may hold values we no longer know.
         if (!ENEMY_MOTION_STYLES.some((m) => m.id === this.settings.enemyMotion)) {
           this.settings.enemyMotion = DEFAULT_ENEMY_MOTION;
@@ -436,7 +445,7 @@ export class GameEngine {
           this.settings.hero = DEFAULT_HERO;
         }
         if (!['both', 'tone', 'surge', 'off'].includes(this.settings.hitSound)) {
-          this.settings.hitSound = 'both';
+          this.settings.hitSound = 'surge';
         }
         audioEngine.setVolume(this.settings.volume, this.settings.sfxVolume);
       }
