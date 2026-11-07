@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '../audio/audioEngine';
+import { BOSS_KINDS } from './boss';
 import { GameEngine, KO_HOLD_MS, RETURN_MS } from './gameEngine';
-import { BeatNote, Track } from '../types/game';
+import { BeatNote, Enemy, Track } from '../types/game';
 
-/** The killing blow often lands right as the music ends: the K.O. must still happen. */
+/**
+ * The last fist often lands right as the music ends (Blitz's ends 16 ms after it). The song
+ * clock runs on after the music (AudioEngine keeps counting until it's stopped), and the end
+ * of the song waits while the last note can still be hit, the killing blow flies back, and
+ * the K.O. plays.
+ */
 
 let clock = 0;
 let now = 1000;
@@ -30,108 +36,102 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
-/** Math.random values that make pickBossKind choose each boss (from four, none met before) */
-const PICK = { leaper: 0, runner: 0.3, twins: 0.6, shadow: 0.9 } as const;
-
-describe.each(Object.entries(PICK))('the %s K.O. at the very end of a song', (_kind, pick) => {
+describe.each(BOSS_KINDS)('the %s K.O. at the very end of a song', (kind) => {
   beforeEach(() => {
-    vi.spyOn(Math, 'random').mockReturnValue(pick);
+    // pickBossKind chooses from all of BOSS_KINDS when none has been met: aim at this one
+    vi.spyOn(Math, 'random').mockReturnValue((BOSS_KINDS.indexOf(kind) + 0.5) / BOSS_KINDS.length);
   });
 
-  it('waits for the killing blow to land and the K.O. to play before the results', async () => {
+  /** Play the song hitting every note perfectly, except the last `skip`, and stop just before the last note. */
+  async function playAllBut(skip: number) {
     const onGameOver = vi.fn();
     const engine = new GameEngine({ onScoreUpdate: () => {}, onGameOver, onJudgement: () => {} });
     engine.settings.latencyOffsetMs = 0;
     await engine.startSong(track(), true);
-    expect(engine.boss).not.toBeNull();
-
-    // Hit everything perfectly
-    for (const enemy of [...engine.enemies].sort((a, b) => a.targetTime - b.targetTime)) {
+    expect(engine.boss!.plan.kind).toBe(kind);
+    const order = [...engine.enemies].sort((a, b) => a.targetTime - b.targetTime);
+    const played = order.slice(0, order.length - skip);
+    for (const enemy of played) {
       clock = enemy.targetTime;
       now += 10;
       engine.update(0.016, 380);
       engine.handleInput(enemy.lane);
     }
-    expect(engine.boss!.hp).toBe(0);
+    const last: Enemy = order[order.length - 1];
+    clock = Math.max(clock, last.targetTime - 0.01);
+    /** Let `ms` pass on both clocks (the song clock runs on after the music), a frame at a time */
+    const wait = (ms: number) => {
+      for (let left = ms; left > 0; left -= 16) {
+        const step = Math.min(16, left);
+        now += step;
+        clock += step / 1000;
+        engine.update(step / 1000, 380);
+      }
+    };
+    return { engine, onGameOver, last, wait };
+  }
 
+  it('waits for the killing blow to land and the K.O. to play before the results', async () => {
+    const { engine, onGameOver, wait } = await playAllBut(0);
+    expect(engine.boss!.hp).toBe(0);
     // The music ends straight after the last fist, before it has flown back into the boss
     musicEnded!();
     expect(onGameOver).not.toHaveBeenCalled();
-    now += RETURN_MS + 20;
-    engine.update(0.016, 380);
+    wait(RETURN_MS + 20);
     expect(engine.boss!.ko).toBe(true);
     expect(onGameOver).not.toHaveBeenCalled();
-
-    now += KO_HOLD_MS;
-    engine.update(0.016, 380);
+    wait(KO_HOLD_MS);
     expect(onGameOver).toHaveBeenCalledTimes(1);
     expect(onGameOver.mock.calls[0][1]).toBe(true);
     expect(engine.bossResult()).toBe('ko');
   });
 
-  async function playAllBut(last: number) {
-    const onGameOver = vi.fn();
-    const engine = new GameEngine({ onScoreUpdate: () => {}, onGameOver, onJudgement: () => {} });
-    engine.settings.latencyOffsetMs = 0;
-    await engine.startSong(track(), true);
-    const order = [...engine.enemies].sort((a, b) => a.targetTime - b.targetTime);
-    for (const enemy of order.slice(0, order.length - last)) {
-      clock = enemy.targetTime;
-      now += 10;
-      engine.update(0.016, 380);
-      engine.handleInput(enemy.lane);
-    }
-    return { engine, onGameOver, rest: order.slice(order.length - last) };
-  }
-
   it('still lets the last fist be hit late after the music has ended', async () => {
-    const { engine, onGameOver, rest } = await playAllBut(1);
-    const final = rest[0];
-    clock = final.targetTime - 0.01;
-    now += 10;
-    engine.update(0.016, 380);
-    // The music ends (its clock stops and reads 0), but the song clock carries on
-    clock = 0;
+    const { engine, onGameOver, last, wait } = await playAllBut(1);
     musicEnded!();
     expect(onGameOver).not.toHaveBeenCalled();
-    now += 50; // 40 ms after the beat: late, but inside the OK window
-    engine.update(0.016, 380);
-    engine.handleInput(final.lane);
-    expect(final.defeated).toBe(true);
-    now += RETURN_MS + 20;
-    engine.update(0.016, 380);
+    wait(50); // 40 ms after the beat: late, but inside the OK window
+    engine.handleInput(last.lane);
+    expect(last.defeated).toBe(true);
+    wait(RETURN_MS + 20);
     expect(engine.boss!.ko).toBe(true);
-    now += KO_HOLD_MS;
-    engine.update(0.016, 380);
+    wait(KO_HOLD_MS);
     expect(onGameOver).toHaveBeenCalledTimes(1);
     expect(engine.bossResult()).toBe('ko');
   });
 
   it('lets the K.O. play when the boss fell just before the music ended', async () => {
-    const { engine, onGameOver } = await playAllBut(0);
-    now += RETURN_MS + 20;
-    engine.update(0.016, 380);
+    const { engine, onGameOver, wait } = await playAllBut(0);
+    wait(RETURN_MS + 20);
     expect(engine.boss!.ko).toBe(true);
     // The music ends just after it fell: the results wait for the K.O.
     now += 30;
     musicEnded!();
     expect(onGameOver).not.toHaveBeenCalled();
-    now += KO_HOLD_MS;
-    engine.update(0.016, 380);
+    wait(KO_HOLD_MS);
     expect(onGameOver).toHaveBeenCalledTimes(1);
   });
 
   it("doesn't wait for a last fist that was missed: the song ends once it's too late to hit", async () => {
-    const { engine, onGameOver, rest } = await playAllBut(1);
-    clock = rest[0].targetTime - 0.01;
-    now += 10;
-    engine.update(0.016, 380);
+    const { engine, onGameOver, wait } = await playAllBut(1);
     musicEnded!();
     expect(onGameOver).not.toHaveBeenCalled();
     // Past the OK window, and past anything hit just before still flying back (a twin falling)
-    now += RETURN_MS + KO_HOLD_MS;
-    engine.update(0.016, 380);
+    wait(RETURN_MS + KO_HOLD_MS + 50);
     expect(onGameOver).toHaveBeenCalledTimes(1);
     expect(engine.bossResult()).toBe('standing');
+  });
+
+  it("holds the late-hit window on the song clock, so a pause doesn't use it up", async () => {
+    const { engine, onGameOver, last, wait } = await playAllBut(1);
+    musicEnded!();
+    engine.paused = true;
+    now += 5000; // a long pause: the song clock (AudioContext) is suspended, so it doesn't move
+    engine.update(0.016, 380);
+    engine.paused = false;
+    expect(onGameOver).not.toHaveBeenCalled();
+    wait(40);
+    engine.handleInput(last.lane);
+    expect(last.defeated).toBe(true);
   });
 });

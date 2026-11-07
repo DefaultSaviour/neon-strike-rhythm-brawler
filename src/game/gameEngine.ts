@@ -17,7 +17,7 @@ import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, l
 import { isStanceUnlocked, nextStance } from './stanceUnlocks';
 import { audioEngine } from '../audio/audioEngine';
 import { getEnemyStyle, resolveBandTier } from './enemyStyles';
-import { BREACH_LATE_SEC, DeathReport, explainDeath, HIT_WINDOWS, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
+import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, PressRecord, suggestLatencyOffsetMs } from './timing';
 import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
@@ -300,12 +300,8 @@ export class GameEngine {
   private lastBossKind: BossKind | null = null;
   /** Song time the song is cut off at (only with the dev ?short switch) */
   private songEndAt = Infinity;
-  /** performance.now() to end the song at: the music is over and the boss's K.O. is playing out (0 = not waiting) */
-  private finishAt = 0;
-  /** The last heard song time read from the music, and when (so the clock can carry on after it ends) */
-  private lastHeard: { audio: number; perf: number } | null = null;
-  /** Once the music has ended: the heard song time then, and when. The song clock carries on from here. */
-  private musicEnd: { audio: number; perf: number } | null = null;
+  /** The song is over but its end is held (the last note can still be hit, or the boss is falling): see mustHoldFinish */
+  private finishPending = false;
   /** Song times (s) of the hits taken this practice run */
   public practiceHits: number[] = [];
   /** Seconds played in practice this visit (only for pacing midgame ads, see adClockSeconds) */
@@ -461,9 +457,7 @@ export class GameEngine {
     this.boss = null;
     this.returningFists = [];
     this.songEndAt = Infinity;
-    this.finishAt = 0;
-    this.lastHeard = null;
-    this.musicEnd = null;
+    this.finishPending = false;
     this.practice = practice;
     this.practiceHits = [];
     this.isRunning = false;
@@ -607,7 +601,6 @@ export class GameEngine {
     audioEngine.startTrack(
       track,
       () => {
-        this.markMusicEnded();
         this.finishSong(true);
       },
       startAt
@@ -639,27 +632,8 @@ export class GameEngine {
 
   /** Song time of a press, corrected for event delay and the player's latency setting. */
   private pressTime(eventTimeStamp?: number): number {
-    const heard = songTimeAtEvent(this.heardTime(), performance.now(), eventTimeStamp);
+    const heard = songTimeAtEvent(audioEngine.getPlaybackTime(), performance.now(), eventTimeStamp);
     return heard - this.settings.latencyOffsetMs / 1000;
-  }
-
-  /**
-   * The song time being heard now. Once the music has ended the player can't hear anything,
-   * but the song clock carries on, so the last note can still be hit late and the boss stays put.
-   */
-  private heardTime(): number {
-    if (this.musicEnd) return this.musicEnd.audio + (performance.now() - this.musicEnd.perf) / 1000;
-    const audio = audioEngine.getPlaybackTime();
-    this.lastHeard = { audio, perf: performance.now() };
-    return audio;
-  }
-
-  /** The music has just ended (its clock stops): carry on from the last time we heard it. */
-  private markMusicEnded() {
-    if (this.musicEnd) return;
-    const now = performance.now();
-    const audio = this.lastHeard ? this.lastHeard.audio + (now - this.lastHeard.perf) / 1000 : this.songTime;
-    this.musicEnd = { audio, perf: now };
   }
 
   /**
@@ -1071,18 +1045,11 @@ export class GameEngine {
     if (!this.isRunning || !this.track || this.paused) return;
     this.worldHalfWidth = worldHalfWidth;
 
-    const audioTime = this.heardTime();
+    const audioTime = audioEngine.getPlaybackTime();
     const effectiveTime = audioTime - this.settings.latencyOffsetMs / 1000;
     this.songTime = effectiveTime;
-    if (this.finishAt) {
-      // The music is over: the last note's hit window, the killing blow and the K.O. play out.
-      // (Finishing can hold again, e.g. a late hit just sent the killing blow flying.)
-      if (performance.now() >= this.finishAt) {
-        this.finishAt = 0;
-        this.finishSong(true);
-        if (!this.isRunning) return;
-      }
-    } else if (effectiveTime >= this.songEndAt) {
+    // Over (or held at its end while the last note's window, the killing blow and the K.O. play out)
+    if (this.finishPending || effectiveTime >= this.songEndAt) {
       this.finishSong(true);
       if (!this.isRunning) return;
     }
@@ -1338,13 +1305,9 @@ export class GameEngine {
     if (!this.isRunning) return;
     // The last fist often lands right as the music ends: hold the results while it can
     // still be hit, while the killing blow flies back to the boss, and while the K.O. plays
-    if (cleared) {
-      const until = this.finishHoldUntil();
-      if (until > performance.now()) {
-        this.finishAt = until;
-        return;
-      }
-    }
+    // (update() asks again every frame)
+    this.finishPending = cleared && this.mustHoldFinish();
+    if (this.finishPending) return;
     this.isRunning = false;
     this.recordProgress(cleared);
     this.countRun(cleared);
@@ -1353,23 +1316,17 @@ export class GameEngine {
     this.callbacks.onGameOver(this.scoreState, cleared);
   }
 
-  /** performance.now() the end of a cleared song should wait for (0 = no need to wait). */
-  private finishHoldUntil(): number {
-    const now = performance.now();
-    let until = 0;
-    // A note still inside its hit window: it can still be hit late
-    for (const e of this.enemies) {
-      if (e.defeated) continue;
-      const left = e.targetTime + HIT_WINDOWS.OK - this.songTime;
-      if (left > 0 && left <= HIT_WINDOWS.OK * 2) until = Math.max(until, now + left * 1000);
-    }
-    if (this.boss) {
-      // The killing blow, flying back at the boss
-      for (const f of this.returningFists) if (f.final) until = Math.max(until, f.start + RETURN_MS + KO_HOLD_MS);
-      // The boss has just fallen: let the K.O. play
-      if (this.boss.ko && this.boss.koAt) until = Math.max(until, this.boss.koAt + KO_HOLD_MS);
-    }
-    return until;
+  /** Should the end of a cleared song wait a moment? */
+  private mustHoldFinish(): boolean {
+    // A note still inside its hit window (on the song clock, so a pause pauses it too). Read the
+    // clock now: the music's end can come between frames.
+    const songTime = audioEngine.getPlaybackTime() - this.settings.latencyOffsetMs / 1000;
+    if (this.enemies.some((e) => !e.defeated && Math.abs(songTime - e.targetTime) < BREACH_LATE_SEC)) return true;
+    // The killing blow, still flying back at the boss
+    if (this.returningFists.some((f) => f.final)) return true;
+    // The boss (or a twin) has just fallen: let it play
+    const fell = (at: number) => at > 0 && performance.now() - at < KO_HOLD_MS;
+    return !!this.boss && ((this.boss.ko && fell(this.boss.koAt)) || fell(this.boss.downAt.left) || fell(this.boss.downAt.right));
   }
 
   private saveHighScore(cleared: boolean) {

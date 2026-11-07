@@ -236,6 +236,11 @@ class AudioEngine {
   private freqBins: Uint8Array<ArrayBuffer> | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
   private isPlayingSynth: boolean = false;
+  /**
+   * A song has started and not been stopped. Its clock keeps counting after the music itself
+   * ends: the game holds on a moment for a late hit on the last note and the boss's K.O.
+   */
+  private songClockRunning = false;
   private isLoadingBuffer: boolean = false;
   private playSessionId: number = 0;
   private synthIntervalId: number | null = null;
@@ -406,7 +411,7 @@ class AudioEngine {
    */
   public getPlaybackTime(): number {
     if (this.isLoadingBuffer) return 0;
-    if (!this.ctx || (!this.currentSource && !this.isPlayingSynth)) return 0;
+    if (!this.ctx || !this.songClockRunning) return 0;
     if (this.currentSource) {
       this.updateRealtimeMeters();
     }
@@ -490,6 +495,7 @@ class AudioEngine {
     }
 
     this.startTime = this.ctx!.currentTime;
+    this.songClockRunning = true;
 
     if (bufferToPlay) {
       const source = this.ctx!.createBufferSource();
@@ -644,13 +650,18 @@ class AudioEngine {
       this.currentSource = null;
     }
 
+    this.songClockRunning = false;
+    this.stopSynth();
+    this.bassMeter = 0;
+    this.trebleMeter = 0;
+  }
+
+  private stopSynth() {
     this.isPlayingSynth = false;
     if (this.synthIntervalId) {
       clearInterval(this.synthIntervalId);
       this.synthIntervalId = null;
     }
-    this.bassMeter = 0;
-    this.trebleMeter = 0;
   }
 
   private startProceduralSynth(track: Track, onComplete?: () => void) {
@@ -680,7 +691,8 @@ class AudioEngine {
 
       const currentPlayback = ctx.currentTime - startAudioTime;
       if (currentPlayback >= trackDuration) {
-        this.stop();
+        // The music is over, but its clock runs on until the game stops it (as for a recording)
+        this.stopSynth();
         if (onComplete) onComplete();
         return;
       }
