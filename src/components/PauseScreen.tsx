@@ -3,13 +3,14 @@ import type { Track } from '../types/game';
 import { audioEngine } from '../audio/audioEngine';
 import { formatSongTime } from '../game/runProgress';
 import { FitText, SlantButton } from './arcade/ui';
+import { PipMeter } from './arcade/PipMeter';
 
 const u = (n: number) => `calc(var(--u) * ${n})`;
 
 /**
  * The pause screen, arcade style. The fight stays frozen in view behind a
  * slanted dark panel. On the panel: PAUSED, the song and how far in you
- * are, and only three buttons (Resume, Restart, Quit to Menu). There are no
+ * are, a music volume meter, and three buttons (Resume, Restart, Quit to Menu). There are no
  * music stripes here. App handles the keys: Space / Esc / P resume, R
  * restarts.
  */
@@ -18,10 +19,13 @@ export const PauseScreen: React.FC<{
   /** How long the song plays (s) */
   length: number;
   practice: boolean;
+  /** Music volume (0..1) */
+  volume: number;
+  onVolume: (volume: number) => void;
   onResume: () => void;
   onRestart: () => void;
   onQuit: () => void;
-}> = ({ track, length, practice, onResume, onRestart, onQuit }) => {
+}> = ({ track, length, practice, volume, onVolume, onResume, onRestart, onQuit }) => {
   // The song is frozen while paused, so read where it stopped once
   const [at] = useState(() => audioEngine.getPlaybackTime());
   const duration = length;
@@ -67,14 +71,23 @@ export const PauseScreen: React.FC<{
             </div>
           )}
 
-          <div className="flex flex-col" style={{ gap: u(2), marginTop: u(3) }}>
-            <SlantButton variant="hot" size="lg" hotkey="Space" onClick={onResume} className="arc-in-left w-full" style={delay(2)}>
+          {/* Music volume: tap or drag (you hear it once the song resumes) */}
+          <div className="arc-in-left flex items-center font-black tracking-[0.2em]" style={{ ...delay(2), gap: u(1.4), fontSize: `max(10px, ${u(2.3)})` }}>
+            <span style={{ color: 'var(--muted)' }}>MUSIC</span>
+            <div className="flex-1">
+              <PipMeter label="Music volume" value={volume} color="var(--pink)" onChange={onVolume} />
+            </div>
+            <span className="tabular-nums text-right" style={{ color: '#fff', minWidth: '4ch' }}>{Math.round(volume * 100)}%</span>
+          </div>
+
+          <div className="flex flex-col" style={{ gap: u(2), marginTop: u(1) }}>
+            <SlantButton variant="hot" size="lg" hotkey="Space" onClick={onResume} className="arc-in-left w-full" style={delay(3)}>
               Resume
             </SlantButton>
-            <SlantButton hotkey="R" onClick={onRestart} className="arc-in-left w-full" style={delay(3)}>
+            <SlantButton hotkey="R" onClick={onRestart} className="arc-in-left w-full" style={delay(4)}>
               Restart
             </SlantButton>
-            <SlantButton onClick={onQuit} className="arc-in-left w-full" style={delay(4)}>
+            <SlantButton onClick={onQuit} className="arc-in-left w-full" style={delay(5)}>
               Quit to Menu
             </SlantButton>
           </div>

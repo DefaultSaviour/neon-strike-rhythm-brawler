@@ -204,4 +204,6 @@ export interface AudioSettings {
   backdrop?: Partial<Record<'sky' | 'skyline' | 'centre' | 'floor', string>>;
   /** Hit feedback sound */
   hitSound: HitSoundMode;
+  /** Which version of the defaults these settings were saved under (missing = 1) */
+  settingsVersion?: number;
 }
