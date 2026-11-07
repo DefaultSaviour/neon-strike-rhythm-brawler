@@ -5,7 +5,7 @@ import { getEnemyStyle, resolveBandTier } from '../game/enemyStyles';
 import { audioEngine } from '../audio/audioEngine';
 import { beatPosition, beatPulse } from '../audio/beatGrid';
 import { BOSS_LOOKS, BOSS_SCALE, bossFigures, BossLook } from '../game/boss';
-import { ArenaLayout, computeArenaLayout, FIGHTER_HEIGHT, FLOOR_Y, SPAWN_DISTANCE } from '../game/layout';
+import { ArenaLayout, computeArenaLayout, FIGHTER_HEIGHT, FLOOR_Y } from '../game/layout';
 import { HIT_WINDOWS } from '../game/timing';
 import { HIT_LOG_FADE_SECONDS, HIT_LOG_SECONDS, hitLogArea, HitLogEntry, HudBox, JUDGEMENT_COLORS } from '../game/hitLog';
 import { Enemy } from '../types/game';
@@ -427,8 +427,9 @@ function drawFullSizedEnemies(ctx: CanvasRenderingContext2D, engine: GameEngine,
     }
     if (Math.abs(enemy.x) > halfW + 120) continue;
     const isNext = enemy === nextLeft || enemy === nextRight;
-    // Fade in over the first stretch of the walk: on screens wider than 16:9 the spawn point is in view
-    const fadeIn = Math.min(1, Math.max(0, (SPAWN_DISTANCE - Math.abs(enemy.x)) / 50));
+    // Enemies walk in from beyond the screen's edge; only on very wide screens can one already be
+    // in view as the song starts, and those fade in over its first half second
+    const fadeIn = Math.min(1, Math.max(0, engine.songTime / 0.5));
     ctx.save();
     if (enemy.bossAttack) {
       // Fists only show once thrown

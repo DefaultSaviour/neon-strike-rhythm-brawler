@@ -1137,11 +1137,19 @@ class AudioEngine {
     const bassOnset = computeOnset(bassEnv);
     const highOnset = computeOnset(highEnv);
 
-    const kP95 = percentile(kickOnset, 95) + 1e-9;
-    const bP95 = percentile(bassOnset, 95) + 1e-9;
-    const hP95 = percentile(highOnset, 95) + 1e-9;
-    const kEnvP85 = percentile(kickEnv, 85) + 1e-9;
-    const bEnvP85 = percentile(bassEnv, 85) + 1e-9;
+    // Each band is scaled by a typical strong value, but never by less than a twentieth of its
+    // loudest moment: in a song that is mostly silence between hits the percentile is zero,
+    // and faint hiss would then count as huge hits (one sparse song gave 77 enemies for 8 kicks).
+    const scaleOf = (arr: Float32Array, p: number) => {
+      let max = 0;
+      for (let i = 0; i < arr.length; i++) if (arr[i] > max) max = arr[i];
+      return Math.max(percentile(arr, p), 0.05 * max) + 1e-9;
+    };
+    const kP95 = scaleOf(kickOnset, 95);
+    const bP95 = scaleOf(bassOnset, 95);
+    const hP95 = scaleOf(highOnset, 95);
+    const kEnvP85 = scaleOf(kickEnv, 85);
+    const bEnvP85 = scaleOf(bassEnv, 85);
 
     const kickN = new Float32Array(nFrames);
     const bassN = new Float32Array(nFrames);
