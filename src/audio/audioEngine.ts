@@ -1571,7 +1571,6 @@ export const audioEngine = new AudioEngine();
 /**
  * The soundtrack, easiest first (one hit ends a run, so more enemies = harder).
  * Made by defaultsaviour on Suno Pro and downloaded from Suno as MP3s, unconverted.
- * Bosses take turns down this list (see boss.ts).
  */
 export const PRELOADED_TRACKS: Track[] = [
   {

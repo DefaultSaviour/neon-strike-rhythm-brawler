@@ -4,7 +4,7 @@ import { Point2D } from '../types/game';
 import { getEnemyStyle, resolveBandTier } from '../game/enemyStyles';
 import { audioEngine } from '../audio/audioEngine';
 import { beatPosition, beatPulse } from '../audio/beatGrid';
-import { BOSS_LOOKS, BOSS_SCALE, bossFigures, BossLook } from '../game/boss';
+import { BOSS_LOOKS, BOSS_SCALE, bossFigures, BossLook, fistPath, LOB_START_LIFT, shadowFistShown, WINDUP_BEATS } from '../game/boss';
 import { ArenaLayout, computeArenaLayout, FIGHTER_HEIGHT, FLOOR_Y } from '../game/layout';
 import { HIT_WINDOWS } from '../game/timing';
 import { HIT_LOG_FADE_SECONDS, HIT_LOG_SECONDS, hitLogArea, HitLogEntry, HudBox, JUDGEMENT_COLORS } from '../game/hitLog';
@@ -16,7 +16,7 @@ import { drawEnemyArt } from './enemyArt';
 import { drawBackdropLayers } from './backdropArt';
 import { drawConveyors, drawPit } from './stageArt';
 import { applyHeroBuild, drawFighter, drawFlyingArmOverHit, drawMeatHooks, drawStrawBurst, drawImpactRipple, drawShotFlash, drawSlashCrescent } from './fighterArt';
-import { fighterTier } from '../game/fighterTier';
+import { FIGHTER_TIERS, fighterTier, FighterTier } from '../game/fighterTier';
 import { bodyFill, drawNeonBody, neonHead, neonLimb, neonShape } from './neonBody';
 
 interface NeonCanvasProps {
@@ -458,13 +458,17 @@ function drawBoss(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   for (const fig of bossFigures(boss.plan, engine.songTime, engine.fistFlight)) {
     if (!fig.visible || (twins && boss.downAt[fig.side])) continue;
 
-    // Punches as each fist leaves its hand
+    // Punches as each fist leaves its hand, and winds the next one up for a beat before
     let lastThrow = -Infinity;
+    let nextThrow: Enemy | null = null;
     for (const e of engine.enemies) {
-      if (!e.bossAttack || (twins && e.lane !== fig.side)) continue;
+      if (!e.bossAttack || e.defeated || (twins && e.lane !== fig.side)) continue;
       if (e.spawnTime <= engine.songTime && e.spawnTime > lastThrow) lastThrow = e.spawnTime;
+      if (e.spawnTime > engine.songTime && (!nextThrow || e.spawnTime < nextThrow.spawnTime)) nextThrow = e;
     }
     const punch = fig.running ? 0 : Math.max(0, 1 - (engine.songTime - lastThrow) / 0.22);
+    const windupSec = (WINDUP_BEATS * 60) / engine.beatGrid.bpm;
+    const charge = nextThrow ? 1 - (nextThrow.spawnTime - engine.songTime) / windupSec : 0;
     const hurt = performance.now() - boss.hurtAt < 90 && (!twins || boss.hurtSide === fig.side);
 
     // The Volt Runner sprints with the run cycle; otherwise the chosen enemy motion
@@ -480,7 +484,7 @@ function drawBoss(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     ctx.save();
     // A glow on the floor under it (fades as it lifts off)
     const glow = ctx.createRadialGradient(fig.x, FLOOR_Y + 2, 2, fig.x, FLOOR_Y + 2, 70);
-    glow.addColorStop(0, colorWithAlpha(look.color, 0.45 * (1 - Math.min(1, fig.lift / 200))));
+    glow.addColorStop(0, colorWithAlpha(look.color, (twins ? 0.7 : 0.45) * fig.fade * (1 - Math.min(1, fig.lift / 200))));
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow;
     ctx.beginPath();
@@ -493,12 +497,221 @@ function drawBoss(ctx: CanvasRenderingContext2D, engine: GameEngine) {
       for (const k of [3, 2, 1]) {
         ctx.save();
         ctx.globalAlpha = 0.1 * (4 - k);
-        drawBossBody(ctx, fig.x - fig.facing * 26 * k, fig.lift, fig.facing, 0, pose, look, false, beat);
+        drawBossBody(ctx, fig.x - fig.facing * 26 * k, fig.lift, fig.facing, 0, pose, look, false, beat, false);
         ctx.restore();
       }
     }
-    drawBossBody(ctx, fig.x, fig.lift, fig.facing, punch, pose, look, hurt, beat);
+    // The Shadow Fighter's portal, opening where it's about to step out
+    if (fig.portal > 0) drawPortal(ctx, fig.x, fig.portal, look, engine.songTime);
+    ctx.save();
+    if (boss.plan.kind === 'shadow') drawShadowFighter(ctx, engine, fig.x, fig.lift, fig.facing, punch, hurt, fig.angry, fig.fade, beat);
+    else drawBossBody(ctx, fig.x, fig.lift, fig.facing, punch, pose, look, hurt, beat, fig.angry);
+    ctx.restore();
+
+    // The roar when it gets angry: rings bursting off it
+    const roar = boss.ragedAt ? (performance.now() - boss.ragedAt) / 700 : 1;
+    if (roar < 1) drawRoar(ctx, fig.x, -fig.lift - 70, roar, look);
+    // The next fist, gathering in its hand (overhead for a lob). The Shadow Fighter's next
+    // shot is always from the other side: it gathers in the portal it's about to step out of.
+    const gathersHere = boss.plan.kind !== 'shadow' || (nextThrow && (nextThrow.lane === 'left') === fig.x < 0);
+    if (nextThrow && charge > 0 && charge <= 1 && gathersHere && (fig.fade > 0 || fig.portal > 0)) {
+      const handY = -6 - fig.lift - (nextThrow.bossMove === 'lob' ? LOB_START_LIFT : 0);
+      drawWindup(ctx, fig.x, handY, charge, look, engine.songTime);
+    }
   }
+}
+
+/** The Shadow Fighter is your own fighter, outlined in its colour (then darkened, see drawShadowFighter). */
+const SHADOW_TIER: FighterTier = {
+  ...FIGHTER_TIERS[0],
+  name: 'SHADOW',
+  color: BOSS_LOOKS.shadow.color,
+  glow: 12,
+  scarfColor: '#3a0034',
+  visorColor: '#ff1744',
+};
+let shadowLayer: HTMLCanvasElement | null = null;
+
+/**
+ * The Shadow Fighter: a giant, dark copy of your own fighter, copying your pose (turned to
+ * face you), with a glowing outline and red eyes. It's drawn on a small layer of its own,
+ * darkened there, then laid on the screen with its glow; `alpha` fades it out and back in.
+ */
+function drawShadowFighter(
+  ctx: CanvasRenderingContext2D,
+  engine: GameEngine,
+  x: number,
+  lift: number,
+  facing: 1 | -1,
+  punch: number,
+  hurt: boolean,
+  angry: boolean,
+  alpha: number,
+  beat: number
+) {
+  if (alpha <= 0.01) return;
+  const look = BOSS_LOOKS.shadow;
+  // The patch of screen it can cover (device pixels)
+  const m = ctx.getTransform();
+  const at = (wx: number, wy: number) => ({ x: m.a * wx + m.c * wy + m.e, y: m.b * wx + m.d * wy + m.f });
+  const a = at(x - 200, FLOOR_Y - lift - 310);
+  const b = at(x + 200, FLOOR_Y - lift + 30);
+  const left = Math.floor(Math.min(a.x, b.x));
+  const top = Math.floor(Math.min(a.y, b.y));
+  const w = Math.ceil(Math.abs(b.x - a.x));
+  const h = Math.ceil(Math.abs(b.y - a.y));
+  if (w <= 0 || h <= 0) return;
+  if (!shadowLayer) shadowLayer = document.createElement('canvas');
+  if (shadowLayer.width < w || shadowLayer.height < h) {
+    shadowLayer.width = Math.max(w, shadowLayer.width);
+    shadowLayer.height = Math.max(h, shadowLayer.height);
+  }
+  const l = shadowLayer.getContext('2d');
+  if (!l) return;
+  l.setTransform(1, 0, 0, 1, 0, 0);
+  l.globalCompositeOperation = 'source-over';
+  l.clearRect(0, 0, shadowLayer.width, shadowLayer.height);
+
+  // Your pose, turned to face the middle from its side
+  const pose = engine.currentPose;
+  const poseFacing: 1 | -1 = engine.attackDirection === 'left' ? -1 : 1;
+  l.setTransform(m.a, m.b, m.c, m.d, m.e - left, m.f - top);
+  l.translate(x, -lift);
+  l.translate(0, FLOOR_Y);
+  l.rotate(facing * 0.16 * punch);
+  l.scale(BOSS_SCALE * facing * poseFacing, BOSS_SCALE);
+  l.translate(0, -FLOOR_Y);
+  const body = l.getTransform();
+  drawFighter(l, pose, { tier: SHADOW_TIER, facing: poseFacing, time: performance.now() / 1000, hero: engine.hero.id });
+
+  // Darken all of it (white when it's hit)
+  l.setTransform(1, 0, 0, 1, 0, 0);
+  l.globalCompositeOperation = 'source-atop';
+  l.fillStyle = hurt ? 'rgba(255, 255, 255, 0.9)' : 'rgba(10, 0, 20, 0.8)';
+  l.fillRect(0, 0, w, h);
+  l.globalCompositeOperation = 'source-over';
+
+  // Red eyes
+  if (!hurt) {
+    l.setTransform(body);
+    // Bigger fighters (Saw Face) are drawn scaled up: put the eyes where their head is drawn
+    applyHeroBuild(l, engine.hero.id, poseFacing);
+    l.fillStyle = '#ff1744';
+    l.shadowColor = '#ff1744';
+    l.shadowBlur = 8;
+    for (const dx of [2, 7]) {
+      l.beginPath();
+      l.arc(pose.head.x + poseFacing * dx, pose.head.y - 1, 1.6, 0, Math.PI * 2);
+      l.fill();
+    }
+    l.shadowBlur = 0;
+  }
+
+  // Onto the screen, with its glow (throbbing on the beat once it's angry)
+  const throb = angry ? Math.pow(1 - (((beat % 1) + 1) % 1), 2) : 0;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha *= alpha;
+  ctx.shadowColor = hurt ? '#ffffff' : angry ? heatColor(look.color, 0.2 + 0.4 * throb) : look.color;
+  ctx.shadowBlur = (angry ? 22 + 18 * throb : 16) * Math.max(1, m.a / 2);
+  ctx.drawImage(shadowLayer, 0, 0, w, h, left, top, w, h);
+  ctx.restore();
+}
+
+/** A rift opening on the floor where the Shadow Fighter is about to step out: a dark oval, ringed in its colour. */
+function drawPortal(ctx: CanvasRenderingContext2D, x: number, u: number, look: BossLook, time: number) {
+  const open = 1 - Math.pow(1 - u, 2);
+  const cy = FLOOR_Y - 125;
+  const ry = 135 * open;
+  const rx = 22 + 34 * open;
+  ctx.save();
+  // A ring on the floor
+  ctx.strokeStyle = colorWithAlpha(look.color, 0.8);
+  ctx.shadowColor = look.color;
+  ctx.shadowBlur = 16;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.ellipse(x, FLOOR_Y + 2, 30 + 50 * open, 9 + 6 * open, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // The rift
+  const fill = ctx.createRadialGradient(x, cy, 0, x, cy, Math.max(rx, ry));
+  fill.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+  fill.addColorStop(0.7, 'rgba(20, 0, 30, 0.85)');
+  fill.addColorStop(1, colorWithAlpha(look.color, 0.25));
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.ellipse(x, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 3 + 2 * Math.sin(time * 18);
+  ctx.strokeStyle = look.color;
+  ctx.shadowBlur = 24;
+  ctx.stroke();
+  // Swirling streaks pulled into it
+  ctx.strokeStyle = look.accent;
+  ctx.lineWidth = 1.6;
+  ctx.shadowBlur = 8;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = time * 5 + (i * Math.PI) / 3;
+    const r = 1.25 - 0.25 * ((time * 2 + i / 6) % 1);
+    ctx.moveTo(x + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r);
+    ctx.lineTo(x + Math.cos(a + 0.35) * rx * (r - 0.2), cy + Math.sin(a + 0.35) * ry * (r - 0.2));
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A fist gathering in the boss's hand for the beat before it's thrown: sparks pull in and it swells. */
+function drawWindup(ctx: CanvasRenderingContext2D, x: number, y: number, charge: number, look: BossLook, time: number) {
+  const r = FIST_START_RADIUS * Math.pow(charge, 0.7);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = look.accent;
+  ctx.shadowColor = look.accent;
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 2.4;
+  ctx.globalAlpha = 0.35 + 0.65 * charge;
+  ctx.beginPath();
+  const reach = r + 30 * (1 - charge);
+  for (let i = 0; i < 5; i++) {
+    const a = time * 4 + (i * Math.PI * 2) / 5;
+    ctx.moveTo(x + Math.cos(a) * reach, y + Math.sin(a) * reach);
+    ctx.lineTo(x + Math.cos(a) * (reach + 13), y + Math.sin(a) * (reach + 13));
+  }
+  ctx.stroke();
+  // A soft halo, so it reads from across the screen
+  const halo = ctx.createRadialGradient(x, y, 0, x, y, 30);
+  halo.addColorStop(0, colorWithAlpha(look.accent, 0.55 * charge));
+  halo.addColorStop(1, colorWithAlpha(look.color, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(x, y, 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = heatColor(look.color, charge * 0.4);
+  ctx.shadowBlur = 8 + 14 * charge;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Rings bursting off a boss as it gets angry. */
+function drawRoar(ctx: CanvasRenderingContext2D, x: number, y: number, u: number, look: BossLook) {
+  ctx.save();
+  ctx.strokeStyle = '#ffffff';
+  ctx.shadowColor = look.color;
+  ctx.shadowBlur = 20;
+  for (const lag of [0, 0.25]) {
+    const k = u - lag;
+    if (k <= 0) continue;
+    ctx.globalAlpha = (1 - k) * 0.9;
+    ctx.lineWidth = 6 * (1 - k) + 1;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 40 + 150 * k, 30 + 110 * k, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawBossBody(
@@ -510,10 +723,13 @@ function drawBossBody(
   pose: ReturnType<typeof enemyPoseFor>,
   look: BossLook,
   hurt: boolean,
-  beat: number
+  beat: number,
+  angry: boolean
 ) {
   const main = hurt ? '#ffffff' : look.color;
   const accent = hurt ? '#ffffff' : look.accent;
+  // Angry: a hotter glow that throbs on every beat
+  const throb = angry ? Math.pow(1 - (((beat % 1) + 1) % 1), 2) : 0;
   ctx.save();
   ctx.translate(x, -lift);
   ctx.translate(0, 68);
@@ -521,9 +737,9 @@ function drawBossBody(
   ctx.scale(BOSS_SCALE * facing, BOSS_SCALE);
   ctx.translate(0, -68);
   ctx.strokeStyle = main;
-  ctx.shadowColor = main;
-  ctx.shadowBlur = 22;
-  ctx.lineWidth = 3.6;
+  ctx.shadowColor = angry && !hurt ? heatColor(look.color, 0.35 + 0.4 * throb) : main;
+  ctx.shadowBlur = angry ? 30 + 22 * throb : 22;
+  ctx.lineWidth = angry ? 4.2 : 3.6;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   drawEnemyArt(ctx, pose, look.band, look.tier, { main, accent }, beat, hurt);
@@ -547,31 +763,56 @@ function drawBossBody(
   ctx.restore();
 }
 
+/** How big a boss fist is as it leaves the boss's hand (world units). */
+const FIST_START_RADIUS = 7;
+
 /**
  * A fist thrown by the boss: a ball of energy that swells as it flies, from the
  * boss's colour to white-hot, crackling at the end, and is fullest exactly on
  * its beat, like it's about to burst. That swell is the timing cue.
  */
 function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameEngine, flash: boolean, grow = 1) {
-  const look = BOSS_LOOKS[engine.boss?.plan.kind ?? 'leaper'];
-  const away = enemy.x < 0 ? -1 : 1;
-  const y = -6;
+  const kind = engine.boss?.plan.kind ?? 'leaper';
+  const look = BOSS_LOOKS[kind];
+  const move = enemy.bossMove ?? 'fist';
+  const flight = enemy.flight ?? engine.fistFlight;
+  const y = -6 - (enemy.lift ?? 0);
   // 0 when thrown, 1 on the beat
-  const u = Math.min(1, Math.max(0, 1 - (enemy.targetTime - engine.songTime) / engine.fistFlight));
-  const r = (5 + 12 * Math.pow(u, 1.6)) * grow;
+  const u = Math.min(1, Math.max(0, 1 - (enemy.targetTime - engine.songTime) / flight));
+  const r = (FIST_START_RADIUS + 10 * Math.pow(u, 1.6)) * grow;
   const outer = flash ? '#ffffff' : heatColor(look.color, Math.max(0, u - 0.35) * 1.2);
   const core = flash ? '#ffffff' : heatColor(look.accent, u * u);
   ctx.save();
   ctx.lineCap = 'round';
-  if (!flash) {
-    const tail = ctx.createLinearGradient(enemy.x, y, enemy.x + away * 34, y);
+  // The Shadow Fighter's fists travel hidden: a faint dark wisp, lighting up for the last beat
+  if (kind === 'shadow' && !flash) {
+    const shown = shadowFistShown(enemy.targetTime - engine.songTime, engine.beatGrid.bpm);
+    if (shown < 1) drawShadowWisp(ctx, enemy, y, r, look, engine.songTime, 1 - shown);
+    ctx.globalAlpha *= shown;
+    if (shown <= 0) {
+      ctx.restore();
+      return;
+    }
+  }
+  // A lob shows where it will come down: a target on the far side's strike line
+  if (move === 'lob' && !flash) drawLobTarget(ctx, enemy, engine, u, look);
+  if (move === 'bolt' && !flash) drawBoltTrail(ctx, enemy, engine, y, look);
+  else if (!flash) {
+    // The tail streams back along the way it came
+    const back = fistPath(kind, move, enemy.lane, engine.hitLineOffset, 1 - u + 0.08);
+    let dx = back.x - enemy.x;
+    let dy = -6 - back.lift - y;
+    const len = Math.hypot(dx, dy) || 1;
+    dx = (dx / len) * 34;
+    dy = (dy / len) * 34;
+    const tail = ctx.createLinearGradient(enemy.x, y, enemy.x + dx, y + dy);
     tail.addColorStop(0, colorWithAlpha(look.accent, 0.7));
     tail.addColorStop(1, colorWithAlpha(look.color, 0));
     ctx.strokeStyle = tail;
     ctx.lineWidth = r * 1.1;
     ctx.beginPath();
     ctx.moveTo(enemy.x, y);
-    ctx.lineTo(enemy.x + away * 34, y);
+    ctx.lineTo(enemy.x + dx, y + dy);
     ctx.stroke();
   }
   ctx.fillStyle = outer;
@@ -600,6 +841,81 @@ function drawBossFist(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameE
     }
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+/** A Shadow Fighter fist while it's hidden: a faint, flickering wisp of dark smoke with a thin rim. */
+function drawShadowWisp(ctx: CanvasRenderingContext2D, enemy: Enemy, y: number, r: number, look: BossLook, time: number, amount: number) {
+  const away = enemy.lane === 'left' ? -1 : 1;
+  const flicker = 0.75 + 0.25 * Math.sin(time * 23 + enemy.targetTime * 5);
+  ctx.save();
+  ctx.globalAlpha *= 0.22 * amount * flicker;
+  ctx.fillStyle = 'rgba(12, 0, 22, 0.9)';
+  ctx.strokeStyle = look.color;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = look.color;
+  ctx.shadowBlur = 6;
+  for (let k = 0; k < 3; k++) {
+    ctx.beginPath();
+    ctx.arc(enemy.x + away * k * r * 0.9, y + Math.sin(time * 9 + k) * 2, r * (1 - k * 0.25), 0, Math.PI * 2);
+    ctx.fill();
+    if (k === 0) ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A Volt Runner bolt: a jagged streak of lightning trailing back toward where it came from, flickering. */
+function drawBoltTrail(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameEngine, y: number, look: BossLook) {
+  const away = enemy.lane === 'left' ? -1 : 1;
+  const seed = Math.floor(engine.songTime * 30) + enemy.targetTime * 7;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const [width, color, blur] of [
+    [6, look.color, 18],
+    [2, '#ffffff', 6],
+  ] as const) {
+    ctx.strokeStyle = color;
+    ctx.shadowColor = look.color;
+    ctx.shadowBlur = blur;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(enemy.x, y);
+    for (let k = 1; k <= 5; k++) {
+      const jitter = Math.sin(seed * 1.7 + k * 2.3) * 9;
+      ctx.lineTo(enemy.x + away * k * 13, y + (k % 2 ? jitter : -jitter * 0.6));
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Where a lobbed fist will land: a spinning target on that side's strike line, tightening as it falls. */
+function drawLobTarget(ctx: CanvasRenderingContext2D, enemy: Enemy, engine: GameEngine, u: number, look: BossLook) {
+  const x = (enemy.lane === 'left' ? -1 : 1) * engine.hitLineOffset;
+  const y = -6;
+  const r = 30 - 12 * u;
+  ctx.save();
+  ctx.strokeStyle = look.accent;
+  ctx.shadowColor = look.color;
+  ctx.shadowBlur = 10 + 10 * u;
+  ctx.globalAlpha = 0.45 + 0.55 * u;
+  ctx.lineWidth = 2.4;
+  ctx.setLineDash([7, 6]);
+  ctx.lineDashOffset = -engine.songTime * 40;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // An arrow pointing down at it
+  const top = y - r - 10 - 6 * Math.sin(engine.songTime * 10);
+  ctx.fillStyle = look.accent;
+  ctx.beginPath();
+  ctx.moveTo(x - 8, top - 10);
+  ctx.lineTo(x + 8, top - 10);
+  ctx.lineTo(x, top);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 
@@ -788,7 +1104,8 @@ function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: n
   const baseY = y - Math.max(5, 1.6 * u);
   const tagSize = Math.max(9, 1.9 * u);
   ctx.font = `900 ${tagSize}px "Outfit", sans-serif`;
-  const tagText = 'BOSS';
+  const angry = !!boss.ragedAt;
+  const tagText = angry ? 'RAGE' : 'BOSS';
   const spacing = tagSize * 0.18;
   let tagW = 0;
   for (const ch of tagText) tagW += ctx.measureText(ch).width + spacing;
@@ -796,7 +1113,9 @@ function drawBossBar(ctx: CanvasRenderingContext2D, engine: GameEngine, width: n
   const tagH = tagSize * 1.6;
   const tagX = left + cut;
   const tagY = baseY - nameSize * 0.42 - tagH / 2;
-  ctx.fillStyle = '#ffe600';
+  // Angry: the tag turns red and throbs on the beat
+  const throb = angry ? Math.pow(1 - (((beatPosition(engine.songTime, engine.beatGrid) % 1) + 1) % 1), 2) : 0;
+  ctx.fillStyle = angry ? heatColor('#ff1744', 0.25 * throb) : '#ffe600';
   slantPath(ctx, tagX, tagY, tagW + tagPadX * 2, tagH, tagH * 0.35);
   ctx.fill();
   ctx.fillStyle = '#000000';
