@@ -1,9 +1,10 @@
+import { headbandPath, helmetCentre, HELMET_SIZE } from './strikerSprites';
 import { describe, expect, it } from 'vitest';
 import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { getOrientedPose } from '../game/animations';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, flyingArmOf, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, flyingArmOf, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers, WING_REACH, wingFins } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -402,5 +403,56 @@ describe("The Tin Man's axe and heart, and The Lion's mane", () => {
     expect(avg(fire)).toBeGreaterThan(avg(calm));
     expect(lionMane(pose, 0.2, true)[0].length).not.toBeCloseTo(fire[0].length, 2);
     expect(lionMane(pose, 0.2, false)[0].length).toBeCloseTo(calm[0].length, 6);
+  });
+});
+
+describe('the Neon Striker in his armour', () => {
+  const scarf = [
+    { x: -8, y: -48 },
+    { x: -22, y: -44 },
+    { x: -38, y: -38 },
+    { x: -55, y: -32 },
+  ];
+
+  it('the headband stays tied at the knot and waves in the wind toward the tip', () => {
+    const a = headbandPath(scarf, 0);
+    const b = headbandPath(scarf, 0.2);
+    // Tied on: the first point never moves
+    expect(a[0]).toEqual(scarf[0]);
+    expect(b[0]).toEqual(scarf[0]);
+    // The tip moves the most, and it moves over time
+    const moved = a.map((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y));
+    expect(moved.at(-1)!).toBeGreaterThan(2);
+    expect(moved.at(-1)!).toBeGreaterThan(moved[4]);
+    // It never stretches far: about the scarf's own length from knot to tip
+    const length = a.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - a[i].x, p.y - a[i].y), 0);
+    expect(length).toBeGreaterThan(45);
+    expect(length).toBeLessThan(75);
+  });
+
+  it('the wings are a small X behind his shoulders: a fin up and a fin down each side, never out over the timing circles', () => {
+    const chest = { x: 0, y: -22 };
+    for (let t = 0; t < 2; t += 0.05) {
+      for (const side of [-1, 1] as const) {
+        const fins = wingFins(chest, side, t);
+        expect(fins).toHaveLength(2);
+        for (const p of fins.flat()) {
+          expect(Math.abs(p.x - chest.x)).toBeLessThanOrEqual(WING_REACH);
+          expect(Math.sign(p.x - chest.x)).toBe(side); // each wing stays on its own side
+        }
+        expect(fins[0][2].y).toBeLessThan(chest.y - 25); // the upper fin's tip, above the shoulders
+        expect(fins[1][2].y).toBeGreaterThan(chest.y + 20); // the lower fin's tip, below them
+      }
+    }
+    // Clear of the circle even when he lunges 16 toward it (circle edge at 78 - 22)
+    expect(WING_REACH + 16).toBeLessThan(78 - 22);
+  });
+
+  it('the helmet is drawn smaller than the art, and sits on the neck below the head joint', () => {
+    expect(HELMET_SIZE).toBeLessThan(1);
+    const c = helmetCentre({ chest: { x: 0, y: -22 }, head: { x: 0, y: -50 } });
+    expect(c.x).toBeCloseTo(0, 5);
+    expect(c.y).toBeGreaterThan(-50);
+    expect(c.y).toBeLessThan(-36);
   });
 });
