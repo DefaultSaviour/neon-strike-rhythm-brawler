@@ -270,11 +270,11 @@ describe('Baba Yaga', () => {
   const baba = getHero('babaYaga');
   const allKeys = baba.moves.flatMap((m) => m.sequence!);
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(baba.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(baba.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => baba.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(baba.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(baba.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -355,7 +355,7 @@ describe('Baba Yaga', () => {
     const using = (prop: string) => baba.moves.filter((m) => m.sequence!.some((k) => k.prop === prop)).map((m) => m.name);
     expect(using('shotgun')).toEqual(['Shotgun Blast', 'Shotgun Pump Combo']);
     expect(using('pencil')).toEqual(['Pencil Strike']);
-    expect(using('pistols')).toEqual(['Dual Pistols', 'Gun-Kata Spin', 'Baba Yaga']);
+    expect(using('pistols')).toEqual(['Dual Pistols', 'Gun-Kata Spin', 'Left, Right', 'High and Low', 'Under the Arm', 'Mark and Sky', 'Baba Yaga']);
   });
 
   it('the wall run really leaves the ground', () => {
@@ -375,6 +375,51 @@ describe('Baba Yaga', () => {
     const m = baba.moves.find((x) => x.name === 'Quick Draw')!;
     const end = comboFrame(comboDuration(m.sequence!) - 0.01, baba.idlePose, m.sequence!, baba.idlePose, 0, (p) => p);
     expect(end.pose.shot).toBeFalsy();
+  });
+
+  it('in tier 4 both guns are out and his feet never move: same feet and hips in every pose, only the arms change', () => {
+    const tier4 = baba.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    const rest = tier4[0].restPose!;
+    const poses = tier4.flatMap((m) => m.sequence!.map((k) => keyToPlayerPose(k)));
+    for (const p of [rest, ...poses]) {
+      expect(p.leftFoot).toEqual(rest.leftFoot);
+      expect(p.rightFoot).toEqual(rest.rightFoot);
+      expect(p.pelvis).toEqual(rest.pelvis);
+      expect(p.chest).toEqual(rest.chest);
+      expect(p.prop).toBe('pistols');
+    }
+    // And the arms really do move: every pose in a move has its hands somewhere new
+    for (const m of tier4) {
+      const real = m.sequence!.filter((k) => !k.hold).map((k) => k.pose);
+      for (let i = 1; i < real.length; i++) {
+        expect(dist(real[i].frontHand, real[i - 1].frontHand) + dist(real[i].backHand, real[i - 1].backHand), m.name).toBeGreaterThan(30);
+      }
+    }
+  });
+
+  it('in tier 4 every pose fires, and both guns get used in each move', () => {
+    for (const m of baba.moves.filter((mv) => mv.tier === 4)) {
+      const real = m.sequence!.filter((k) => !k.hold);
+      expect(real.every((k) => !!k.shot && !!k.trail), m.name).toBe(true);
+      expect(new Set(real.map((k) => k.shot)).size, m.name).toBe(2);
+    }
+  });
+
+  it('waits with the guns crossed on his chest between tier 4 attacks, and only in tier 4', () => {
+    const rest = baba.moves.find((m) => m.tier === 4)!.restPose!;
+    for (const hand of [rest.leftHand, rest.rightHand]) {
+      expect(dist(hand, rest.chest)).toBeLessThan(16);
+    }
+    for (const m of baba.moves) expect(!!m.restPose).toBe(m.tier === 4);
+  });
+
+  it('holds the last pose of each move, so every move ends with a foot on the floor', () => {
+    expect(baba.holdsPose).toBe(true);
+    for (const m of baba.moves) {
+      const last = m.sequence!.at(-1)!.pose;
+      expect(Math.max(last.frontFoot.y, last.backFoot.y), m.name).toBeGreaterThan(60);
+    }
   });
 });
 

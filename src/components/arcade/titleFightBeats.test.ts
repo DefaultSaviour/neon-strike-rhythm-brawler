@@ -81,7 +81,7 @@ describe("the title fighter's moves", () => {
   it('holds the last pose for about two beats for heroes who hold, and not at all for the others', () => {
     expect(titleStrike(getHero('striker'), 0, 0, 0.42).holdSec).toBeCloseTo(0.84, 6);
     expect(titleStrike(getHero('striker'), 0, 0, 0.2).holdSec).toBe(0.6);
-    expect(titleStrike(getHero('babaYaga'), 0, 0, 0.42).holdSec).toBe(0);
+    expect(titleStrike({ ...getHero('striker'), holdsPose: false }, 0, 0, 0.42).holdSec).toBe(0);
   });
 });
 

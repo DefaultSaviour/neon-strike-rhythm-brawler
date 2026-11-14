@@ -8,8 +8,9 @@ import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHol
  * throws, elbows and kicks. Physical only: muzzle flashes and bullet
  * streaks, no magic.
  *
- * Same pattern as the Little Dragon (see littleDragon.ts): 21 combos over
- * the 5 tiers (5, 5, 4, 4, 3), the first keyframe is the hit. Keys marked
+ * Same pattern as the Little Dragon (see littleDragon.ts): 25 combos over
+ * the 5 tiers (5, 5, 8, 4, 3), the first keyframe is the hit. Tier 4 is his
+ * twist: both guns out and his feet never move, only his arms. Keys marked
  * `shot` fire the gun: their trail is drawn as the bullet streak and a
  * muzzle flash pops at the gun hand (fighterArt.ts).
  *
@@ -112,6 +113,21 @@ const aimed = (aim: number, extra: Partial<Key> = {}): Key => ({
 /** Gun hand snapped up by the recoil, weight rocked back. Held, so it reads. */
 const kickedBack = (extra: Partial<Key> = {}): Key => aimed(-35, { pelvis: { x: -6, y: 12 }, lean: -10, ...extra });
 
+/** Tier 4: rooted to the spot. The same hips and the same feet in every pose. */
+const rooted = { pelvis: { x: 2, y: 14 }, lean: 6, ...wide, prop: 'pistols' as const };
+/** A gun folded back across his chest, muzzle up by the far shoulder. */
+const chestFront: LimbAngles = { upper: 80, lower: -120 };
+const chestBack: LimbAngles = { upper: 100, lower: -60 };
+
+/** Tier 4 between attacks: both guns crossed on his chest, feet planted. */
+export const PLANTED_REST: SkeletonPose = buildFighterPose({ ...rooted, frontArm: chestFront, backArm: chestBack }, TRAIL);
+
+/** A tier 4 move: only his arms move, and he stays rooted with the guns out after it. */
+function planted(name: string, description: string, keys: Key[]): AttackMove {
+  return { ...combo(4, name, description, keys), restPose: PLANTED_REST };
+}
+
+
 /*
  * Simple and bold: each move is ONE clear idea in 2-3 big poses (4 for the
  * finishers), with at most two shots (three for the finishers). The last
@@ -183,26 +199,48 @@ export const BABA_YAGA_MOVES: AttackMove[] = [
     { ms: 200, pelvis: { x: 10, y: 26 }, lean: 14, frontArm: relock, backArm: armsBack, frontLeg: { x: 30, y: F }, backLeg: { x: -10, y: F } },
   ]),
 
-  // ================= Tier 4: gun-kata =================
-  combo(4, 'Gun-Kata Spin', 'Fires ahead, spins, and fires behind', [
+  // =================== Tier 3, continued (these were tier 4 before the planted two-gun tier) ===================
+  combo(3, 'Gun-Kata Spin', 'Fires ahead, spins, and fires behind', [
     { pelvis: { x: 2, y: 14 }, lean: 10, frontArm: straight(0), backArm: armsBack, ...wide, prop: 'pistols', ...bullet() },
     { ms: 140, pelvis: { x: 0, y: 14 }, lean: -6, tilt: 8, frontArm: { upper: 70, lower: 50 }, backArm: straight(180), ...wide, prop: 'pistols', ...bullet('backHand', 46) },
   ]),
-  combo(4, 'Grapple and Execute', 'Grabs the collar, drives a knee in, and fires down', [
+  combo(3, 'Grapple and Execute', 'Grabs the collar, drives a knee in, and fires down', [
     { ...lunge, lean: 16, frontArm: relock, backArm: straight(-6), trail: { from: 'backHand', reach: 16, curve: 8 } },
     { ms: 120, pelvis: { x: 6, y: 4 }, lean: 8, frontArm: relock, backArm: straight(14), frontLeg: { upper: -60, lower: 85 }, backLeg: { x: -12, y: F }, trail: { from: 'frontKnee', reach: 18 } },
     { ms: 140, ...aimed(45, { pelvis: { x: 6, y: 22 }, lean: 18 }), ...bullet('frontHand', 40) },
   ]),
-  combo(4, 'Shotgun Pump Combo', 'Blast, a big pump, and a second blast stepping forward', [
+  combo(3, 'Shotgun Pump Combo', 'Blast, a big pump, and a second blast stepping forward', [
     { ...aimed(0, { prop: 'shotgun' }), ...bullet('frontHand', 60) },
     { ms: 160, ...kickedBack({ prop: 'shotgun' }) },
     { ms: 120, ...aimed(0, { prop: 'shotgun', ...lunge, lean: 14 }), ...bullet('frontHand', 60) },
   ]),
-  combo(4, 'Rolling Fire', 'Dives into a forward roll and comes up kneeling, firing', [
+  combo(3, 'Rolling Fire', 'Dives into a forward roll and comes up kneeling, firing', [
     { pelvis: { x: 6, y: 34 }, lean: 55, frontArm: straight(12), backArm: armsBack, frontLeg: { x: 26, y: F }, backLeg: { x: -20, y: F }, ...bullet() },
     { ms: 150, pelvis: { x: 12, y: 40 }, lean: 80, frontArm: { upper: 20, lower: -110 }, backArm: { upper: 40, lower: -100 }, frontLeg: tucked, backLeg: tucked },
     { ms: 160, ...aimed(-2, { pelvis: { x: 16, y: 40 }, lean: 2, frontLeg: { x: 34, y: F }, backLeg: { upper: 100, lower: 175 } }), ...bullet('frontHand', 56) },
   ]),
+
+  // ================= Tier 4: two guns, and his feet never move =================
+  // Both pistols are out and he stands rooted for the whole tier: same feet,
+  // same hips, in every pose. Only his arms and head move. Between attacks
+  // the guns are crossed on his chest (PLANTED_REST).
+  planted('Left, Right', 'One gun fires, then the other, as the first folds back across his chest', [
+    { ...rooted, frontArm: straight(-4), backArm: chestBack, ...bullet() },
+    { ms: 120, ...rooted, frontArm: chestFront, backArm: straight(6), ...bullet('backHand') },
+  ]),
+  planted('High and Low', 'One gun high and one low at the same time, then they swap', [
+    { ...rooted, frontArm: straight(-34), backArm: straight(30), ...bullet() },
+    { ms: 130, ...rooted, frontArm: straight(30), backArm: straight(-34), ...bullet('backHand') },
+  ]),
+  planted('Under the Arm', 'Looks away, lifts one gun by his head and fires the other from under it. Then the first comes down and fires too.', [
+    { ...rooted, tilt: -24, frontArm: { upper: -60, lower: -120 }, backArm: straight(4), ...bullet('backHand') },
+    { ms: 140, ...rooted, tilt: 0, frontArm: straight(0), backArm: straight(90), ...bullet() },
+  ]),
+  planted('Mark and Sky', 'Both guns fire dead ahead together, then one snaps up to point at the sky', [
+    { ...rooted, frontArm: straight(-2), backArm: straight(3), ...bullet('frontHand', 56) },
+    { ms: 140, ...rooted, frontArm: straight(-88), backArm: straight(3), ...bullet('backHand') },
+  ]),
+
 
   // ================= Tier 5: legendary finishers =================
   combo(5, 'Blacklisted', 'Front kick, hip throw, one shot down, then he holsters and walks', [

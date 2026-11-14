@@ -74,6 +74,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Gun-fu assassin: point-blank shots, judo throws and a shotgun',
     idlePose: BABA_YAGA_IDLE,
     moves: BABA_YAGA_MOVES,
+    holdsPose: true,
   },
   {
     id: 'theOne',
