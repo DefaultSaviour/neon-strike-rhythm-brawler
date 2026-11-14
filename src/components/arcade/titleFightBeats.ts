@@ -124,7 +124,7 @@ export function titleStrike(hero: HeroDefinition, combo: number, noteIndex: numb
     // About two beats, as in the game
     holdSec: hero.holdsPose ? Math.min(1.4, Math.max(0.6, periodSec * 2)) : 0,
     still: !!move.still,
-    lunge: move.still ? STILL_DRIFT : 0,
+    lunge: move.still && !move.planted ? STILL_DRIFT : 0,
   };
 }
 

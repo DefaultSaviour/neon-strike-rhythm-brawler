@@ -16,8 +16,10 @@ import { SAW_FACE_POSE_EDITS } from './sawFacePoses';
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
- * centre. 21 combos over the 5 tiers (5, 5, 4, 4, 3); the first keyframe is
- * the hit. Saw hits trail from the lead hand out to the tip of the bar.
+ * centre. 23 combos over the 5 tiers (5, 5, 8, 2, 3); the first keyframe is
+ * the hit. Tier 4 is his twist: he stops attacking and just dances, the saw
+ * swung overhead to one side or the other (the designer's two poses) and
+ * whirled once round in a full circle. Saw hits trail from the lead hand out to the tip of the bar.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -105,6 +107,45 @@ const spinSwing = (extra: Partial<Key> = {}): Key => ({ pelvis: { x: 0, y: 16 },
 const danceUp = (ms: number): Key => ({ ms, pelvis: { x: 2, y: 12 }, lean: -8, tilt: -10, frontArm: { upper: -55, lower: -88 }, backArm: freeBack, frontLeg: { upper: 20, lower: 92 }, backLeg: { x: -6, y: F }, spin: true });
 const danceBack = (ms: number): Key => ({ ms, pelvis: { x: -2, y: 12 }, lean: -14, tilt: -6, frontArm: { upper: -40, lower: -62 }, backArm: freeBack, frontLeg: { x: 10, y: F }, backLeg: { upper: 140, lower: 112 }, spin: true });
 
+/**
+ * Tier 4, the chainsaw dance: feet planted wide, the saw held up overhead in
+ * both hands. He doesn't strike at anyone and never turns: he just swings
+ * the saw over to the side the enemy is on. The two poses are the designer's
+ * (drawn in the Pose Studio): `toRight` with the saw tipped over to the right
+ * and his head thrown left, `toLeft` with the saw up on the left and his
+ * head to the right. `dip` drops him lower and tips the saw further for the
+ * second step of the dance.
+ */
+const danceRight = (dip = 0): Key => ({ pelvis: { x: 5, y: 19 + dip }, lean: -21, tilt: -25 - dip, frontArm: { upper: -95 + dip * 2, lower: -56 + dip * 3 }, backArm: freeBack, frontLeg: { upper: 34, lower: 106 }, backLeg: { upper: 148, lower: 97 } });
+const danceLeft = (dip = 0): Key => ({ pelvis: { x: -2, y: 22 + dip }, lean: -20, tilt: 46 + dip, frontArm: { upper: -128 - dip * 2, lower: -94 - dip * 3 }, backArm: freeBack, frontLeg: { upper: 27, lower: 92 }, backLeg: { upper: 153, lower: 86 } });
+
+/** Tier 4 between steps: standing wide with the saw straight up overhead. */
+export const SAW_DANCE_REST: SkeletonPose = buildFighterPose(twoHanded({ pelvis: { x: 2, y: 20 }, lean: -14, tilt: 8, frontArm: { upper: -108, lower: -80 }, backArm: freeBack, frontLeg: { upper: 30, lower: 98 }, backLeg: { upper: 150, lower: 92 } }), TRAIL);
+
+/** How long each quarter of the whirl takes. */
+const WHIRL_MS = 70;
+
+/**
+ * The whirl: from the pose, the saw goes once right round in a full circle
+ * over his head (four quarter turns, `turn` +1 clockwise or -1 the other
+ * way) and comes back to where it started. Only the saw arm moves.
+ */
+function whirl(base: Key, turn: 1 | -1): Key[] {
+  const arm = base.frontArm;
+  const quarter = (i: number): Key => ({ ...base, ms: WHIRL_MS, frontArm: { upper: arm.upper, lower: arm.lower + turn * 90 * i } });
+  return [base, quarter(1), quarter(2), quarter(3), { ...base, ms: WHIRL_MS }];
+}
+
+/**
+ * One step of the dance: a pose for each side, no strike, feet planted,
+ * never turning. He snaps to the pose on the beat, whirls the saw once
+ * round over his head (toward the enemy's side first), and holds the pose.
+ */
+function dance(name: string, description: string, dip: number): AttackMove {
+  const keys = (k: Key, turn: 1 | -1) => withHolds(whirl(k, turn).map((q) => buildKey(twoHanded(q), TRAIL, q.ms ?? 0)));
+  return { ...comboMove(nextId++, 4, name, description, keys(danceRight(dip), 1)), leftSequence: keys(danceLeft(dip), -1), restPose: SAW_DANCE_REST, still: true, planted: true };
+}
+
 const BUILT_MOVES: AttackMove[] = [
   // ======================= Tier 1: the saw =======================
   combo(1, 'Rev and Thrust', 'Revs the saw and drives it straight in', [thrust(), guard(150)]),
@@ -135,17 +176,21 @@ const BUILT_MOVES: AttackMove[] = [
   ]),
   combo(3, 'Spin and Chop', 'Swings the saw round, then brings it down', [spinSwing(), { ms: 100, ...chop() }]),
 
-  // ================= Tier 4: the slaughterhouse =================
-  combo(4, 'Frenzy', 'Two wild thrusts, one high and one low', [thrust({ frontArm: straight(-14) }), { ms: 90, ...thrust({ frontArm: straight(14) }) }]),
-  combo(4, 'Kneeling Rip', 'Drops to one knee, sweeps low, then rips the saw up', [
+  // =================== Tier 3, continued (these were tier 4 before the dance) ===================
+  combo(3, 'Frenzy', 'Two wild thrusts, one high and one low', [thrust({ frontArm: straight(-14) }), { ms: 90, ...thrust({ frontArm: straight(14) }) }]),
+  combo(3, 'Kneeling Rip', 'Drops to one knee, sweeps low, then rips the saw up', [
     { pelvis: { x: 2, y: 36 }, lean: 18, frontArm: straight(32), backArm: freeBack, frontLeg: { x: 26, y: F }, backLeg: { upper: 100, lower: 180 }, trail: { from: 'frontHand', reach: TIP, curve: 22 } },
     { ms: 110, ...rip() },
   ]),
-  combo(4, 'Wild Spin', 'Spins twice with the saw held out', [spinSwing(), { ms: 100, ...spinSwing() }]),
-  combo(4, 'Flying Swing', 'Leaps through the air with the saw held out flat', [
+  combo(3, 'Wild Spin', 'Spins twice with the saw held out, then back on guard', [spinSwing(), { ms: 100, ...spinSwing() }, guard(170)]),
+  combo(3, 'Flying Swing', 'Leaps through the air with the saw held out flat', [
     { ...airborne, lean: 10, frontArm: straight(2), backArm: freeBack, trail: { from: 'frontHand', reach: TIP, curve: 26 } },
     guard(190),
   ]),
+
+  // ================= Tier 4: the chainsaw dance =================
+  dance('Chainsaw Dance', 'Swings the saw up overhead to their side, head thrown back the other way, and whirls it once right round', 0),
+  dance('Dance Again', 'The same swing and whirl, dropping lower with the saw tipped further over', 5),
 
   // ================= Tier 5: the dance =================
   combo(5, 'Sunset Dance', 'One big swing, then the saw goes up overhead and he whirls it round', [swing(), danceUp(110), danceBack(160)]),
