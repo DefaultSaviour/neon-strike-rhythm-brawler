@@ -156,6 +156,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'A roaring chainsaw and a stitched mask: thrusts, chops, lumbering spins, and the chainsaw dance',
     idlePose: SAW_FACE_IDLE,
     moves: SAW_FACE_MOVES,
+    holdsPose: true,
   },
   {
     id: 'scarecrow',

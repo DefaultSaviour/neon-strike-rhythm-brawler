@@ -1280,11 +1280,11 @@ describe('Saw Face', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(sf.moves).toHaveLength(21);
+  it('has 23 moves spread over the 5 combo tiers (5, 5, 8, 2, 3), all with different names', () => {
+    expect(sf.moves).toHaveLength(23);
     const perTier = [1, 2, 3, 4, 5].map((t) => sf.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(sf.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 2, 3]);
+    expect(new Set(sf.moves.map((m) => m.name)).size).toBe(23);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -1300,6 +1300,8 @@ describe('Saw Face', () => {
   it('every move is a combo whose first keyframe is the hit, landing toward the enemy', () => {
     for (const m of sf.moves) {
       expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+      // Tier 4 is the dance: he doesn't strike at anyone (see below)
+      if (m.tier === 4) continue;
       expect(m.sequence![0].trail).toBeDefined();
       // The designer's own studio poses are taken exactly as drawn
       if (SAW_FACE_POSE_EDITS[m.name]) continue;
@@ -1318,7 +1320,8 @@ describe('Saw Face', () => {
 
   it('keeps every move simple and holds its poses so they read', () => {
     for (const m of sf.moves) {
-      expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+      // Tier 4 is the dance: one pose, with the saw whirled round (see below)
+      if (m.tier !== 4) expect(realPoses(m).length).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
       const [before, last] = m.sequence!.slice(-2);
       expect(last.pose).toEqual(before.pose);
       expect(last.ms).toBeGreaterThanOrEqual(150);
@@ -1344,8 +1347,8 @@ describe('Saw Face', () => {
       expect(after.some((k) => k.pose.frontHand.y < k.pose.head.y), m.name).toBe(true);
       expect(m.sequence![m.sequence!.length - 1].spin, m.name).toBe(true);
     }
-    // ...and the dance is only for the finishers
-    for (const m of sf.moves.filter((x) => x.tier < 5)) {
+    // ...and below the dance tier the saw never goes up over his head
+    for (const m of sf.moves.filter((x) => x.tier < 4)) {
       for (const k of m.sequence!) expect(k.pose.frontHand.y, m.name).toBeGreaterThan(k.pose.head.y);
     }
   });
@@ -1356,7 +1359,70 @@ describe('Saw Face', () => {
     expect(isHeroUnlocked('sawFace', after(666))).toBe(true);
     expect(isHeroUnlocked('sawFace', after(0, 1))).toBe(false);
   });
+
+  it('in tier 4 he just dances: the saw up overhead, no strike, feet planted, and he never turns', () => {
+    const tier4 = sf.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(2);
+    for (const m of tier4) {
+      expect(m.still, m.name).toBe(true);
+      expect(m.planted, m.name).toBe(true);
+      for (const keys of [m.sequence!, m.leftSequence!]) {
+        // He snaps to the pose with the saw up overhead, and ends back in the very same pose
+        expect(keys[0].pose.frontHand.y, m.name).toBeLessThan(keys[0].pose.chest.y - 15);
+        expect(keys.at(-1)!.pose).toEqual(keys[0].pose);
+      }
+      for (const k of [...m.sequence!, ...m.leftSequence!]) {
+        expect(k.trail, m.name).toBeUndefined();
+        expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(66);
+        expect(dist(k.pose.frontHand, k.pose.backHand), m.name).toBeLessThan(GRIP_GAP);
+      }
+    }
+    for (const m of sf.moves) {
+      expect(!!m.restPose, m.name).toBe(m.tier === 4);
+      expect(!!m.leftSequence, m.name).toBe(m.tier === 4);
+    }
+  });
+
+  it('the dance has a pose for each side, as the designer drew them: saw over to the right with his head thrown left, and the other way round', () => {
+    for (const m of sf.moves.filter((x) => x.tier === 4)) {
+      const right = m.sequence![0].pose;
+      const left = m.leftSequence![0].pose;
+      // An attack to the right: the saw's hands are right of his head
+      expect(right.frontHand.x, m.name).toBeGreaterThan(right.head.x + 15);
+      // An attack to the left: they are left of it
+      expect(left.frontHand.x, m.name).toBeLessThan(left.head.x - 15);
+      // Same wide stance on both sides: the feet barely move
+      expect(dist(right.frontFoot, left.frontFoot), m.name).toBeLessThan(8);
+      expect(dist(right.backFoot, left.backFoot), m.name).toBeLessThan(8);
+    }
+  });
+
+  it('in the dance the saw goes once right round over his head: four quarter turns, toward the enemy first, and only the saw arm moves', () => {
+    const angle = (k: { pose: { frontElbow: Point2D; frontHand: Point2D } }) => Math.atan2(k.pose.frontHand.y - k.pose.frontElbow.y, k.pose.frontHand.x - k.pose.frontElbow.x);
+    for (const m of sf.moves.filter((x) => x.tier === 4)) {
+      for (const [keys, turn] of [[m.sequence!, 1], [m.leftSequence!, -1]] as const) {
+        const real = keys.filter((k) => !k.hold);
+        expect(real).toHaveLength(5);
+        let total = 0;
+        for (let i = 1; i < real.length; i++) {
+          const step = ((((angle(real[i]) - angle(real[i - 1])) * turn) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+          expect(step, m.name).toBeCloseTo(Math.PI / 2, 5);
+          total += step;
+          expect(real[i].pose.pelvis).toEqual(real[0].pose.pelvis);
+          expect(real[i].pose.head).toEqual(real[0].pose.head);
+          expect(real[i].pose.frontFoot).toEqual(real[0].pose.frontFoot);
+        }
+        expect(total).toBeCloseTo(Math.PI * 2, 5);
+      }
+    }
+  });
+
+  it('holds the last pose of each move; only the dances end in a whirl', () => {
+    expect(sf.holdsPose).toBe(true);
+    for (const m of sf.moves.filter((x) => x.tier < 5)) expect(!!m.sequence!.at(-1)!.spin, m.name).toBe(false);
+  });
 });
+
 
 describe('The Scarecrow', () => {
   const GRIP_GAP = 16;

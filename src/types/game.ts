@@ -168,6 +168,11 @@ export interface AttackMove {
   still?: boolean;
   /** Rooted to the spot: the hero turns to face the enemy as usual but never steps toward them */
   planted?: boolean;
+  /**
+   * For a hero who never turns (`still`): the keyframes for an attack to the LEFT, drawn exactly as
+   * they should look (not mirrored). Without it the same poses are used for both sides.
+   */
+  leftSequence?: MoveKey[];
   /** While this move's tier is up, the hero holds this pose between attacks instead of their stance */
   restPose?: SkeletonPose;
   tier: 1 | 2 | 3 | 4 | 5; // 1: Basic, 2: Advanced Acrobatic, 3: Superhuman Cyber, 4: Overdrive Master, 5: God-Tier Finisher

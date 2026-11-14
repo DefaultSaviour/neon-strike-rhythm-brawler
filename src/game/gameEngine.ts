@@ -23,6 +23,7 @@ import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGr
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame, trailingScarf } from './motion';
 import { comboDuration, comboFrame, STILL_DRIFT } from './combo';
+import { keyToPlayerPose } from './heroMoves/poseBuilder';
 import { FLOOR_Y, SPAWN_DISTANCE } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { practiceRunProgress, recordRunProgress, RunProgress } from './runProgress';
@@ -773,12 +774,16 @@ export class GameEngine {
     if (currentMove.sequence) {
       const holdSec = this.hero.holdsPose ? this.poseHoldSec() : 0;
       const still = !!currentMove.still;
+      // A hero who never turns can have his own poses for an attack to the left
+      const leftKeys = still && lane === 'left' ? currentMove.leftSequence : undefined;
+      const keys = leftKeys ?? currentMove.sequence;
+      const firstPose = leftKeys ? keyToPlayerPose(leftKeys[0]) : currentMove.pose;
       this.startStrike(
         lane,
-        still ? orientEffectOnly(currentMove.pose, lane) : getOrientedPose(currentMove.pose, lane),
-        comboDuration(currentMove.sequence) + holdSec,
-        still ? STILL_DRIFT : currentMove.planted ? 0 : LUNGE_DISTANCE,
-        currentMove.sequence,
+        still ? orientEffectOnly(firstPose, lane) : getOrientedPose(firstPose, lane),
+        comboDuration(keys) + holdSec,
+        currentMove.planted ? 0 : still ? STILL_DRIFT : LUNGE_DISTANCE,
+        keys,
         holdSec,
         still
       );
