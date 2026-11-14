@@ -7,7 +7,7 @@ import { EMPTY_STATS, isHeroUnlocked } from './heroUnlocks';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
 import { SAW_FACE_POSE_EDITS } from './heroMoves/sawFacePoses';
 import { COMBO_SNAP_SEC, comboDuration, comboFrame, STILL_DRIFT } from './combo';
-import { muzzlePoint } from '../components/fighterArt';
+import { muzzlePoint, postEnds } from '../components/fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 const dragon = getHero('dragon');
@@ -1364,11 +1364,11 @@ describe('The Scarecrow', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(sc.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(sc.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => sc.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(sc.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(sc.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -1398,8 +1398,8 @@ describe('The Scarecrow', () => {
     }
   });
 
-  it('never drifts far from his spot: the hips stay near the centre in every keyframe', () => {
-    for (const m of sc.moves) {
+  it('never drifts far from his spot: the hips stay near the centre in every keyframe (tier 4 tips over instead, see below)', () => {
+    for (const m of sc.moves.filter((mv) => mv.tier !== 4)) {
       for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x), m.name).toBeLessThanOrEqual(12);
     }
   });
@@ -1419,7 +1419,7 @@ describe('The Scarecrow', () => {
       expect(k.trail, m.name).toBeDefined();
       const hand = k.flyingArm === 'front' ? k.pose.frontHand : k.pose.backHand;
       expect(dist(hand, k.trail!.end), m.name).toBeGreaterThan(35);
-      expect(k.prop, m.name).toBeUndefined();
+      expect(k.prop, m.name).not.toBe('pole');
     }
   });
 
@@ -1443,6 +1443,45 @@ describe('The Scarecrow', () => {
     expect(isHeroUnlocked('scarecrow', after(9))).toBe(false);
     expect(isHeroUnlocked('scarecrow', after(10))).toBe(true);
     expect(isHeroUnlocked('scarecrow', after(0, 1))).toBe(false);
+  });
+
+  it('in tier 4 he is back on his post: feet off the floor in every pose, and the foot of the post never leaves his spot', () => {
+    const tier4 = sc.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    const rest = tier4[0].restPose!;
+    expect(rest.prop).toBe('post');
+    expect(postEnds(rest).foot.x).toBeCloseTo(0, 5);
+    for (const m of tier4) {
+      expect(m.planted, m.name).toBe(true);
+      for (const k of m.sequence!) {
+        const p = keyToPlayerPose(k);
+        expect(p.prop, m.name).toBe('post');
+        expect(Math.max(p.leftFoot.y, p.rightFoot.y), m.name).toBeLessThan(66);
+        const { foot } = postEnds(p);
+        expect(foot.x, m.name).toBeCloseTo(0, 5);
+        expect(foot.y, m.name).toBeCloseTo(68, 5);
+      }
+    }
+    for (const m of sc.moves) {
+      expect(!!m.restPose, m.name).toBe(m.tier === 4);
+      expect(!!m.planted, m.name).toBe(m.tier === 4);
+    }
+  });
+
+  it('in tier 4 the post tips toward the enemy on every hit, and never so far that he covers the timing circles', () => {
+    for (const m of sc.moves.filter((mv) => mv.tier === 4)) {
+      const hit = m.sequence![0].pose;
+      expect(hit.pelvis.x, m.name).toBeGreaterThan(15);
+      for (const k of m.sequence!) {
+        // The circle sits on the strike line at (78, -2) with radius 22; his head is about 10 across
+        for (const q of [k.pose.pelvis, k.pose.chest, k.pose.head]) expect(dist(q, { x: 78, y: -2 }), m.name).toBeGreaterThan(22 + 10);
+      }
+    }
+  });
+
+  it('holds the last pose of each move, and none of them ends in a spin', () => {
+    expect(sc.holdsPose).toBe(true);
+    for (const m of sc.moves) expect(!!m.sequence!.at(-1)!.spin, m.name).toBe(false);
   });
 });
 

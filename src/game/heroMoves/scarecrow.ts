@@ -16,8 +16,9 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, handOf
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
- * centre. 21 combos over the 5 tiers (5, 5, 4, 4, 3); the first keyframe is
- * the hit. Pole hits trail out to the end of the pole.
+ * centre. 25 combos over the 5 tiers (5, 5, 8, 4, 3); the first keyframe is
+ * the hit. Tier 4 is his twist: he is back on his post, feet off the floor,
+ * and the post tips toward the enemy and flings a bit of him at them. Pole hits trail out to the end of the pole.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -67,6 +68,30 @@ function onPole(k: Key): Key {
 let nextId = 1301;
 function combo(tier: AttackMove['tier'], name: string, description: string, keys: Key[]): AttackMove {
   return comboMove(nextId++, tier, name, description, withHolds(keys.map(onPole).map((k) => buildKey(k, TRAIL, k.ms ?? 0))));
+}
+
+/** Tier 4: how far up his post his hips hang, so his feet dangle clear of the floor. */
+export const HANG = 78;
+/** Hung on the post, which is stuck in the ground at his spot and tipped over this many degrees toward the enemy. */
+const post = (tip: number) => {
+  const t = (tip * Math.PI) / 180;
+  return { pelvis: { x: Math.sin(t) * HANG, y: F - Math.cos(t) * HANG }, lean: tip, prop: 'post' as const };
+};
+/** An arm tied along the crossbar, the forearm hanging off the end of it. */
+const barFront = (tip: number, fore = 84): LimbAngles => ({ upper: tip, lower: fore });
+const barBack = (tip: number, fore = 96): LimbAngles => ({ upper: 180 + tip, lower: fore });
+/** Legs dangling: straight down, or trailing behind (+) or swinging ahead (-) as the post tips. */
+const dangling = (lag = 0) => ({ frontLeg: { upper: 84 + lag, lower: 96 + lag * 1.4 }, backLeg: { upper: 98 + lag, lower: 86 + lag * 1.4 } });
+
+/** Tier 4 between attacks: hanging on his post, head lolling, like a scarecrow in a field. */
+export const ON_THE_POST: SkeletonPose = buildFighterPose({ ...post(0), tilt: 20, frontArm: barFront(0), backArm: barBack(0), ...dangling() }, TRAIL);
+
+/**
+ * A tier 4 move: he never steps. The post tips toward the enemy and flings a
+ * bit of him at them. `planted` keeps the foot of the post on his spot.
+ */
+function hung(name: string, description: string, keys: Key[]): AttackMove {
+  return { ...combo(4, name, description, keys), restPose: ON_THE_POST, planted: true };
 }
 
 /** Slumped, head lolling, arms hanging like empty sleeves. */
@@ -135,24 +160,50 @@ export const SCARECROW_MOVES: AttackMove[] = [
     { ...airborne, lean: -10, frontArm: straight(76), backArm: flungBack, frontLeg: kick(-8), backLeg: kick(6), prop: 'pole', trail: { from: 'frontFoot', reach: 16 } },
     slumped(180),
   ]),
-  combo(3, 'Scatter', 'Spins with his arms flung out, straw going everywhere', [flailSpin(), { ms: 100, ...flailSpin() }]),
+  combo(3, 'Scatter', 'Spins with his arms flung out, straw going everywhere, and comes out of it dizzy', [
+    flailSpin(),
+    { ms: 100, ...flailSpin() },
+    { ms: 150, pelvis: { x: -2, y: 16 }, lean: -10, tilt: 26, frontArm: { upper: 60, lower: 100 }, backArm: { upper: 130, lower: 100 }, frontLeg: { x: 18, y: F }, backLeg: { x: -6, y: F } },
+  ]),
 
-  // ================= Tier 4: the crows =================
-  combo(4, 'Crow Flap', 'Flaps his arms like wings, then chops down with both', [
+  // =================== Tier 3, continued (these were tier 4 before he went back on his post) ===================
+  combo(3, 'Crow Flap', 'Flaps his arms like wings, then chops down with both', [
     { ...lurch, lean: 18, frontArm: { upper: -20, lower: 16 }, backArm: { upper: -150, lower: -120 }, trail: { from: 'frontHand', reach: 18, curve: 24 } },
     { ms: 160, pelvis: { x: 0, y: 8 }, lean: 0, tilt: -10, frontArm: { upper: -30, lower: -70 }, backArm: { upper: -150, lower: -110 }, frontLeg: { x: 12, y: F }, backLeg: { x: -10, y: F } },
   ]),
-  combo(4, 'Pole Spin', 'Twirls the pole round in front of him, hitting twice', [
+  combo(3, 'Pole Spin', 'Twirls the pole round in front of him, hitting twice, then stands it up like a staff', [
     polePoke({ spin: true, trail: { from: 'frontHand', reach: POLE_REACH, curve: 30 } }),
     { ms: 100, ...poleSweep({ spin: true }) },
+    { ms: 150, ...slump, lean: 4, tilt: 12, frontArm: { upper: 40, lower: -70 }, backArm: flungBack, prop: 'pole' },
   ]),
-  combo(4, 'Haystack Drop', 'Leaps up and drops knee first onto them like a falling haystack', [
+  combo(3, 'Haystack Drop', 'Leaps up and drops knee first onto them like a falling haystack', [
     { ...airborne, lean: 20, frontArm: { upper: -60, lower: -100 }, backArm: { upper: -120, lower: -80 }, frontLeg: { upper: 10, lower: 100 }, trail: { from: 'frontKnee', reach: 14 } },
     { ms: 170, ...heap, lean: 10, tilt: 10, frontArm: { upper: 60, lower: 80 }, backArm: { upper: 120, lower: 100 }, frontLeg: kick(4) },
   ]),
-  combo(4, 'Rag Doll', 'Flops forward and throws his whole lead arm at them, then rebounds', [
+  combo(3, 'Rag Doll', 'Flops forward and throws his whole lead arm at them, then rebounds', [
     { ...lurch, pelvis: { x: 8, y: 22 }, lean: 40, tilt: 20, frontArm: straight(4), backArm: { upper: -20, lower: 30 }, flyingArm: 'front', trail: { from: 'frontHand', reach: ARM_FLIES + 4, curve: 10 } },
     { ms: 110, ...ropeHook() },
+  ]),
+
+  // ================= Tier 4: back on his post =================
+  // He hangs on his post like a scarecrow in a field, feet off the floor,
+  // and never steps. The post tips toward the enemy and flings a bit of
+  // him at them. Between attacks he hangs upright (ON_THE_POST).
+  hung('In the Wind', 'The post tips over and his arm rips off the crossbar and flies at them', [
+    { ...post(20), tilt: 6, frontArm: straight(8), backArm: barBack(20), ...dangling(22), flyingArm: 'front', trail: { from: 'frontHand', reach: ARM_FLIES, curve: 10 } },
+    { ms: 170, ...post(8), tilt: 18, frontArm: barFront(8, 60), backArm: barBack(8), ...dangling(-12) },
+  ]),
+  hung('Both Sleeves', 'Tips over and throws one arm, tips further and throws the other', [
+    { ...post(14), tilt: 4, frontArm: straight(4), backArm: barBack(14), ...dangling(14), flyingArm: 'front', trail: { from: 'frontHand', reach: ARM_FLIES, curve: 10 } },
+    { ms: 130, ...post(24), tilt: 10, frontArm: barFront(24, 110), backArm: straight(12), ...dangling(28), flyingArm: 'back', trail: { from: 'backHand', reach: ARM_FLIES, curve: -10 } },
+  ]),
+  hung('Dangling Kick', 'His legs swing up off the post as it tips: one whips out, then the other', [
+    { ...post(18), tilt: 14, frontArm: barFront(18), backArm: barBack(18), frontLeg: kick(6), backLeg: { upper: 120, lower: 150 }, trail: { from: 'frontFoot', reach: 16 } },
+    { ms: 140, ...post(22), tilt: 4, frontArm: barFront(22), backArm: barBack(22), frontLeg: { upper: 70, lower: 130 }, backLeg: kick(-12), trail: { from: 'backFoot', reach: 16, curve: -16 } },
+  ]),
+  hung('Timber', 'The whole post topples at them, hat first, then rocks back upright', [
+    { ...post(24), tilt: 32, frontArm: barFront(26, 50), backArm: barBack(26, 130), ...dangling(34), trail: { from: 'head', reach: 16 } },
+    { ms: 180, ...post(-8), tilt: -6, frontArm: barFront(-8, 110), backArm: barBack(-8, 70), ...dangling(-16) },
   ]),
 
   // ================= Tier 5: the brain =================

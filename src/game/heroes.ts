@@ -164,6 +164,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'A floppy straw man: rubbery flails, his old pole, and a heap he springs back out of',
     idlePose: SCARECROW_IDLE,
     moves: SCARECROW_MOVES,
+    holdsPose: true,
   },
   {
     id: 'tinMan',

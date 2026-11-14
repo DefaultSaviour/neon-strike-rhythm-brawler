@@ -777,7 +777,7 @@ export class GameEngine {
         lane,
         still ? orientEffectOnly(currentMove.pose, lane) : getOrientedPose(currentMove.pose, lane),
         comboDuration(currentMove.sequence) + holdSec,
-        still ? STILL_DRIFT : LUNGE_DISTANCE,
+        still ? STILL_DRIFT : currentMove.planted ? 0 : LUNGE_DISTANCE,
         currentMove.sequence,
         holdSec,
         still
