@@ -2740,7 +2740,19 @@ function drawLionOutfit(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1, time: numb
     [pose.rightHand, pose.rightElbow],
   ] as const) {
     const a = Math.atan2(hand.y - elbow.y, hand.x - elbow.x);
-    const big = blazing ? 1.4 : 1;
+    // A paw held over his face: the forearm comes across in front of his mane, and the paw is big enough to hide his eyes
+    const hiding = Math.hypot(hand.x - h.x, hand.y - h.y) < 13;
+    const big = (blazing ? 1.4 : 1) * (hiding ? 1.45 : 1);
+    if (hiding) {
+      for (const [color, width] of [['#05050c', 7.4], ['#d9a24e', 5.2]] as const) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(elbow.x, elbow.y);
+        ctx.lineTo(hand.x, hand.y);
+        ctx.stroke();
+      }
+    }
     ctx.fillStyle = '#d9a24e';
     ctx.strokeStyle = '#05050c';
     ctx.lineWidth = 1;

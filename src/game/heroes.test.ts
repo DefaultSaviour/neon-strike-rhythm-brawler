@@ -1640,4 +1640,40 @@ describe('The Lion', () => {
     expect(isHeroUnlocked('lion', { ...EMPTY_STATS, songsQuit: 4 })).toBe(false);
     expect(isHeroUnlocked('lion', { ...EMPTY_STATS, songsQuit: 5 })).toBe(true);
   });
+
+  it('cannot bear to look for the first three tiers: one paw stays over his eyes and he only hits with the other', () => {
+    const low = H.moves.filter((m) => m.tier <= 3);
+    expect(low).toHaveLength(14);
+    for (const m of low) {
+      for (const k of m.sequence!) {
+        const p = keyToPlayerPose(k);
+        // The rear paw (the right one, facing right) is on his face in every pose
+        expect(dist(p.rightHand, p.head), m.name).toBeLessThan(12);
+        // So no hit ever starts from it
+        if (k.trail && dist(k.trail.end, k.pose.head) > 20) expect(dist(k.trail.end, k.pose.backHand), m.name).toBeGreaterThan(20);
+      }
+      expect(dist(m.restPose!.rightHand, m.restPose!.head), m.name).toBeLessThan(12);
+      expect(dist(m.restPose!.leftHand, m.restPose!.head), m.name).toBeGreaterThan(20);
+    }
+  });
+
+  it('in tier 4 the paw comes down: he looks when he hits, uses both paws, and waits in his normal stance', () => {
+    const tier4 = H.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      const hit = keyToPlayerPose(m.sequence![0]);
+      expect(dist(hit.rightHand, hit.head), m.name).toBeGreaterThan(14);
+      expect(dist(hit.leftHand, hit.head), m.name).toBeGreaterThan(14);
+    }
+    for (const m of H.moves) expect(!!m.restPose, m.name).toBe(m.tier <= 3);
+  });
+
+  it('holds the last pose of each move, so every move ends with a foot on the floor and not in a spin', () => {
+    expect(H.holdsPose).toBe(true);
+    for (const m of H.moves) {
+      const last = m.sequence!.at(-1)!;
+      expect(Math.max(last.pose.frontFoot.y, last.pose.backFoot.y), m.name).toBeGreaterThan(60);
+      expect(!!last.spin, m.name).toBe(false);
+    }
+  });
 });
