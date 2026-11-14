@@ -81,6 +81,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Bullet-time kung fu: impossible dodges, and he floats while he kicks',
     idlePose: THE_ONE_IDLE,
     moves: THE_ONE_MOVES,
+    holdsPose: true,
   },
   {
     id: 'drunkenMaster',

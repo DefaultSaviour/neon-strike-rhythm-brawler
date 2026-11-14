@@ -10,7 +10,7 @@ import {
   MoveKey,
   AudioSettings,
 } from '../types/game';
-import { IDLE_POSE, getOrientedPose, getMoveForCombo } from './animations';
+import { IDLE_POSE, getOrientedPose, orientEffectOnly, getMoveForCombo } from './animations';
 import { DEFAULT_HERO, getHero, HeroDefinition, HeroId, HEROES } from './heroes';
 import { RunUnlock, unlocksBetween } from './runUnlocks';
 import { accuracyPercent, addRun, HERO_UNLOCKS, isHeroUnlocked, LifetimeStats, loadStats, newlyUnlocked, saveStats, withAdHero } from './heroUnlocks';
@@ -22,7 +22,7 @@ import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepD
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
 import { idleBouncePose, strikeFrame, trailingScarf } from './motion';
-import { comboDuration, comboFrame } from './combo';
+import { comboDuration, comboFrame, STILL_DRIFT } from './combo';
 import { FLOOR_Y, SPAWN_DISTANCE } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
 import { practiceRunProgress, recordRunProgress, RunProgress } from './runProgress';
@@ -214,6 +214,12 @@ export class GameEngine {
   private strikeDuration: number = 0.2;
   private strikeFromPose: SkeletonPose = { ...IDLE_POSE };
   private strikeLunge: number = 0;
+  /** The current move is one where he never turns: his whole body drifts to the attacking side instead */
+  private strikeStill: boolean = false;
+  /** Where his body was, sideways, when the current strike began */
+  private strikeFromOffset: number = 0;
+  /** Which way the hero's body is drawn facing (the lane he last struck, unless the move never turns him) */
+  public bodyFacing: Lane = 'right';
   /** How long the current combo's last pose is held before he recovers (0 for most heroes) */
   private strikeHoldSec: number = 0;
   /** The trailing scarf's points last frame, and the clock they were made at */
@@ -766,7 +772,16 @@ export class GameEngine {
     }
     if (currentMove.sequence) {
       const holdSec = this.hero.holdsPose ? this.poseHoldSec() : 0;
-      this.startStrike(lane, getOrientedPose(currentMove.pose, lane), comboDuration(currentMove.sequence) + holdSec, LUNGE_DISTANCE, currentMove.sequence, holdSec);
+      const still = !!currentMove.still;
+      this.startStrike(
+        lane,
+        still ? orientEffectOnly(currentMove.pose, lane) : getOrientedPose(currentMove.pose, lane),
+        comboDuration(currentMove.sequence) + holdSec,
+        still ? STILL_DRIFT : LUNGE_DISTANCE,
+        currentMove.sequence,
+        holdSec,
+        still
+      );
     } else {
       this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
     }
@@ -920,8 +935,12 @@ export class GameEngine {
   }
 
   /** Begin a strike animation from wherever the fighter currently is. */
-  private startStrike(lane: Lane, pose: SkeletonPose, durationSec: number, lunge: number, keys: MoveKey[] | null = null, holdSec = 0) {
+  private startStrike(lane: Lane, pose: SkeletonPose, durationSec: number, lunge: number, keys: MoveKey[] | null = null, holdSec = 0, still = false) {
     this.isAttacking = true;
+    this.strikeStill = still;
+    // A hero who never turns keeps facing the way he was drawn; everyone else turns to the enemy
+    this.bodyFacing = still ? 'right' : lane;
+    this.strikeFromOffset = this.playerOffsetX;
     this.strikeHoldSec = holdSec;
     this.strikeKeys = keys;
     this.attackDirection = lane;
@@ -1229,8 +1248,9 @@ export class GameEngine {
               this.strikeKeys,
               restPose,
               this.strikeLunge,
-              (p) => getOrientedPose(p, lane),
-              this.strikeHoldSec
+              (p) => (this.strikeStill ? orientEffectOnly(p, lane) : getOrientedPose(p, lane)),
+              this.strikeHoldSec,
+              { fromLunge: this.strikeFromOffset, stay: this.strikeStill }
             )
           : strikeFrame(progress, this.strikeFromPose, this.lastAttackPose, restPose, this.strikeLunge);
         // A held pose still breathes with the music

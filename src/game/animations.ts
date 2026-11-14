@@ -882,6 +882,19 @@ export function getOrientedPose(pose: SkeletonPose, direction: 'left' | 'right')
   };
 }
 
+/**
+ * For a hero who never turns (The One, sitting in the air): the body stays
+ * exactly as it is, and only the hit effect goes over to the struck side.
+ */
+export function orientEffectOnly(pose: SkeletonPose, direction: 'left' | 'right'): SkeletonPose {
+  if (direction === 'right' || !pose.bladeSlash) return pose;
+  const s = pose.bladeSlash;
+  return {
+    ...pose,
+    bladeSlash: { ...s, start: { x: -s.start.x, y: s.start.y }, end: { x: -s.end.x, y: s.end.y }, curveOffset: -s.curveOffset },
+  };
+}
+
 export function lerpPose(a: SkeletonPose, b: SkeletonPose, t: number): SkeletonPose {
   const clampT = Math.max(0, Math.min(1, t));
   const lerpPt = (p1: Point2D, p2: Point2D): Point2D => ({

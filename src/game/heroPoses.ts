@@ -80,9 +80,13 @@ const TRAIL_LIMBS: Array<{ from: TrailSpec['from']; joint: (p: EnemyPose) => Poi
   { from: 'head', joint: (p) => p.chest, end: (p) => p.head },
 ];
 
-/** Work out which limb a built trail came from, and how far past it it reaches. */
-export function trailSource(pose: EnemyPose, trail: NonNullable<MoveKey['trail']>): { spec: TrailSpec; color: string } {
-  let best = { error: Infinity, spec: { from: 'frontHand', reach: 14, curve: trail.curveOffset } as TrailSpec };
+/**
+ * Work out which limb a built trail came from, and how far past it it reaches.
+ * `free` is true when it came from no limb at all (The One's mind-power pulses,
+ * drawn between two points in the air): those are kept exactly as they are.
+ */
+export function trailSource(pose: EnemyPose, trail: NonNullable<MoveKey['trail']>): { spec: TrailSpec; color: string; free: boolean } {
+  let best = { error: Infinity, startError: Infinity, spec: { from: 'frontHand', reach: 14, curve: trail.curveOffset } as TrailSpec };
   for (const limb of TRAIL_LIMBS) {
     const j = limb.joint(pose);
     const e = limb.end(pose);
@@ -90,9 +94,11 @@ export function trailSource(pose: EnemyPose, trail: NonNullable<MoveKey['trail']
     const reach = Math.hypot(trail.end.x - e.x, trail.end.y - e.y);
     const expected = { x: e.x + ((e.x - j.x) / len) * reach, y: e.y + ((e.y - j.y) / len) * reach };
     const error = Math.hypot(expected.x - trail.end.x, expected.y - trail.end.y);
-    if (error < best.error) best = { error, spec: { from: limb.from, reach, curve: trail.curveOffset } };
+    // A limb's trail starts 30% of the way down the limb (see trailFor)
+    const startError = Math.hypot(j.x + (e.x - j.x) * 0.3 - trail.start.x, j.y + (e.y - j.y) * 0.3 - trail.start.y);
+    if (error < best.error) best = { error, startError, spec: { from: limb.from, reach, curve: trail.curveOffset } };
   }
-  return { spec: best.spec, color: trail.color };
+  return { spec: best.spec, color: trail.color, free: best.error > 0.5 || best.startError > 0.5 };
 }
 
 /** Rebuild a move from an edit: new poses and timings, each keeping its original hit effect and weapon. */
@@ -104,8 +110,8 @@ export function applyEdit(move: AttackMove, edit: HeroPoseEdit): AttackMove {
     const pose = assemblePose(rig, 0, false);
     const key: MoveKey = { pose, ms: i === 0 ? 0 : Math.max(20, edit.ms[i] ?? 120) };
     if (source.trail) {
-      const { spec, color } = trailSource(source.pose, source.trail);
-      key.trail = trailFor(pose, spec, color);
+      const { spec, color, free } = trailSource(source.pose, source.trail);
+      key.trail = free ? source.trail : trailFor(pose, spec, color);
       if (source.shot) key.shot = source.shot;
     }
     if (source.prop) key.prop = source.prop;
@@ -115,8 +121,8 @@ export function applyEdit(move: AttackMove, edit: HeroPoseEdit): AttackMove {
   });
   // The first pose is the hit: it must have a hit effect.
   if (!keys[0].trail && originals[0].trail) {
-    const { spec, color } = trailSource(originals[0].pose, originals[0].trail);
-    keys[0].trail = trailFor(keys[0].pose, spec, color);
+    const { spec, color, free } = trailSource(originals[0].pose, originals[0].trail);
+    keys[0].trail = free ? originals[0].trail : trailFor(keys[0].pose, spec, color);
   }
   // Heroes built before holds existed (the Little Dragon) stay without them.
   const hadHolds = (move.sequence ?? []).some((k) => k.hold);
