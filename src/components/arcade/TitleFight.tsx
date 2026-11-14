@@ -1,25 +1,30 @@
 import React, { useEffect, useRef } from 'react';
 import { HeroId, HEROES } from '../../game/heroes';
 import { fighterTier } from '../../game/fighterTier';
-import { getOrientedPose, lerpPose } from '../../game/animations';
+import { getOrientedPose, lerpPose, orientEffectOnly } from '../../game/animations';
+import { comboDuration, comboFrame } from '../../game/combo';
 import { enemyPoseFor } from '../../game/customAnimation';
 import { getActiveAnimations } from '../../game/animationLibrary';
 import { getEnemyStyle } from '../../game/enemyStyles';
 import type { EnemyMotionStyle } from '../../game/enemyMotion';
-import type { BeatNote, Track } from '../../types/game';
+import type { BeatNote, SkeletonPose, Track } from '../../types/game';
 import { drawFighter } from '../fighterArt';
 import { drawEnemyArt } from '../enemyArt';
 import { drawDebrisList } from '../NeonCanvas';
 import { DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris } from '../../game/debrisPhysics';
 import { comboBlastPower, extraShardsForCombo } from '../../game/comboFx';
 import { strikeBlend } from './ui';
-import { approachSpeed, firstNoteFrom, TITLE_HIT_X, titleEnemyAt, titleEnemyLook, titleEnemyRange, TitleEnemyState } from './titleFightBeats';
+import { approachSpeed, firstNoteFrom, TITLE_HIT_X, titleEnemyAt, titleEnemyLook, titleCombo, titleEnemyRange, TitleEnemyState, titleStrike, TitleStrike } from './titleFightBeats';
 
 /**
  * The title screen's fight: your fighter floats on the left of this canvas,
  * facing right, and the title song's enemies float in from the right edge:
  * every enemy in its chart, on its note, at the game's speed (all from the
- * right). Each is hit with your fighter's own moves and broken into pieces
+ * right). Each is hit with your fighter's own moves, played as the game
+ * plays them: the whole combo of each move, the moves of the tier the run
+ * has reached (the tiers go round, so the tier 4 twist and the top form each get their turn),
+ * the last pose held until the next hit, and the pose they wait in between
+ * attacks. Each enemy is broken into pieces
  * like in the game (but without the game's white flash), which fall off the
  * bottom and are gone. The enemies move in your chosen stance. With no music
  * (a browser holds the sound until the first tap or key) the fighter just
@@ -136,6 +141,13 @@ export const TitleFight: React.FC<{
     let lastSongTime = -Infinity;
     let nextId = 1;
     let lastFrame = performance.now();
+    // The move being played: which note set it off, where the fighter was when it began, and how it is played
+    let strikeNote = -1;
+    let strike: TitleStrike | null = null;
+    let strikeFrom: SkeletonPose = hero.idlePose;
+    let strikeFromX = 0;
+    let shown: SkeletonPose = hero.idlePose;
+    let shownX = 0;
 
     const draw = (now: number) => {
       const dt = Math.min(0.05, (now - lastFrame) / 1000);
@@ -176,6 +188,8 @@ export const TitleFight: React.FC<{
         if (lastBroken === null || songTime < lastSongTime - 0.5) {
           lastBroken = firstNoteFrom(notes, songTime) - 1;
           runStart = lastBroken + 1;
+          strikeNote = -1;
+          strike = null;
         }
         lastSongTime = songTime;
         // Break each enemy into pieces the moment it's hit
@@ -237,19 +251,44 @@ export const TitleFight: React.FC<{
 
       // The fighter, floating, throwing their next move on each note
       let pose = hero.idlePose;
+      let offsetX = 0;
       let combo = 0;
       if (music && hero.moves.length > 0) {
         const last = firstNoteFrom(notes, songTime + 1e-6) - 1;
         if (last >= 0) {
+          combo = titleCombo(last - runStart + 1);
+          // A new note: the next move starts from wherever the fighter is now
+          if (last !== strikeNote) {
+            strikeNote = last;
+            strike = titleStrike(hero, combo, last, music.period);
+            strikeFrom = shown;
+            strikeFromX = shownX;
+          }
           const since = songTime - notes[last].time;
-          pose = lerpPose(hero.idlePose, getOrientedPose(hero.moves[last % hero.moves.length].pose, 'right'), strikeBlend(since));
-          combo = Math.max(0, last - runStart + 1);
+          const keys = strike?.move.sequence;
+          if (strike && keys) {
+            const orient = (p: SkeletonPose) => (strike!.still ? orientEffectOnly(p, 'right') : getOrientedPose(p, 'right'));
+            if (since < comboDuration(keys) + strike.holdSec) {
+              const frame = comboFrame(since, strikeFrom, keys, strike.rest, strike.lunge, orient, strike.holdSec, { fromLunge: strikeFromX, stay: strike.still });
+              pose = frame.pose;
+              offsetX = frame.lungeX;
+            } else {
+              pose = strike.rest;
+            }
+          } else if (strike) {
+            // A move with a single pose: out to it and back
+            pose = lerpPose(strike.rest, getOrientedPose(strike.move.pose, 'right'), strikeBlend(since));
+          }
         }
       }
+      shown = pose;
+      shownX = offsetX;
       const tier = fighterTier(combo);
+      // The hit effect is not drawn here: the burst where the blow lands does that job
+      const body = pose.bladeSlash ? { ...pose, bladeSlash: undefined } : pose;
       ctx.save();
-      if (!still) ctx.translate(0, Math.sin((now / 1800) * Math.PI * 2) * 3);
-      drawFighter(ctx, pose, { tier, facing: 1, time: now / 1000, hero: heroId, random: Math.random });
+      ctx.translate(offsetX, still ? 0 : Math.sin((now / 1800) * Math.PI * 2) * 3);
+      drawFighter(ctx, body, { tier, facing: 1, time: now / 1000, hero: heroId, random: Math.random });
       ctx.restore();
 
       // The pieces (in their own colours: no white flash or white-hot pieces here, it was distracting),

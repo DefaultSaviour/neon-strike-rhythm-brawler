@@ -1,3 +1,7 @@
+import { getMoveForCombo } from '../../game/animations';
+import { STILL_DRIFT } from '../../game/combo';
+import type { HeroDefinition } from '../../game/heroes';
+import type { AttackMove, SkeletonPose } from '../../types/game';
 import type { BeatNote, EnemyTier, FrequencyBand } from '../../types/game';
 import { resolveBandTier } from '../../game/enemyStyles';
 import { SPAWN_DISTANCE } from '../../game/layout';
@@ -86,4 +90,48 @@ export function titleEnemyRange(notes: ReadonlyArray<{ time: number }>, songTime
   const from = firstNoteFrom(notes, songTime - HIT_FLASH_SEC);
   const to = firstNoteFrom(notes, songTime + (rightEdge + 40 - TITLE_HIT_X) / speed);
   return [from, to];
+}
+
+/**
+ * How many hits the title screen's fighter takes to go through all five
+ * tiers before starting again from the first: 6 hits of tier 1, 10 of
+ * tier 2, 14 of tier 3, then 20 each of tier 4 and the top form.
+ */
+export const TITLE_COMBO_LOOP = 70;
+
+/**
+ * The combo the title screen shows after this many hits in a row. In a song
+ * the combo only climbs, so the fighter would reach the top form in seconds
+ * and stay there; here it goes round, so every tier (and its tier 4 twist)
+ * gets its turn on show.
+ */
+export function titleCombo(hitsInRun: number): number {
+  return Math.max(0, hitsInRun) % TITLE_COMBO_LOOP;
+}
+
+/**
+ * The move the title screen's fighter throws on a note, played the way the
+ * game plays it: the move for the combo's tier (so the tier 4 twist and the
+ * finishers show up as the run builds), the pose they wait in between
+ * attacks in that tier, how long they hold the last pose, and how far
+ * a hero who never turns drifts toward the enemy.
+ */
+export function titleStrike(hero: HeroDefinition, combo: number, noteIndex: number, periodSec: number): TitleStrike {
+  const move = getMoveForCombo(combo, noteIndex, hero.moves);
+  return {
+    move,
+    rest: move.restPose ?? hero.idlePose,
+    // About two beats, as in the game
+    holdSec: hero.holdsPose ? Math.min(1.4, Math.max(0.6, periodSec * 2)) : 0,
+    still: !!move.still,
+    lunge: move.still ? STILL_DRIFT : 0,
+  };
+}
+
+export interface TitleStrike {
+  move: AttackMove;
+  rest: SkeletonPose;
+  holdSec: number;
+  still: boolean;
+  lunge: number;
 }

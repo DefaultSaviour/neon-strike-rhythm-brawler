@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SPAWN_DISTANCE } from '../../game/layout';
-import { approachSpeed, firstNoteFrom, HIT_FLASH_SEC, TITLE_HIT_X, titleEnemyAt, titleEnemyLook, titleEnemyRange } from './titleFightBeats';
+import { approachSpeed, firstNoteFrom, HIT_FLASH_SEC, TITLE_HIT_X, titleEnemyAt, titleEnemyLook, TITLE_COMBO_LOOP, titleCombo, titleEnemyRange, titleStrike } from './titleFightBeats';
+import { fighterTier } from '../../game/fighterTier';
+import { getHero } from '../../game/heroes';
+import { STILL_DRIFT } from '../../game/combo';
 
 const PERIOD = 60 / 197;
 const notes = [1, 1.3, 1.45, 2, 3.5, 3.5, 6].map((time) => ({ time }));
@@ -45,5 +48,51 @@ describe('the title fight', () => {
   it('looks like the enemy the game would send for that note', () => {
     expect(titleEnemyLook({ time: 0, lane: 'left', enemyType: 'brawler', band: 'bass', tier: 3 })).toEqual({ band: 'bass', tier: 3 });
     expect(titleEnemyLook({ time: 0, lane: 'left', enemyType: 'brawler', pitchCategory: 'kick' }).band).toBe('sub');
+  });
+});
+
+describe("the title fighter's moves", () => {
+  it('throws the moves of the tier the run has reached, like the game', () => {
+    const striker = getHero('striker');
+    expect(titleStrike(striker, 0, 0, 0.42).move.tier).toBe(1);
+    expect(titleStrike(striker, 8, 8, 0.42).move.tier).toBe(2);
+    expect(titleStrike(striker, 20, 20, 0.42).move.tier).toBe(3);
+    expect(titleStrike(striker, 35, 35, 0.42).move.tier).toBe(4);
+    expect(titleStrike(striker, 60, 60, 0.42).move.tier).toBe(5);
+    // And it works through the tier's moves, not the same one each time
+    const names = new Set([0, 1, 2, 3, 4].map((i) => titleStrike(striker, 0, i, 0.42).move.name));
+    expect(names.size).toBe(5);
+  });
+
+  it('shows the tier 4 twist: The One sits in the air, never turns, and drifts toward the enemy', () => {
+    const one = getHero('theOne');
+    const t4 = titleStrike(one, 35, 35, 0.42);
+    expect(t4.still).toBe(true);
+    expect(t4.lunge).toBe(STILL_DRIFT);
+    expect(t4.rest).toBe(t4.move.restPose);
+    expect(Math.max(t4.rest.leftFoot.y, t4.rest.rightFoot.y)).toBeLessThan(64);
+    // Below tier 4 he stands in his own stance and stays put
+    const t1 = titleStrike(one, 0, 0, 0.42);
+    expect(t1.still).toBe(false);
+    expect(t1.lunge).toBe(0);
+    expect(t1.rest).toBe(one.idlePose);
+  });
+
+  it('holds the last pose for about two beats for heroes who hold, and not at all for the others', () => {
+    expect(titleStrike(getHero('striker'), 0, 0, 0.42).holdSec).toBeCloseTo(0.84, 6);
+    expect(titleStrike(getHero('striker'), 0, 0, 0.2).holdSec).toBe(0.6);
+    expect(titleStrike(getHero('babaYaga'), 0, 0, 0.42).holdSec).toBe(0);
+  });
+});
+
+describe("the title fighter's tiers", () => {
+  it('goes through all five tiers and then starts again, so tier 4 always gets its turn', () => {
+    const tiers = Array.from({ length: TITLE_COMBO_LOOP * 2 }, (_, hits) => fighterTier(titleCombo(hits)).minCombo);
+    // Each tier in order, twice over
+    const order = tiers.filter((t, i) => i === 0 || t !== tiers[i - 1]);
+    expect(order).toEqual([0, 6, 16, 30, 50, 0, 6, 16, 30, 50]);
+    // Tier 4 (30 to 49) and the top form get 20 hits each, every time round
+    expect(tiers.slice(0, TITLE_COMBO_LOOP).filter((t) => t === 30)).toHaveLength(20);
+    expect(tiers.slice(0, TITLE_COMBO_LOOP).filter((t) => t === 50)).toHaveLength(20);
   });
 });
