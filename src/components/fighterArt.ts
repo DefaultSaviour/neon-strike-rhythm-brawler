@@ -176,6 +176,9 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   // 4b. The One's long coat tail, flaring out behind his legs
   if (opts.hero === 'theOne') drawCoatTail(ctx, pose, tier, opts.facing, opts.time);
 
+  // 4c. The Scarecrow's post (tier 4), behind his body
+  if (opts.hero === 'scarecrow' && pose.prop === 'post') drawScarecrowPost(ctx, pose);
+
   // 5. Solid neon body. The left limbs lead in every attack pose, so they're in front.
   // The Scarecrow's flying arm is left off the body (drawn out in the air, below).
   const fly = opts.hero === 'scarecrow' ? flyingArmOf(pose, opts.facing) : null;
@@ -2044,6 +2047,31 @@ export function poleEnds(pose: SkeletonPose, facing: 1 | -1) {
   return { tip: muzzle, back: { x: lead.hand.x - dir.x * POLE_BACK, y: lead.hand.y - dir.y * POLE_BACK } };
 }
 
+/** The floor, where the foot of his post is stuck in. */
+const POST_FLOOR = 68;
+const POST_ABOVE_CHEST = 46;
+const POST_BAR = 36;
+
+/**
+ * The post The Scarecrow hangs on in tier 4: it runs up his spine from the
+ * floor to above his head, with a crossbar behind his shoulders. It tips
+ * with him, so its foot stays where it is stuck in the ground.
+ */
+export function postEnds(pose: SkeletonPose) {
+  const c = pose.chest;
+  const dx = pose.pelvis.x - c.x;
+  const dy = pose.pelvis.y - c.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const down = { x: dx / len, y: dy / len };
+  const toFloor = down.y > 0.2 ? (POST_FLOOR - c.y) / down.y : len;
+  return {
+    foot: { x: c.x + down.x * toFloor, y: c.y + down.y * toFloor },
+    top: { x: c.x - down.x * POST_ABOVE_CHEST, y: c.y - down.y * POST_ABOVE_CHEST },
+    barLeft: { x: c.x + down.y * POST_BAR, y: c.y - down.x * POST_BAR },
+    barRight: { x: c.x - down.y * POST_BAR, y: c.y + down.x * POST_BAR },
+  };
+}
+
 /**
  * The Scarecrow's top-level form: he gets a brain. It sits glowing in the
  * open top of his sack head, his hat lifted off it like a lid, with a few
@@ -2058,6 +2086,38 @@ export function scarecrowBrain(pose: SkeletonPose, time: number, facing: 1 | -1)
     return { x: brain.x + Math.cos(a) * r, y: brain.y - 3 + Math.sin(a) * r * 0.7, size: 2 + ((i + Math.floor(time * 6)) % 2) };
   });
   return { brain, sparks };
+}
+
+/** Tier 4: the post he hangs on, stuck in the ground and tipped with him. Drawn behind his body. */
+function drawScarecrowPost(ctx: Ctx, pose: SkeletonPose) {
+  const c = pose.chest;
+  ctx.save();
+  ctx.lineCap = 'round';
+  const { foot, top, barLeft, barRight } = postEnds(pose);
+  for (const [a, b, w] of [[foot, top, 5.4], [barLeft, barRight, 4.4]] as const) {
+    ctx.strokeStyle = '#05050c';
+    ctx.lineWidth = w + 2.3;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.strokeStyle = '#a0703a';
+    ctx.shadowColor = '#c9925a';
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = w;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  // Rope lashing the crossbar to the post
+  ctx.strokeStyle = '#d9b44a';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(c.x - 4, c.y - 2);
+  ctx.lineTo(c.x + 4, c.y + 4);
+  ctx.moveTo(c.x + 4, c.y - 2);
+  ctx.lineTo(c.x - 4, c.y + 4);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** A tuft of straw sticking out at `at`, fanning round the direction `dir` (radians). */
