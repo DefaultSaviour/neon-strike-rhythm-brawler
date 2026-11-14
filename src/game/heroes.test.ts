@@ -99,11 +99,36 @@ describe('The Neon Striker', () => {
     }
   });
 
-  it('every move ends standing on the floor, so the pose can be held', () => {
+  it('every move ends down on the floor (standing, kneeling or in the splits), so the pose can be held', () => {
     for (const m of striker.moves) {
       const last = keysOf(m).at(-1)!;
-      expect(Math.max(last.leftFoot.y, last.rightFoot.y)).toBeCloseTo(68, 3);
+      expect(Math.max(last.leftFoot.y, last.rightFoot.y)).toBeGreaterThan(64);
     }
+  });
+
+  it('no two moves end in the same pose', () => {
+    const ends = striker.moves.map((m) => keysOf(m).at(-1)!);
+    const gap = (a: SkeletonPose, b: SkeletonPose) =>
+      dist(a.head, b.head) + dist(a.leftHand, b.leftHand) + dist(a.rightHand, b.rightHand) + dist(a.leftFoot, b.leftFoot) + dist(a.rightFoot, b.rightFoot);
+    for (let i = 0; i < ends.length; i++) {
+      for (let j = i + 1; j < ends.length; j++) expect(gap(ends[i], ends[j]), `${striker.moves[i].name} vs ${striker.moves[j].name}`).toBeGreaterThan(40);
+    }
+  });
+
+  it('goes big: he gets upside down, does the splits, and jumps high', () => {
+    const key = (name: string, i: number) => keyToPlayerPose(striker.moves.find((m) => m.name === name)!.sequence!.filter((k) => !k.hold)[i]);
+    // Upside down: the head is below the hips
+    for (const [name, i] of [['Cartwheel Kick', 0], ['Flash Kick', 1], ['Dragon Whip', 1], ['Omega Burst', 2]] as const) {
+      const p = key(name, i);
+      expect(p.head.y, name).toBeGreaterThan(p.pelvis.y);
+    }
+    // The splits: feet far apart, hips nearly on the floor
+    const split = key('Axe Kick', 1);
+    expect(Math.abs(split.leftFoot.x - split.rightFoot.x)).toBeGreaterThan(110);
+    expect(split.pelvis.y).toBeGreaterThan(55);
+    // A high jump: both feet well clear of the floor
+    const star = key('Thunder Palm', 1);
+    expect(Math.max(star.leftFoot.y, star.rightFoot.y)).toBeLessThan(40);
   });
 
   it('stays in the last pose of a move, then recovers to the stance when the hold runs out', () => {
