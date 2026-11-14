@@ -71,6 +71,8 @@ export interface StrikeFrame {
   lungeX: number;
   /** True while the blow is landing (used to draw the slash trail) */
   active: boolean;
+  /** True while he is staying in the last pose of a move, waiting for the next attack */
+  held?: boolean;
 }
 
 /**
@@ -122,6 +124,33 @@ export function idleBouncePose(rest: SkeletonPose, pulse: number, sway: number):
     rightKnee: lift(rest.rightKnee, dip * 0.5, dip * 0.6),
     scarf: rest.scarf?.map((pt, i) => ({ x: pt.x - sway * i * 0.8, y: pt.y + dip + Math.sin(sway + i) * i * 1.5 })),
   };
+}
+
+/** Where each scarf segment hangs behind the head when he stands still (matches the Striker's stance). */
+const SCARF_REST = [
+  { back: 8, down: 2 },
+  { back: 22, down: 6 },
+  { back: 38, down: 12 },
+  { back: 55, down: 18 },
+];
+/** How fast each segment catches up with the head (per second): the tip lags the most. */
+const SCARF_FOLLOW = [40, 24, 16, 11];
+
+/**
+ * A scarf that trails the head: each segment chases its place behind the
+ * head, the tip slowest, so it whips round when he spins or changes side
+ * and streams out when he lunges.
+ * @param prev last frame's scarf (or undefined to start at rest)
+ * @param facing 1 when he faces right, -1 when he faces left
+ */
+export function trailingScarf(prev: Point2D[] | undefined, head: Point2D, facing: 1 | -1, dt: number, wave: number): Point2D[] {
+  return SCARF_REST.map((r, i) => {
+    const target = { x: head.x - facing * r.back, y: head.y + r.down + Math.sin(wave + i * 0.9) * (i + 1) * 1.2 };
+    const from = prev?.[i];
+    if (!from) return target;
+    const k = 1 - Math.exp(-SCARF_FOLLOW[i] * Math.max(0, dt));
+    return { x: from.x + (target.x - from.x) * k, y: from.y + (target.y - from.y) * k };
+  });
 }
 
 /**

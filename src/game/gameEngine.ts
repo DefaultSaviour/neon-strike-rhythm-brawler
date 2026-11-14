@@ -21,7 +21,7 @@ import { BREACH_LATE_SEC, DeathReport, explainDeath, judgeOffset, pickTarget, Pr
 import { burstOrb, DEBRIS_GRAVITY, DebrisPiece, DebrisWorld, shatterEnemy, stepDebris, trimDebris } from './debrisPhysics';
 import { BeatGrid, beatPosition, beatPulse, gridForNotes } from '../audio/beatGrid';
 import { songTimeAtEvent } from '../audio/songClock';
-import { idleBouncePose, strikeFrame } from './motion';
+import { idleBouncePose, strikeFrame, trailingScarf } from './motion';
 import { comboDuration, comboFrame } from './combo';
 import { FLOOR_Y, SPAWN_DISTANCE } from './layout';
 import { comboBlastPower, extraShardsForCombo, MAX_DEBRIS, MAX_PARTICLES } from './comboFx';
@@ -214,6 +214,11 @@ export class GameEngine {
   private strikeDuration: number = 0.2;
   private strikeFromPose: SkeletonPose = { ...IDLE_POSE };
   private strikeLunge: number = 0;
+  /** How long the current combo's last pose is held before he recovers (0 for most heroes) */
+  private strikeHoldSec: number = 0;
+  /** The trailing scarf's points last frame, and the clock they were made at */
+  private scarfPoints: SkeletonPose['scarf'];
+  private scarfClock: number = 0;
   /** Keyframes of the combo being played, or null for a single-pose strike */
   private strikeKeys: MoveKey[] | null = null;
 
@@ -760,7 +765,8 @@ export class GameEngine {
       this.crowdPop = 1;
     }
     if (currentMove.sequence) {
-      this.startStrike(lane, getOrientedPose(currentMove.pose, lane), comboDuration(currentMove.sequence), LUNGE_DISTANCE, currentMove.sequence);
+      const holdSec = this.hero.holdsPose ? this.poseHoldSec() : 0;
+      this.startStrike(lane, getOrientedPose(currentMove.pose, lane), comboDuration(currentMove.sequence) + holdSec, LUNGE_DISTANCE, currentMove.sequence, holdSec);
     } else {
       this.startStrike(lane, getOrientedPose(currentMove.pose, lane), currentMove.durationMs / 1000 + 0.06, LUNGE_DISTANCE);
     }
@@ -907,9 +913,16 @@ export class GameEngine {
     this.spawnHitParticles(figure.x, -60, figure.side, 'PERFECT', look.accent);
   }
 
+  /** How long a pose-holding hero waits in his last pose for the next attack: about two beats. */
+  private poseHoldSec(): number {
+    const bpm = this.beatGrid.bpm > 0 ? this.beatGrid.bpm : 120;
+    return Math.min(1.4, Math.max(0.6, 120 / bpm));
+  }
+
   /** Begin a strike animation from wherever the fighter currently is. */
-  private startStrike(lane: Lane, pose: SkeletonPose, durationSec: number, lunge: number, keys: MoveKey[] | null = null) {
+  private startStrike(lane: Lane, pose: SkeletonPose, durationSec: number, lunge: number, keys: MoveKey[] | null = null, holdSec = 0) {
     this.isAttacking = true;
+    this.strikeHoldSec = holdSec;
     this.strikeKeys = keys;
     this.attackDirection = lane;
     this.strikeFromPose = this.currentPose;
@@ -1210,17 +1223,31 @@ export class GameEngine {
       } else {
         const lane = this.attackDirection;
         const frame = this.strikeKeys
-          ? comboFrame(this.animClock - this.strikeStart, this.strikeFromPose, this.strikeKeys, restPose, this.strikeLunge, (p) =>
-              getOrientedPose(p, lane)
+          ? comboFrame(
+              this.animClock - this.strikeStart,
+              this.strikeFromPose,
+              this.strikeKeys,
+              restPose,
+              this.strikeLunge,
+              (p) => getOrientedPose(p, lane),
+              this.strikeHoldSec
             )
           : strikeFrame(progress, this.strikeFromPose, this.lastAttackPose, restPose, this.strikeLunge);
-        this.currentPose = frame.pose;
+        // A held pose still breathes with the music
+        this.currentPose = frame.held ? idleBouncePose(frame.pose, pulse, 0) : frame.pose;
         this.playerOffsetX = frame.lungeX;
         this.strikeActive = frame.active;
       }
     } else {
       this.currentPose = restPose;
       this.playerOffsetX = 0;
+    }
+
+    if (this.hero.trailingScarf) {
+      const facing = this.isAttacking && this.attackDirection === 'left' ? -1 : 1;
+      this.scarfPoints = trailingScarf(this.scarfPoints, this.currentPose.head, facing, this.animClock - this.scarfClock, beatPos * Math.PI);
+      this.scarfClock = this.animClock;
+      this.currentPose = { ...this.currentPose, scarf: this.scarfPoints };
     }
   }
 
