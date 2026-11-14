@@ -20,6 +20,8 @@ import { blendPose, easeInOutCubic, easeOutBack, easeOutCubic, StrikeFrame } fro
 export const COMBO_SNAP_SEC = 0.05;
 /** Time to settle back into the stance after the last keyframe (seconds) */
 export const COMBO_RECOVER_SEC = 0.14;
+/** While holding the last pose, time to step back from the lunge to his spot (seconds) */
+export const HOLD_STEP_BACK_SEC = 0.18;
 /** Fraction of each keyframe's travel during which its trail is drawn */
 const TRAIL_SHOWN_FOR = 0.75;
 
@@ -33,6 +35,8 @@ export function comboDuration(keys: MoveKey[]): number {
  * @param from where the fighter was when the button was pressed (screen space)
  * @param rest the fighting stance to recover to (screen space)
  * @param orient turns a right-facing pose toward the struck lane
+ * @param holdSec how long to stay in the last pose before recovering (0 = recover at once).
+ *   A new attack simply starts from the held pose, so this is how long he waits for one.
  */
 export function comboFrame(
   elapsed: number,
@@ -40,7 +44,8 @@ export function comboFrame(
   keys: MoveKey[],
   rest: SkeletonPose,
   lunge: number,
-  orient: (p: SkeletonPose) => SkeletonPose
+  orient: (p: SkeletonPose) => SkeletonPose,
+  holdSec = 0
 ): StrikeFrame {
   const keyPose = (i: number) => orient(keyToPlayerPose(keys[i]));
   const t0 = Math.max(0, elapsed);
@@ -73,6 +78,17 @@ export function comboFrame(
   delete last.shot;
   delete last.spin;
   delete last.flyingArm;
+
+  // 3a. Stay in the last pose, stepping back to his spot, until the next attack or the hold runs out
+  if (e < holdSec) {
+    const back = easeInOutCubic(Math.min(1, e / HOLD_STEP_BACK_SEC));
+    return { pose: last, lungeX: lunge * (1 - back), active: false, held: true };
+  }
+  if (holdSec > 0) {
+    const t = Math.min(1, (e - holdSec) / COMBO_RECOVER_SEC);
+    return { pose: blendPose(last, rest, easeInOutCubic(t)), lungeX: 0, active: false };
+  }
+
   const t = Math.min(1, e / COMBO_RECOVER_SEC);
   const eased = easeInOutCubic(t);
   return { pose: blendPose(last, rest, eased), lungeX: lunge * (1 - eased), active: false };

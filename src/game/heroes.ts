@@ -1,7 +1,8 @@
 import { AttackMove, SkeletonPose } from '../types/game';
 import { getSavedHeroPoses } from './heroPoseLibrary';
 import { HeroPoseLibrary, heroWithEdits } from './heroPoses';
-import { ATTACK_MOVES, IDLE_POSE } from './animations';
+import { IDLE_POSE } from './animations';
+import { STRIKER_MOVES } from './heroMoves/striker';
 import { BABA_YAGA_IDLE, BABA_YAGA_MOVES } from './heroMoves/babaYaga';
 import { DISCO_KING_IDLE, DISCO_KING_MOVES } from './heroMoves/discoKing';
 import { DRUNKEN_MASTER_IDLE, DRUNKEN_MASTER_MOVES } from './heroMoves/drunkenMaster';
@@ -37,6 +38,13 @@ export interface HeroDefinition {
   /** Fighting stance between attacks (facing right) */
   idlePose: SkeletonPose;
   moves: AttackMove[];
+  /**
+   * After a move he stays in its last pose until the next attack (or about two
+   * beats pass), instead of going straight back to the stance.
+   */
+  holdsPose?: boolean;
+  /** His scarf trails behind his head with a lag (the moves carry no scarf of their own) */
+  trailingScarf?: boolean;
 }
 
 export const HEROES: HeroDefinition[] = [
@@ -46,7 +54,9 @@ export const HEROES: HeroDefinition[] = [
     tagline: 'The original, still unbeaten',
     description: 'The original cyber fighter: blades, flips and a flowing scarf',
     idlePose: IDLE_POSE,
-    moves: ATTACK_MOVES,
+    moves: STRIKER_MOVES,
+    holdsPose: true,
+    trailingScarf: true,
   },
   {
     id: 'dragon',

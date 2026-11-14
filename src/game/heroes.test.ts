@@ -51,9 +51,83 @@ describe('heroes', () => {
     expect(getHero(undefined).id).toBe(DEFAULT_HERO);
   });
 
-  it('the original Neon Striker is unchanged', () => {
-    expect(getHero('striker').moves).toBe(ATTACK_MOVES);
+  it('with no hero given, the original move list is still the default', () => {
     expect(getMoveForCombo(0, 0)).toBe(ATTACK_MOVES[0]);
+  });
+});
+
+describe('The Neon Striker', () => {
+  const striker = getHero('striker');
+  const keysOf = (m: AttackMove) => m.sequence!.map(keyToPlayerPose);
+
+  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all combos with different names', () => {
+    expect([1, 2, 3, 4, 5].map((t) => striker.moves.filter((m) => m.tier === t).length)).toEqual([5, 5, 4, 4, 3]);
+    expect(new Set(striker.moves.map((m) => m.name)).size).toBe(21);
+    for (const m of striker.moves) expect(m.sequence!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps every move simple: 2 or 3 big poses, 4 for a finisher', () => {
+    for (const m of striker.moves) {
+      const poses = m.sequence!.filter((k) => !k.hold).length;
+      expect(poses).toBeLessThanOrEqual(m.tier === 5 ? 4 : 3);
+    }
+  });
+
+  it('jumping moves really leave the ground', () => {
+    const lowestFoot = (name: string) => {
+      const p = keyToPlayerPose(striker.moves.find((m) => m.name === name)!.sequence![0]);
+      return Math.max(p.leftFoot.y, p.rightFoot.y);
+    };
+    for (const name of ['Flying Knee', 'Rocket Punch', 'Dropkick', 'Tornado Kick', 'Scissor Cleave']) expect(lowestFoot(name)).toBeLessThan(60);
+  });
+
+  it('every pose keeps its limbs solid and stays above the floor', () => {
+    for (const m of striker.moves) {
+      for (const p of keysOf(m)) {
+        expectSolidLimbs(p);
+        for (const pt of [p.leftFoot, p.rightFoot, p.leftKnee, p.rightKnee, p.leftHand, p.rightHand, p.head]) {
+          expect(pt.y).toBeLessThanOrEqual(68.001);
+        }
+      }
+    }
+  });
+
+  it('the first keyframe is the hit, with a trail, and the hips never drift far from his spot', () => {
+    for (const m of striker.moves) {
+      expect(m.sequence![0].trail).toBeDefined();
+      for (const k of m.sequence!) expect(Math.abs(k.pose.pelvis.x)).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('every move ends standing on the floor, so the pose can be held', () => {
+    for (const m of striker.moves) {
+      const last = keysOf(m).at(-1)!;
+      expect(Math.max(last.leftFoot.y, last.rightFoot.y)).toBeCloseTo(68, 3);
+    }
+  });
+
+  it('stays in the last pose of a move, then recovers to the stance when the hold runs out', () => {
+    expect(striker.holdsPose).toBe(true);
+    const keys = striker.moves[0].sequence!;
+    const rest = striker.idlePose;
+    const same = (p: SkeletonPose) => p;
+    const hold = 1;
+    const end = comboDuration(keys) - 0.14; // when the last keyframe is reached
+    const last = keyToPlayerPose(keys.at(-1)!);
+
+    const held = comboFrame(end + 0.5, rest, keys, rest, 16, same, hold);
+    expect(held.held).toBe(true);
+    expect(held.pose.rightHand).toEqual(last.rightHand);
+    expect(held.pose.bladeSlash).toBeUndefined(); // the hit effect is over
+    expect(held.lungeX).toBe(0); // he has stepped back to his spot
+
+    const after = comboFrame(end + hold + 0.14, rest, keys, rest, 16, same, hold);
+    expect(after.held).toBeFalsy();
+    expect(after.pose.rightHand.x).toBeCloseTo(rest.rightHand.x, 3);
+
+    // Without a hold (every other hero) he recovers straight away
+    const noHold = comboFrame(end + 0.14, rest, keys, rest, 16, same);
+    expect(noHold.pose.rightHand.x).toBeCloseTo(rest.rightHand.x, 3);
   });
 });
 
