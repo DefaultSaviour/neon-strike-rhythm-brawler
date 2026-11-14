@@ -537,7 +537,47 @@ function drawCodeRain(ctx: Ctx, pose: SkeletonPose, time: number) {
  * the knees, the tail flaring out behind him. It flares more when he is in
  * the air and sways gently with time.
  */
+/**
+ * True when he is sitting cross-legged in the air facing you (The One's tier 4):
+ * knees wide out to either side of the hips, and both feet off the floor.
+ */
+export function sittingFrontOn(pose: SkeletonPose): boolean {
+  const [lo, hi] = [Math.min(pose.leftKnee.x, pose.rightKnee.x), Math.max(pose.leftKnee.x, pose.rightKnee.x)];
+  return hi - pose.pelvis.x > 22 && pose.pelvis.x - lo > 22 && Math.max(pose.leftFoot.y, pose.rightFoot.y) < 60;
+}
+
+/** The corners of his coat when he sits facing you: it hangs evenly to both sides and pools under him, like a robe. */
+export function robeOutline(pose: SkeletonPose, time: number): Point2D[] {
+  const c = pose.chest;
+  const p = pose.pelvis;
+  const sway = Math.sin(time * 2) * 1.5;
+  return [
+    { x: c.x - 9, y: c.y + 1 },
+    { x: c.x + 9, y: c.y + 1 },
+    { x: p.x + 36 + sway, y: p.y + 21 },
+    { x: p.x - 36 + sway, y: p.y + 21 },
+  ];
+}
+
 function drawCoatTail(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, facing: 1 | -1, time: number) {
+  if (sittingFrontOn(pose)) {
+    const pts = robeOutline(pose, time);
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = '#07070c';
+    ctx.strokeStyle = tier.color;
+    ctx.lineWidth = 1.4;
+    ctx.shadowColor = tier.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (const pt of pts.slice(1)) ctx.lineTo(pt.x, pt.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   const c = pose.chest;
   const p = pose.pelvis;
   const back = -facing;
@@ -617,6 +657,24 @@ function drawSunglasses(ctx: Ctx, pose: SkeletonPose, facing: 1 | -1) {
   ctx.lineWidth = 0.8;
   ctx.shadowColor = '#39ff6a';
   ctx.shadowBlur = 6;
+  if (sittingFrontOn(pose)) {
+    // Facing you: a lens over each eye, with the bridge between them
+    for (const dx of [-3.4, 3.4]) {
+      ctx.beginPath();
+      ctx.ellipse(h.x + dx, h.y - 1, 2.8, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(h.x - 0.8, h.y - 1.4);
+    ctx.lineTo(h.x + 0.8, h.y - 1.4);
+    ctx.moveTo(h.x - 6.2, h.y - 1.5);
+    ctx.lineTo(h.x - 8.6, h.y - 2.2);
+    ctx.moveTo(h.x + 6.2, h.y - 1.5);
+    ctx.lineTo(h.x + 8.6, h.y - 2.2);
+    ctx.stroke();
+    return;
+  }
   for (const dx of [2, 7]) {
     ctx.beginPath();
     ctx.ellipse(h.x + facing * dx, h.y - 1, 2.8, 2, 0, 0, Math.PI * 2);

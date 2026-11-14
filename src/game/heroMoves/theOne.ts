@@ -1,12 +1,23 @@
-import { AttackMove, SkeletonPose } from '../../types/game';
+import { AttackMove, Point2D, SkeletonPose } from '../../types/game';
 import { FLOOR } from '../enemyMotion';
-import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHolds } from './poseBuilder';
+import { STILL_DRIFT } from '../combo';
+import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHolds } from './poseBuilder';
 
 /**
  * THE ONE: a calm, bullet-time martial artist in a long black coat, in the
  * spirit of the late-90s cyberpunk kung-fu films. Effortless, precise
- * strikes, and in the overdrive tier he simply floats, kicking in slow
- * motion. Physical only: no magic.
+ * strikes in tiers 1 to 3 and 5.
+ *
+ * Tier 4 is his twist: he stops fighting with his body at all. He sits
+ * cross-legged in the air like a monk at prayer, facing you, palms pressed
+ * together at his chest, and does not move. He never turns to face an
+ * enemy: the whole of him simply drifts over toward the side being
+ * attacked, and the hit appears there as a cut in the air, with nothing
+ * connecting it to him. Between attacks he stays sitting there (the tier's
+ * rest pose).
+ *
+ * He holds the last pose of every move until the next attack (`holdsPose`
+ * in heroes.ts), so each move ends in its own pose.
  *
  * Built the Baba Yaga way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
@@ -39,11 +50,49 @@ const wide = { frontLeg: { x: 22, y: F }, backLeg: { x: -20, y: F } };
 /** A lunge forward, hips kept near the centre. */
 const lunge = { pelvis: { x: 6, y: 20 }, frontLeg: { x: 30, y: F }, backLeg: { x: -20, y: F } };
 
+/** Sitting cross-legged in the air, seen from the front: knees wide out to either side, shins crossing flat under him. */
+const lotus = { frontLeg: { upper: 12, lower: 162 }, backLeg: { upper: 168, lower: 18 } };
+/** Sitting in the air with his hips at this height (lower numbers are higher up). */
+const sit = (y: number) => ({ pelvis: { x: 0, y }, ...lotus });
+/**
+ * Where the enemy stands when the hit lands, measured from his own middle:
+ * the strike line is 78 out, and by then he has drifted STILL_DRIFT toward it.
+ */
+const ENEMY_X = 78 - STILL_DRIFT;
+
+/** A cut that appears in the air, given by its two ends. */
+interface Cut {
+  from: Point2D;
+  to: Point2D;
+  curve?: number;
+}
+
 type Key = FighterSpec & { ms?: number };
 
 let nextId = 301;
 function combo(tier: AttackMove['tier'], name: string, description: string, keys: Key[]): AttackMove {
   return comboMove(nextId++, tier, name, description, withHolds(keys.map((k) => buildKey(k, TRAIL, k.ms ?? 0))));
+}
+
+/** Tier 4, always: sitting cross-legged in the air, palms pressed together in front of his chest, elbows out. */
+const lotusAt = (y: number): FighterSpec => {
+  const base: FighterSpec = { ...sit(y), lean: 0, frontArm: straight(90), backArm: straight(90) };
+  const palms = { x: 0, y: y - 21 };
+  return { ...base, frontArm: armReaching(base, 'front', palms, true), backArm: armReaching(base, 'back', palms) };
+};
+export const THE_ONE_LOTUS: SkeletonPose = buildFighterPose(lotusAt(6), TRAIL);
+
+/**
+ * A tier 4 move. He does not move a muscle or turn his head: he sits in the
+ * air (lifting a touch as the hit lands, then settling), and the hit simply
+ * appears as a cut in the air where the enemy stands. `still` keeps him
+ * facing the same way and drifts the whole of him toward the attacking side.
+ */
+function mind(name: string, description: string, cut: Cut): AttackMove {
+  const hit = buildKey(lotusAt(3), TRAIL, 0);
+  hit.trail = { start: cut.from, end: cut.to, curveOffset: cut.curve ?? 0, color: TRAIL };
+  const settle = buildKey(lotusAt(6), TRAIL, 200);
+  return { ...comboMove(nextId++, 4, name, description, withHolds([hit, settle])), restPose: THE_ONE_LOTUS, still: true };
 }
 
 /** Relaxed and upright, lead hand out palm-up: "come on". */
@@ -90,12 +139,12 @@ export const THE_ONE_MOVES: AttackMove[] = [
   ]),
   combo(2, 'Wall-Run Kick', 'Runs up the wall and kicks off it, high and sideways', [
     { pelvis: { x: 0, y: -16 }, lean: -32, frontArm: guard, backArm: armsBack, frontLeg: straight(-12), backLeg: tucked, trail: { from: 'frontFoot', reach: 22 } },
-    { ms: 200, pelvis: { x: 4, y: 24 }, lean: 10, frontArm: { upper: 40, lower: -55 }, backArm: relaxed, frontLeg: { x: 26, y: F }, backLeg: { x: -14, y: F } },
+    { ms: 200, pelvis: { x: 4, y: 34 }, lean: 22, frontArm: { upper: 75, lower: 85 }, backArm: armsBack, frontLeg: { x: 26, y: F }, backLeg: { x: -18, y: F } },
   ]),
   combo(2, 'Corkscrew Kick', 'Leaps and twists in the air: one leg, then the other', [
     { pelvis: { x: 0, y: -14 }, lean: -20, tilt: 10, frontArm: spreadFront, backArm: spreadBack, frontLeg: tucked, backLeg: straight(-6), trail: { from: 'backFoot', reach: 20, curve: 14 } },
     { ms: 120, pelvis: { x: 2, y: -14 }, lean: -20, tilt: -10, frontArm: spreadBack, backArm: spreadFront, frontLeg: straight(-4), backLeg: tucked, trail: { from: 'frontFoot', reach: 20, curve: -14 } },
-    { ms: 170, pelvis: { x: 2, y: 22 }, lean: 10, frontArm: { upper: 40, lower: -55 }, backArm: relaxed, ...wide },
+    { ms: 170, pelvis: { x: 2, y: 22 }, lean: 0, frontArm: spreadFront, backArm: spreadBack, ...wide },
   ]),
   combo(2, 'Twin Palm Strike', 'Both palms driven out together from a low stance', [
     { ...lunge, lean: 16, frontArm: straight(-2), backArm: straight(6), trail: { from: 'frontHand', reach: 22 } },
@@ -103,14 +152,14 @@ export const THE_ONE_MOVES: AttackMove[] = [
   ]),
   combo(2, 'Flying Knee', 'Leaps straight up and drives the knee through the chin', [
     { pelvis: { x: 2, y: -12 }, lean: 6, frontArm: armsBack, backArm: { upper: 30, lower: -60 }, frontLeg: { upper: -55, lower: 80 }, backLeg: { upper: 100, lower: 120 }, trail: { from: 'frontKnee', reach: 18, curve: -6 } },
-    { ms: 190, pelvis: { x: 2, y: 22 }, lean: 10, frontArm: { upper: 40, lower: -55 }, backArm: relaxed, ...wide },
+    { ms: 190, pelvis: { x: 2, y: 14 }, lean: 0, frontArm: { upper: -10, lower: -80 }, backArm: relaxed, ...wide },
   ]),
 
   // =================== Tier 3: bullet time ===================
   combo(3, 'Air Pirouette Kick', 'Spins up into the air with a high kick, then a back heel', [
     { pelvis: { x: 0, y: -16 }, lean: -24, frontArm: spreadFront, backArm: spreadBack, frontLeg: straight(-30), backLeg: tucked, trail: { from: 'frontFoot', reach: 20, curve: -18 } },
     { ms: 130, pelvis: { x: 2, y: -16 }, lean: -30, tilt: 10, frontArm: spreadBack, backArm: spreadFront, frontLeg: tucked, backLeg: straight(4), trail: { from: 'backFoot', reach: 20, curve: 16 } },
-    { ms: 180, pelvis: { x: 2, y: 22 }, lean: 10, frontArm: { upper: 40, lower: -55 }, backArm: relaxed, ...wide },
+    { ms: 180, pelvis: { x: 0, y: 36 }, lean: 14, tilt: 22, frontArm: { upper: 80, lower: 95 }, backArm: { upper: 100, lower: 85 }, frontLeg: { x: 20, y: F }, backLeg: { x: -24, y: F } },
   ]),
   combo(3, 'Hands-Only Spin', 'Arms out like blades, he spins and strikes with each hand in turn', [
     { pelvis: { x: 2, y: 12 }, lean: 4, frontArm: straight(0), backArm: spreadBack, ...wide, trail: { from: 'frontHand', reach: 20, curve: 18 } },
@@ -120,7 +169,7 @@ export const THE_ONE_MOVES: AttackMove[] = [
   combo(3, 'Lean-Back Flip Kick', 'Leans back as the leg arcs up, flips right over, and lands', [
     { pelvis: { x: -2, y: 4 }, lean: -55, frontArm: { upper: 170, lower: 180 }, backArm: { upper: 150, lower: 170 }, frontLeg: straight(-60), backLeg: { upper: 100, lower: 140 }, trail: { from: 'frontFoot', reach: 22, curve: -24 } },
     { ms: 150, pelvis: { x: -4, y: -14 }, lean: -110, frontArm: { upper: 200, lower: 210 }, backArm: { upper: 190, lower: 200 }, frontLeg: straight(-115), backLeg: { upper: -80, lower: -50 } },
-    { ms: 160, pelvis: { x: -2, y: 22 }, lean: 10, frontArm: { upper: 40, lower: -55 }, backArm: relaxed, ...wide },
+    { ms: 160, pelvis: { x: -2, y: 8 }, lean: 0, frontArm: { upper: 60, lower: -110 }, backArm: relaxed, frontLeg: { x: 8, y: F }, backLeg: { x: -12, y: F } },
   ]),
   combo(3, 'Hundred Punch Blur', 'Rooted in place, punches too fast to follow', [
     { pelvis: { x: 2, y: 12 }, lean: 12, frontArm: straight(-6), backArm: guard, ...wide, trail: { from: 'frontHand', reach: 16 } },
@@ -128,25 +177,26 @@ export const THE_ONE_MOVES: AttackMove[] = [
     { ms: 55, pelvis: { x: 2, y: 12 }, lean: 12, frontArm: straight(8), backArm: guard, ...wide, trail: { from: 'frontHand', reach: 16 } },
   ]),
 
-  // ================= Tier 4: he floats (slow-motion air moves) =================
-  combo(4, 'Float Kick', 'Floats up off the floor and kicks three times in slow motion', [
-    { pelvis: { x: 0, y: -24 }, lean: -20, frontArm: spreadFront, backArm: spreadBack, frontLeg: straight(-8), backLeg: { upper: 100, lower: 120 }, trail: { from: 'frontFoot', reach: 22 } },
-    { ms: 220, pelvis: { x: 0, y: -26 }, lean: -14, frontArm: spreadFront, backArm: spreadBack, frontLeg: { upper: 100, lower: 120 }, backLeg: straight(2), trail: { from: 'backFoot', reach: 22 } },
-    { ms: 220, pelvis: { x: 0, y: -26 }, lean: -24, frontArm: spreadFront, backArm: spreadBack, frontLeg: straight(-18), backLeg: { upper: 100, lower: 120 }, trail: { from: 'frontFoot', reach: 22 } },
-  ]),
-  combo(4, 'Hover Spin', 'Hangs in the air turning slowly, arms and legs out like spokes', [
-    { pelvis: { x: 0, y: -22 }, lean: -6, frontArm: straight(-4), backArm: spreadBack, frontLeg: { upper: 100, lower: 110 }, backLeg: { upper: 80, lower: 100 }, trail: { from: 'frontHand', reach: 20, curve: 16 } },
-    { ms: 220, pelvis: { x: 0, y: -24 }, lean: -10, tilt: 10, frontArm: spreadBack, backArm: spreadFront, frontLeg: straight(4), backLeg: straight(176), trail: { from: 'frontFoot', reach: 20, curve: 16 } },
-  ]),
-  combo(4, 'Hang-Time Axe', 'Floats up with the leg raised high, hangs there, then chops it down', [
-    { pelvis: { x: 0, y: -22 }, lean: -16, frontArm: spreadFront, backArm: spreadBack, frontLeg: { upper: -80, lower: -82 }, backLeg: { upper: 100, lower: 120 }, trail: { from: 'frontFoot', reach: 18, curve: -20 } },
-    { ms: 260, pelvis: { x: 0, y: -26 }, lean: -18, frontArm: spreadFront, backArm: spreadBack, frontLeg: { upper: -84, lower: -86 }, backLeg: { upper: 100, lower: 120 } },
-    { ms: 120, pelvis: { x: 2, y: -6 }, lean: 10, frontArm: { upper: 60, lower: -30 }, backArm: armsBack, frontLeg: straight(45), backLeg: { upper: 100, lower: 120 }, trail: { from: 'frontFoot', reach: 18, curve: -16 } },
-  ]),
-  combo(4, 'Slow-Mo Flying Side Kick', 'A flying side kick that hangs in the air in slow motion', [
-    { pelvis: { x: 0, y: -20 }, lean: -40, frontArm: armsBack, backArm: { upper: 160, lower: 150 }, frontLeg: straight(-6), backLeg: tucked, trail: { from: 'frontFoot', reach: 26 } },
-    { ms: 340, pelvis: { x: 6, y: -22 }, lean: -42, frontArm: armsBack, backArm: { upper: 160, lower: 150 }, frontLeg: straight(-4), backLeg: tucked, trail: { from: 'frontFoot', reach: 26 } },
-  ]),
+  // ================= Tier 4: the lotus (he sits in the air; the hits just appear) =================
+  mind('A Thought', 'He thinks it, and a cut falls across them from above', {
+    from: { x: ENEMY_X - 14, y: -46 },
+    to: { x: ENEMY_X + 14, y: 22 },
+    curve: 8,
+  }),
+  mind('Stillness', 'Nothing moves, and a line opens straight through them', {
+    from: { x: ENEMY_X - 16, y: -14 },
+    to: { x: ENEMY_X + 16, y: -14 },
+  }),
+  mind('Silence', 'A cut drops down through them from over their head', {
+    from: { x: ENEMY_X, y: -62 },
+    to: { x: ENEMY_X + 2, y: 40 },
+    curve: -8,
+  }),
+  mind('A Breath', 'He breathes out, and a cut rises up through them from the floor', {
+    from: { x: ENEMY_X - 14, y: 34 },
+    to: { x: ENEMY_X + 14, y: -48 },
+    curve: -10,
+  }),
 
   // ================= Tier 5: legendary finishers =================
   combo(5, 'Surrounded', 'Surrounded: a punch ahead, a kick behind, a kick ahead, and a final palm', [

@@ -160,6 +160,12 @@ export interface AttackMove {
   impactOffset?: Point2D;
   /** A slam: shakes the screen harder and gets a crowd-pop flash at the screen edges */
   slam?: boolean;
+  /**
+   * He never turns to face the enemy for this move: his body stays exactly as it is, and the whole
+   * of him drifts over toward the side he is attacking instead (see STILL_DRIFT). Only the hit
+   * effect goes to the enemy's side.
+   */
+  still?: boolean;
   /** While this move's tier is up, the hero holds this pose between attacks instead of their stance */
   restPose?: SkeletonPose;
   tier: 1 | 2 | 3 | 4 | 5; // 1: Basic, 2: Advanced Acrobatic, 3: Superhuman Cyber, 4: Overdrive Master, 5: God-Tier Finisher

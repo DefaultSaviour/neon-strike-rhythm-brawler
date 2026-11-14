@@ -1208,7 +1208,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   // Glow, colour, lightning and the top-level form all come from the combo tier (see fighterTier.ts).
   const tier = fighterTier(combo);
 
-  const facing = engine.attackDirection === 'left' ? -1 : 1;
+  const facing = engine.bodyFacing === 'left' ? -1 : 1;
   ctx.save();
   ctx.translate(engine.playerOffsetX, 0);
 

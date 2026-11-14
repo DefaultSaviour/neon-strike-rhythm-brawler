@@ -22,6 +22,15 @@ export const COMBO_SNAP_SEC = 0.05;
 export const COMBO_RECOVER_SEC = 0.14;
 /** While holding the last pose, time to step back from the lunge to his spot (seconds) */
 export const HOLD_STEP_BACK_SEC = 0.18;
+/** How far a hero who never turns (a `still` move) drifts toward the side he is attacking (world units) */
+export const STILL_DRIFT = 18;
+
+export interface ComboOptions {
+  /** Where his body already was, sideways, when the button was pressed: the move starts from there, not from the middle */
+  fromLunge?: number;
+  /** While holding the last pose he stays over on the side he attacked, instead of stepping back to the middle */
+  stay?: boolean;
+}
 /** Fraction of each keyframe's travel during which its trail is drawn */
 const TRAIL_SHOWN_FOR = 0.75;
 
@@ -45,15 +54,17 @@ export function comboFrame(
   rest: SkeletonPose,
   lunge: number,
   orient: (p: SkeletonPose) => SkeletonPose,
-  holdSec = 0
+  holdSec = 0,
+  opts: ComboOptions = {}
 ): StrikeFrame {
+  const fromLunge = opts.fromLunge ?? 0;
   const keyPose = (i: number) => orient(keyToPlayerPose(keys[i]));
   const t0 = Math.max(0, elapsed);
 
   // 1. Snap into the first hit
   if (t0 < COMBO_SNAP_SEC) {
     const t = t0 / COMBO_SNAP_SEC;
-    return { pose: blendPose(from, keyPose(0), easeOutBack(t)), lungeX: lunge * easeOutCubic(t), active: true };
+    return { pose: blendPose(from, keyPose(0), easeOutBack(t)), lungeX: fromLunge + (lunge - fromLunge) * easeOutCubic(t), active: true };
   }
 
   // 2. Follow-up hits: rotate from each keyframe into the next
@@ -81,12 +92,12 @@ export function comboFrame(
 
   // 3a. Stay in the last pose, stepping back to his spot, until the next attack or the hold runs out
   if (e < holdSec) {
-    const back = easeInOutCubic(Math.min(1, e / HOLD_STEP_BACK_SEC));
+    const back = opts.stay ? 0 : easeInOutCubic(Math.min(1, e / HOLD_STEP_BACK_SEC));
     return { pose: last, lungeX: lunge * (1 - back), active: false, held: true };
   }
   if (holdSec > 0) {
-    const t = Math.min(1, (e - holdSec) / COMBO_RECOVER_SEC);
-    return { pose: blendPose(last, rest, easeInOutCubic(t)), lungeX: 0, active: false };
+    const eased = easeInOutCubic(Math.min(1, (e - holdSec) / COMBO_RECOVER_SEC));
+    return { pose: blendPose(last, rest, eased), lungeX: opts.stay ? lunge * (1 - eased) : 0, active: false };
   }
 
   const t = Math.min(1, e / COMBO_RECOVER_SEC);

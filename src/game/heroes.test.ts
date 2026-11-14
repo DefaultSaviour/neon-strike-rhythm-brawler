@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AttackMove, Point2D, SkeletonPose } from '../types/game';
-import { ATTACK_MOVES, getMoveForCombo, getOrientedPose } from './animations';
+import { ATTACK_MOVES, getMoveForCombo, getOrientedPose, orientEffectOnly } from './animations';
 import { LIMB } from './enemyMotion';
 import { DEFAULT_HERO, getHero, HEROES } from './heroes';
 import { EMPTY_STATS, isHeroUnlocked } from './heroUnlocks';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
 import { SAW_FACE_POSE_EDITS } from './heroMoves/sawFacePoses';
-import { COMBO_SNAP_SEC, comboDuration, comboFrame } from './combo';
+import { COMBO_SNAP_SEC, comboDuration, comboFrame, STILL_DRIFT } from './combo';
 import { muzzlePoint } from '../components/fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -384,6 +384,99 @@ describe('The One', () => {
     expect(floating).toHaveLength(4);
     for (const m of floating) {
       for (const k of m.sequence!) expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y)).toBeLessThan(64);
+    }
+  });
+
+  it('in tier 4 he sits cross-legged in the air: knees out to either side, feet tucked in under him', () => {
+    for (const m of one.moves.filter((mv) => mv.tier === 4)) {
+      for (const k of m.sequence!) {
+        const p = k.pose;
+        expect(p.frontKnee.x - p.pelvis.x).toBeGreaterThan(25);
+        expect(p.pelvis.x - p.backKnee.x).toBeGreaterThan(25);
+        expect(Math.abs(p.frontFoot.x - p.pelvis.x)).toBeLessThan(8);
+        expect(Math.abs(p.backFoot.x - p.pelvis.x)).toBeLessThan(8);
+      }
+    }
+  });
+
+  it('in tier 4 he sits like a monk at prayer in every keyframe: palms together at his chest, elbows out either side', () => {
+    const poses = one.moves.filter((mv) => mv.tier === 4).flatMap((m) => [...m.sequence!.map((k) => k.pose)]);
+    for (const p of poses) {
+      expect(dist(p.frontHand, p.backHand)).toBeLessThan(3);
+      expect(Math.abs(p.frontHand.x - p.pelvis.x)).toBeLessThan(3);
+      expect(p.frontHand.y).toBeGreaterThan(p.chest.y); // below the collar
+      expect(p.frontHand.y).toBeLessThan(p.pelvis.y); // above the lap
+      expect(p.frontElbow.x).toBeGreaterThan(p.pelvis.x + 10);
+      expect(p.backElbow.x).toBeLessThan(p.pelvis.x - 10);
+    }
+  });
+
+  it('in tier 4 he never turns: only the hit goes over to the enemy on the left', () => {
+    for (const m of one.moves) expect(!!m.still).toBe(m.tier === 4);
+    const hit = one.moves.find((m) => m.tier === 4)!.pose;
+    const left = orientEffectOnly(hit, 'left');
+    expect(left.leftHand).toEqual(hit.leftHand);
+    expect(left.leftKnee).toEqual(hit.leftKnee);
+    expect(left.head).toEqual(hit.head);
+    expect(left.bladeSlash!.end.x).toBeCloseTo(-hit.bladeSlash!.end.x, 6);
+    expect(orientEffectOnly(hit, 'right')).toBe(hit);
+  });
+
+  it('in tier 4 the hits just appear: each is a cut in the air on the strike line, touching nothing of his', () => {
+    const cuts = one.moves.filter((mv) => mv.tier === 4).map((m) => ({ name: m.name, hit: m.sequence![0] }));
+    for (const { name, hit } of cuts) {
+      const reach = Math.max(hit.pose.frontHand.x, hit.pose.frontKnee.x, hit.pose.frontFoot.x, hit.pose.frontElbow.x);
+      const [lo, hi] = [Math.min(hit.trail!.start.x, hit.trail!.end.x), Math.max(hit.trail!.start.x, hit.trail!.end.x)];
+      expect(lo, name).toBeGreaterThan(reach + 10); // a clear gap between him and the cut
+      // Once he has drifted over, the cut sits across the strike line at 78
+      expect(lo + STILL_DRIFT).toBeLessThanOrEqual(78);
+      expect(hi + STILL_DRIFT).toBeGreaterThanOrEqual(78);
+    }
+    for (let i = 0; i < cuts.length; i++) {
+      for (let j = i + 1; j < cuts.length; j++) {
+        const [p, q] = [cuts[i].hit.trail!, cuts[j].hit.trail!];
+        expect(dist(p.start, q.start) + dist(p.end, q.end)).toBeGreaterThan(30);
+      }
+    }
+  });
+
+  it('drifts his whole body to the side he attacks, stays there while he holds, and starts the next move from there', () => {
+    const keys = one.moves.find((m) => m.tier === 4)!.sequence!;
+    const rest = one.idlePose;
+    const same = (p: SkeletonPose) => p;
+    const end = comboDuration(keys) - 0.14;
+    // Over to the right, and still there well into the hold
+    const held = comboFrame(end + 0.5, rest, keys, rest, STILL_DRIFT, same, 1, { stay: true });
+    expect(held.held).toBe(true);
+    expect(held.lungeX).toBe(STILL_DRIFT);
+    // The next attack, to the left, starts from where he is and glides across: no jump back to the middle
+    const start = comboFrame(0, rest, keys, rest, -STILL_DRIFT, same, 1, { fromLunge: STILL_DRIFT, stay: true });
+    expect(start.lungeX).toBe(STILL_DRIFT);
+    const landed = comboFrame(COMBO_SNAP_SEC, rest, keys, rest, -STILL_DRIFT, same, 1, { fromLunge: STILL_DRIFT, stay: true });
+    expect(landed.lungeX).toBeCloseTo(-STILL_DRIFT, 6);
+    // He stays clear of the timing circle (its edge is at 78 - 22): his knee is the widest part of him
+    const knee = Math.max(...keys.map((k) => k.pose.frontKnee.x));
+    expect(knee + STILL_DRIFT).toBeLessThan(78 - 22);
+  });
+
+  it('stays sitting in the air at prayer between tier 4 attacks, and nowhere else', () => {
+    const rest = one.moves.find((m) => m.tier === 4)!.restPose!;
+    expect(Math.max(rest.leftFoot.y, rest.rightFoot.y)).toBeLessThan(64);
+    expect(dist(rest.leftHand, rest.rightHand)).toBeLessThan(3);
+    for (const m of one.moves) expect(!!m.restPose).toBe(m.tier === 4);
+  });
+
+  it('holds the last pose of each move, and no two moves in a tier end in the same pose', () => {
+    expect(one.holdsPose).toBe(true);
+    const gap = (a: SkeletonPose, b: SkeletonPose) =>
+      dist(a.head, b.head) + dist(a.leftHand, b.leftHand) + dist(a.rightHand, b.rightHand) + dist(a.leftFoot, b.leftFoot) + dist(a.rightFoot, b.rightFoot);
+    // Not tier 4: there he ends every move the same way, sitting still
+    for (const tier of [1, 2, 3, 5]) {
+      const moves = one.moves.filter((m) => m.tier === tier);
+      const ends = moves.map((m) => keyToPlayerPose(m.sequence!.at(-1)!));
+      for (let i = 0; i < ends.length; i++) {
+        for (let j = i + 1; j < ends.length; j++) expect(gap(ends[i], ends[j]), `${moves[i].name} vs ${moves[j].name}`).toBeGreaterThan(20);
+      }
     }
   });
 

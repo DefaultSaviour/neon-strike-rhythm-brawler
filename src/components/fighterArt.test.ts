@@ -4,7 +4,7 @@ import { getHero } from '../game/heroes';
 import { keyToPlayerPose } from '../game/heroMoves/poseBuilder';
 import { getOrientedPose } from '../game/animations';
 import { Point2D } from '../types/game';
-import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, flyingArmOf, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers, WING_REACH, wingFins } from './fighterArt';
+import { ballerinaArms, blossomStorm, katanaTip, championBelt, codeRainStreaks, coinHalo, dizzyHalo, dizzySpeed, discoFever, dragonSpiritPath, kidCrane, battlePlate, spearTip, stallionSun, applyHeroBuild, axeHead, bodyBulk, flyingArmOf, HERO_BUILDS, lionMane, meatHooks, poleEnds, tinHeart, sawBarTip, scarecrowBrain, swanTutuFeathers, robeOutline, sittingFrontOn, WING_REACH, wingFins } from './fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -454,5 +454,26 @@ describe('the Neon Striker in his armour', () => {
     expect(c.x).toBeCloseTo(0, 5);
     expect(c.y).toBeGreaterThan(-50);
     expect(c.y).toBeLessThan(-36);
+  });
+});
+
+describe('The One sitting in the air (tier 4)', () => {
+  const one = getHero('theOne');
+  const lotus = one.moves.find((m) => m.tier === 4)!.restPose!;
+
+  it('is drawn facing you only when he sits cross-legged in the air, never in his standing moves', () => {
+    expect(sittingFrontOn(lotus)).toBe(true);
+    expect(sittingFrontOn(one.idlePose)).toBe(false);
+    for (const m of one.moves.filter((mv) => mv.tier !== 4)) {
+      for (const k of m.sequence!) expect(sittingFrontOn(keyToPlayerPose(k)), m.name).toBe(false);
+    }
+  });
+
+  it('his coat hangs evenly to both sides and pools under him, wider than his knees', () => {
+    const [topL, topR, hemR, hemL] = robeOutline(lotus, 0);
+    expect(topL.x + topR.x).toBeCloseTo(lotus.chest.x * 2, 6);
+    expect(hemL.x + hemR.x).toBeCloseTo(lotus.pelvis.x * 2, 6);
+    expect(hemR.x).toBeGreaterThan(Math.max(lotus.leftKnee.x, lotus.rightKnee.x));
+    expect(hemR.y).toBeGreaterThan(lotus.pelvis.y);
   });
 });
