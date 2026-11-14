@@ -1,6 +1,6 @@
 import { AttackMove, SkeletonPose } from '../../types/game';
 import { FLOOR } from '../enemyMotion';
-import { buildFighterPose, buildKey, FighterSpec, keyToPlayerPose, LimbAngles } from './poseBuilder';
+import { buildFighterPose, buildKey, FighterSpec, keyToPlayerPose, LimbAngles, withHolds } from './poseBuilder';
 
 /**
  * THE LITTLE DRAGON: a lightning-fast martial artist in the spirit of the
@@ -11,7 +11,7 @@ import { buildFighterPose, buildKey, FighterSpec, keyToPlayerPose, LimbAngles } 
  * button press, then the follow-ups play out (extra hits, spins, landings).
  * Between keyframes each bone rotates around its joint (see combo.ts).
  *
- * 21 moves across the 5 combo tiers (5, 5, 4, 4, 3). Poses are built from
+ * 25 moves across the 5 combo tiers (5, 5, 8, 4, 3). Poses are built from
  * joint angles (see poseBuilder.ts): 0 deg = toward the enemy, 90 = down,
  * -90 = up, 180 = back. Feet planted on the floor are at y = 68.
  */
@@ -42,6 +42,22 @@ function combo(tier: AttackMove['tier'], name: string, description: string, keys
   const sequence = keys.map((k) => buildKey(k, TRAIL, k.ms ?? 0));
   const durationMs = 50 + sequence.slice(1).reduce((s, k) => s + k.ms, 0) + 140;
   return { id: nextId++, tier, name, description, durationMs, pose: keyToPlayerPose(sequence[0]), sequence };
+}
+
+/** Tier 4: balanced on the rear leg, hips over the standing foot. */
+const onOneLeg = { pelvis: { x: 0, y: 7 }, backLeg: { x: -4, y: F } };
+
+/** Tier 4 between attacks: on one leg, lead knee raised and ready, hands up. */
+export const ONE_LEG_REST: SkeletonPose = buildFighterPose(
+  { ...onOneLeg, lean: -4, frontArm: leadReady, backArm: guard, frontLeg: { upper: -35, lower: 85 } },
+  TRAIL
+);
+
+/** A tier 4 move: thrown from one leg, and he stays on that leg after it. Its hits are held so they read. */
+function oneLeg(name: string, description: string, keys: Key[]): AttackMove {
+  const sequence = withHolds(keys.map((k) => buildKey(k, TRAIL, k.ms ?? 0)));
+  const durationMs = 50 + sequence.slice(1).reduce((sum, k) => sum + k.ms, 0) + 140;
+  return { id: nextId++, tier: 4, name, description, durationMs, pose: keyToPlayerPose(sequence[0]), sequence, restPose: ONE_LEG_REST };
 }
 
 /** The classic stance: low, on the balls of the feet, lead hand forward. */
@@ -128,6 +144,7 @@ export const LITTLE_DRAGON_MOVES: AttackMove[] = [
       trail: { from: 'frontHand', reach: 24, curve: -10 },
     },
     { ms: 140, pelvis: { x: 8, y: -6 }, lean: 0, frontArm: { upper: -86, lower: -90 }, backArm: { upper: 150, lower: 170 }, frontLeg: tucked, backLeg: { upper: 100, lower: 120 } },
+    { ms: 120, pelvis: { x: 6, y: 14 }, lean: 0, frontArm: straight(-85), backArm: { upper: 110, lower: 20 }, frontLeg: { x: 20, y: F }, backLeg: { x: -12, y: F } },
   ]),
   combo(2, 'Hurricane Kick', 'Leaps and whirls like a propeller, legs scything round', [
     { pelvis: { x: 0, y: -12 }, lean: -8, frontArm: { upper: 150, lower: 120 }, backArm: { upper: 30, lower: -40 }, frontLeg: straight(-3), backLeg: straight(177), trail: { from: 'frontFoot', reach: 16, curve: 18 } },
@@ -135,6 +152,7 @@ export const LITTLE_DRAGON_MOVES: AttackMove[] = [
     { ms: 55, pelvis: { x: 4, y: -14 }, lean: -8, frontArm: { upper: 150, lower: 120 }, backArm: { upper: 30, lower: -40 }, frontLeg: straight(177), backLeg: straight(-3), trail: { from: 'backFoot', reach: 16, curve: 18 } },
     { ms: 55, pelvis: { x: 6, y: -12 }, lean: -8, frontArm: { upper: 150, lower: 120 }, backArm: { upper: 30, lower: -40 }, frontLeg: straight(-90), backLeg: straight(90) },
     { ms: 55, pelvis: { x: 8, y: -10 }, lean: -8, frontArm: { upper: 150, lower: 120 }, backArm: { upper: 30, lower: -40 }, frontLeg: straight(-3), backLeg: straight(177), trail: { from: 'frontFoot', reach: 16, curve: 18 } },
+    { ms: 110, pelvis: { x: 6, y: 24 }, lean: 0, frontArm: straight(-8), backArm: straight(188), frontLeg: { x: 28, y: F }, backLeg: { x: -18, y: F } },
   ]),
   combo(2, 'Lightning Legs', 'Balanced on one leg, a blur of kicks too fast to count', [
     { pelvis: { x: -2, y: 8 }, lean: -25, frontArm: { upper: 40, lower: -50 }, backArm: armsBackHigh, frontLeg: straight(-10), backLeg: { x: -10, y: F }, trail: { from: 'frontFoot', reach: 14 } },
@@ -153,6 +171,7 @@ export const LITTLE_DRAGON_MOVES: AttackMove[] = [
     { ms: 65, pelvis: { x: 5, y: -12 }, lean: -30, frontArm: armsBackLow, backArm: { upper: 40, lower: -40 }, frontLeg: tucked, backLeg: straight(-5), trail: { from: 'backFoot', reach: 16 } },
     { ms: 65, pelvis: { x: 10, y: -12 }, lean: -30, frontArm: armsBackLow, backArm: { upper: 40, lower: -40 }, frontLeg: straight(-5), backLeg: tucked, trail: { from: 'frontFoot', reach: 16 } },
     { ms: 65, pelvis: { x: 14, y: -10 }, lean: -30, frontArm: armsBackLow, backArm: { upper: 40, lower: -40 }, frontLeg: tucked, backLeg: straight(-5), trail: { from: 'backFoot', reach: 18 } },
+    { ms: 110, pelvis: { x: 12, y: 18 }, lean: 16, frontArm: { upper: 20, lower: -60 }, backArm: { upper: 110, lower: 20 }, frontLeg: { x: 34, y: F }, backLeg: { x: -14, y: F } },
   ]),
 
   // =================== Tier 3: big physical specials ===================
@@ -163,6 +182,7 @@ export const LITTLE_DRAGON_MOVES: AttackMove[] = [
   combo(3, 'Tiger Knee', 'Leaps up driving the knee through the chin', [
     { pelvis: { x: 4, y: -6 }, lean: 10, frontArm: { upper: 20, lower: 60 }, backArm: { upper: 30, lower: 70 }, frontLeg: { upper: -40, lower: 90 }, backLeg: { upper: 100, lower: 120 }, trail: { from: 'frontKnee', reach: 16, curve: -6 } },
     { ms: 120, pelvis: { x: 6, y: -18 }, lean: 6, frontArm: { upper: 10, lower: 50 }, backArm: { upper: 20, lower: 60 }, frontLeg: { upper: -60, lower: 80 }, backLeg: { upper: 105, lower: 125 }, trail: { from: 'frontKnee', reach: 14 } },
+    { ms: 120, pelvis: { x: 8, y: 22 }, lean: 32, frontArm: straight(150), backArm: straight(162), frontLeg: { x: 32, y: F }, backLeg: { x: -18, y: F } },
   ]),
   combo(3, 'Hundred-Hand Slap', 'Rooted in place, palms fire faster than the eye can follow', [
     { pelvis: { x: 3, y: 13 }, lean: 12, frontArm: straight(-5), backArm: guard, ...stanceLegs, trail: { from: 'frontHand', reach: 12 } },
@@ -177,27 +197,49 @@ export const LITTLE_DRAGON_MOVES: AttackMove[] = [
     { ms: 150, pelvis: { x: 0, y: 60 }, lean: 6, frontArm: straight(16), backArm: { upper: -125, lower: -110 }, frontLeg: straight(1), backLeg: straight(179) },
   ]),
 
-  // ================= Tier 4: overdrive combos =================
-  combo(4, 'Nunchaku Fury', 'Three cracking nunchaku swings: high, low, high', [
+  // =================== Tier 3, continued: the overdrive combos (they were tier 4 before the one-leg tier) ===================
+  combo(3, 'Nunchaku Fury', 'Three cracking nunchaku swings: high, low, high', [
     { pelvis: { x: 1, y: 10 }, lean: 4, tilt: -8, frontArm: { upper: -75, lower: -35 }, backArm: guard, ...stanceLegs, trail: { from: 'frontHand', reach: 28, curve: 22 }, prop: 'nunchaku' },
     { ms: 70, pelvis: { x: 3, y: 14 }, lean: 14, frontArm: { upper: 40, lower: 60 }, backArm: guard, ...stanceLegs, trail: { from: 'frontHand', reach: 26, curve: 18 }, prop: 'nunchaku' },
     { ms: 70, pelvis: { x: 2, y: 11 }, lean: 6, frontArm: { upper: -30, lower: -60 }, backArm: guard, ...stanceLegs, trail: { from: 'frontHand', reach: 26, curve: -18 }, prop: 'nunchaku' },
     { ms: 80, pelvis: { x: 4, y: 12 }, lean: 10, frontArm: { upper: 10, lower: 0 }, backArm: guard, ...stanceLegs, trail: { from: 'frontHand', reach: 28 }, prop: 'nunchaku' },
   ]),
-  combo(4, 'Axe and Spin', 'Axe kick straight down, then a spinning back heel', [
+  combo(3, 'Axe and Spin', 'Axe kick straight down, then a spinning back heel', [
     { pelvis: { x: -2, y: 7 }, lean: -15, frontArm: { upper: 60, lower: -30 }, backArm: armsBackHigh, frontLeg: { upper: -78, lower: -80 }, backLeg: { x: -10, y: F }, trail: { from: 'frontFoot', reach: 16, curve: -20 } },
     { ms: 90, pelvis: { x: 0, y: 10 }, lean: 10, frontArm: { upper: 60, lower: -30 }, backArm: armsBackLow, frontLeg: straight(45), backLeg: { x: -10, y: F }, trail: { from: 'frontFoot', reach: 14, curve: -14 } },
     { ms: 110, pelvis: { x: -4, y: 7 }, lean: -38, tilt: 10, frontArm: { upper: 140, lower: 100 }, backArm: { upper: 170, lower: 140 }, frontLeg: { x: -6, y: F }, backLeg: straight(-6), trail: { from: 'backFoot', reach: 18, curve: 10 } },
   ]),
-  combo(4, 'Dragon Rush', 'Dashes in low with a straight, then rips an uppercut and a hook', [
+  combo(3, 'Dragon Rush', 'Dashes in low with a straight, then rips an uppercut and a hook', [
     { pelvis: { x: 12, y: 20 }, lean: 25, frontArm: straight(10), backArm: guard, frontLeg: { x: 34, y: F }, backLeg: { x: -10, y: F }, trail: { from: 'frontHand', reach: 22 } },
     { ms: 80, pelvis: { x: 14, y: 12 }, lean: 5, frontArm: guard, backArm: { upper: -60, lower: -70 }, frontLeg: { x: 34, y: F }, backLeg: { x: -4, y: F }, trail: { from: 'backHand', reach: 16, curve: -10 } },
     { ms: 90, pelvis: { x: 14, y: 12 }, lean: 10, tilt: 6, frontArm: { upper: -15, lower: 35 }, backArm: guard, frontLeg: { x: 34, y: F }, backLeg: { x: -4, y: F }, trail: { from: 'frontHand', reach: 12, curve: 16 } },
   ]),
-  combo(4, 'Scissor Takedown', 'Leaps legs-wide, scissors them shut, and lands in a crouch', [
+  combo(3, 'Scissor Takedown', 'Leaps legs-wide, scissors them shut, and lands in a crouch', [
     { pelvis: { x: 0, y: -14 }, lean: -25, frontArm: { upper: 30, lower: -40 }, backArm: armsBackHigh, frontLeg: straight(-10), backLeg: straight(25), trail: { from: 'frontFoot', reach: 16, curve: 12 } },
     { ms: 80, pelvis: { x: 4, y: -10 }, lean: -25, frontArm: { upper: 30, lower: -40 }, backArm: armsBackHigh, frontLeg: straight(12), backLeg: straight(4), trail: { from: 'backFoot', reach: 14, curve: -12 } },
-    { ms: 120, pelvis: { x: 4, y: 26 }, lean: 12, frontArm: leadReady, backArm: guard, frontLeg: { x: 20, y: F }, backLeg: { x: -16, y: F } },
+    { ms: 120, pelvis: { x: 4, y: 38 }, lean: 24, frontArm: { upper: 80, lower: 88 }, backArm: armsBackHigh, frontLeg: { x: 24, y: F }, backLeg: { x: -20, y: F } },
+  ]),
+
+  // ================= Tier 4: one leg only =================
+  // He stands on his rear leg for the whole tier. The lead leg does all the
+  // hitting and never touches the floor, and between attacks he waits with
+  // the knee raised (ONE_LEG_REST).
+  oneLeg('High and Low', 'A kick to the head, then the same leg drops to the shin. It stays out there.', [
+    { ...onOneLeg, lean: -30, frontArm: guard, backArm: armsBackHigh, frontLeg: straight(-30), trail: { from: 'frontFoot', reach: 18, curve: -10 } },
+    { ms: 90, ...onOneLeg, lean: -8, frontArm: guard, backArm: armsBackLow, frontLeg: straight(35), trail: { from: 'frontFoot', reach: 16, curve: 12 } },
+  ]),
+  oneLeg('Side Thrust', 'Lays right back and drives the heel straight out, then pulls the knee up high', [
+    { ...onOneLeg, lean: -48, frontArm: { upper: 40, lower: -60 }, backArm: armsBackHigh, frontLeg: straight(-2), trail: { from: 'frontFoot', reach: 24 } },
+    { ms: 120, ...onOneLeg, lean: -2, frontArm: leadReady, backArm: guard, frontLeg: { upper: -62, lower: 70 } },
+  ]),
+  oneLeg('Mule Kick', 'Turns his back, folds over and kicks out behind him, then swings round and beckons', [
+    { ...onOneLeg, lean: -72, tilt: 34, frontArm: { upper: 150, lower: 100 }, backArm: { upper: 160, lower: 110 }, frontLeg: straight(-6), trail: { from: 'frontFoot', reach: 22 } },
+    { ms: 130, ...onOneLeg, lean: -4, frontArm: { upper: 10, lower: -100 }, backArm: guard, frontLeg: { upper: -30, lower: 90 } },
+  ]),
+  oneLeg('Three and Hold', 'Middle, high, and the leg goes straight up past his ear and stays there', [
+    { ...onOneLeg, lean: -18, frontArm: guard, backArm: armsBackLow, frontLeg: straight(-4), trail: { from: 'frontFoot', reach: 16 } },
+    { ms: 70, ...onOneLeg, lean: -32, frontArm: guard, backArm: armsBackHigh, frontLeg: straight(-44), trail: { from: 'frontFoot', reach: 18, curve: -12 } },
+    { ms: 100, ...onOneLeg, lean: -16, frontArm: { upper: 60, lower: -30 }, backArm: armsBackHigh, frontLeg: straight(-80) },
   ]),
 
   // ================= Tier 5: legendary finishing combos =================
@@ -216,6 +258,7 @@ export const LITTLE_DRAGON_MOVES: AttackMove[] = [
     { ms: 70, pelvis: { x: 6, y: 4 }, lean: 10, frontArm: { upper: 20, lower: 60 }, backArm: { upper: 30, lower: 70 }, frontLeg: { upper: -40, lower: 90 }, backLeg: { x: -8, y: F }, trail: { from: 'frontKnee', reach: 14 } },
     { ms: 70, pelvis: { x: 2, y: 6 }, lean: -32, frontArm: { upper: 40, lower: -60 }, backArm: armsBackHigh, frontLeg: straight(-12), backLeg: { x: -10, y: F }, trail: { from: 'frontFoot', reach: 18, curve: -6 } },
     { ms: 90, pelvis: { x: 8, y: -12 }, lean: -32, frontArm: { upper: 40, lower: -60 }, backArm: armsBackHigh, frontLeg: straight(-5), backLeg: { upper: 30, lower: 150 }, trail: { from: 'frontFoot', reach: 24, curve: -4 } },
+    { ms: 120, pelvis: { x: 8, y: 22 }, lean: -12, frontArm: { upper: 40, lower: -60 }, backArm: armsBackHigh, frontLeg: { x: 36, y: F }, backLeg: { x: -12, y: F } },
   ]),
   combo(5, 'Final Dragon', 'A huge flying side kick, a rebound flip, and he lands beckoning for more', [
     { pelvis: { x: 0, y: -24 }, lean: -40, frontArm: { upper: 200, lower: 190 }, backArm: { upper: 160, lower: 150 }, frontLeg: straight(-15), backLeg: { upper: 70, lower: 150 }, trail: { from: 'frontFoot', reach: 30, curve: -8 } },

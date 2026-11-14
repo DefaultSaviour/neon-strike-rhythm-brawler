@@ -65,6 +65,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Lightning kung fu: one-inch punches, flying kicks and nunchaku',
     idlePose: LITTLE_DRAGON_IDLE,
     moves: LITTLE_DRAGON_MOVES,
+    holdsPose: true,
   },
   {
     id: 'babaYaga',

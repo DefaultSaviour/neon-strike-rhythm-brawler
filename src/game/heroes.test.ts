@@ -157,11 +157,55 @@ describe('The Neon Striker', () => {
 });
 
 describe('The Little Dragon', () => {
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(dragon.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(dragon.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => dragon.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(dragon.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(dragon.moves.map((m) => m.name)).size).toBe(25);
+  });
+
+  it('in tier 4 he stands on one leg: the rear foot stays planted and the lead foot never touches the floor', () => {
+    const tier4 = dragon.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      for (const k of m.sequence!) {
+        expect(k.pose.backFoot.y, m.name).toBeCloseTo(68, 3);
+        expect(k.pose.frontFoot.y, m.name).toBeLessThan(56);
+        expect(Math.abs(k.pose.pelvis.x)).toBeLessThanOrEqual(12);
+      }
+      // Every hit in the tier comes from that one raised leg
+      for (const k of m.sequence!.filter((key) => key.trail)) {
+        expect(dist(k.trail!.end, k.pose.frontFoot)).toBeLessThan(30);
+      }
+    }
+  });
+
+  it('waits on one leg between tier 4 attacks, knee raised, and only in tier 4', () => {
+    const rest = dragon.moves.find((m) => m.tier === 4)!.restPose!;
+    expect(Math.max(rest.leftFoot.y, rest.rightFoot.y)).toBeCloseTo(68, 3);
+    expect(Math.min(rest.leftFoot.y, rest.rightFoot.y)).toBeLessThan(56);
+    expect(Math.min(rest.leftKnee.y, rest.rightKnee.y)).toBeLessThan(rest.pelvis.y); // the knee is up above the hip
+    for (const m of dragon.moves) expect(!!m.restPose).toBe(m.tier === 4);
+  });
+
+  it('the one leg kicks high, low, straight out and behind him', () => {
+    const hit = (name: string, i = 0) => dragon.moves.find((m) => m.name === name)!.sequence!.filter((k) => !k.hold)[i].pose;
+    expect(hit('High and Low').frontFoot.y).toBeLessThan(hit('High and Low').chest.y); // head height
+    expect(hit('High and Low', 1).frontFoot.y).toBeGreaterThan(hit('High and Low', 1).pelvis.y + 25); // shin height
+    const side = hit('Side Thrust');
+    expect(Math.abs(side.frontFoot.y - side.pelvis.y)).toBeLessThan(8); // straight out from the hip
+    const mule = hit('Mule Kick');
+    expect(mule.head.x).toBeLessThan(mule.pelvis.x - 20); // folded right over, away from the enemy
+    const up = hit('Three and Hold', 2);
+    expect(up.frontFoot.y).toBeLessThan(up.head.y); // the foot ends above his own head
+  });
+
+  it('holds the last pose of each move, so every move ends with a foot on the floor', () => {
+    expect(dragon.holdsPose).toBe(true);
+    for (const m of dragon.moves) {
+      const last = m.sequence!.at(-1)!.pose;
+      expect(Math.max(last.frontFoot.y, last.backFoot.y), m.name).toBeGreaterThan(60);
+    }
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -189,6 +233,7 @@ describe('The Little Dragon', () => {
 
   it('jumping moves really leave the ground', () => {
     const airborneHit = ['Hurricane Kick', 'Bicycle Kick', 'Tiger Knee', 'Scissor Takedown', 'Final Dragon'];
+    expect(dragon.moves.filter((m) => airborneHit.includes(m.name))).toHaveLength(airborneHit.length);
     for (const name of airborneHit) {
       const k = dragon.moves.find((m) => m.name === name)!.sequence![0];
       expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y)).toBeLessThan(64);
