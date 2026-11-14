@@ -6,9 +6,10 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, headOf
  * THE LION: the lion who wanted courage, from the old fairy tale of the
  * yellow road (the books, not any film's costume or songs): a big shaggy
  * mane, a lion's face, a swishing tail and clawed paws (drawn by
- * fighterArt). He starts out a scaredy-cat: in the low tiers every swipe
- * is followed by a cower, paws over his face. As the combo grows he gets
- * braver (pounces, claw flurries, roars). His top-level form is his
+ * fighterArt). He starts out a scaredy-cat: for the first three tiers he
+ * fights with one paw over his eyes and only ever hits with the other, and
+ * in tier 1 most swipes end in a cower, both paws over his face. In tier 4
+ * the paw comes down and he fights properly (pounces, both claws, roars). His top-level form is his
  * courage: a blazing mane of fire, and he bulks up into a much bigger,
  * jacked king (fighterArt's HERO_BUILDS and bodyBulk), his finishers
  * ending on a roaring double-biceps flex.
@@ -42,6 +43,22 @@ const pounce = { pelvis: { x: 4, y: -2 }, frontLeg: { upper: 40, lower: 110 }, b
 /** A keyframe; `cower` puts both paws over his face. */
 type Key = FighterSpec & { ms?: number; cower?: boolean };
 
+/**
+ * His rear paw clapped over his eyes (he can't bear to look): he leans back
+ * from what he is hitting, head turned away, and the arm comes up in front
+ * of him, elbow out toward the enemy, so the paw sits on the front of his face.
+ */
+function eyesCovered(k: Key): Key {
+  if (k.cower) return k;
+  const flinch: Key = { ...k, lean: (k.lean ?? 0) - 14, tilt: (k.tilt ?? 0) - 16 };
+  const head = headOf(flinch);
+  const target = { x: head.x + 9, y: head.y - 2.5 };
+  const options = [armReaching(flinch, 'back', target), armReaching(flinch, 'back', target, true)];
+  // The elbow that sticks out in front of him, not the one tucked behind his mane
+  const elbowOut = (l: LimbAngles) => Math.cos((l.upper * Math.PI) / 180);
+  return { ...flinch, backArm: elbowOut(options[0]) >= elbowOut(options[1]) ? options[0] : options[1] };
+}
+
 /** Both paws up over his face (he's scared). */
 function covering(k: Key): Key {
   if (!k.cower) return k;
@@ -58,8 +75,20 @@ function combo(tier: AttackMove['tier'], name: string, description: string, keys
   return comboMove(nextId++, tier, name, description, withHolds(keys.map(covering).map((k) => buildKey(k, TRAIL, k.ms ?? 0))));
 }
 
+/**
+ * A move from tiers 1 to 3: too scared to look. His rear paw stays over his
+ * eyes in every pose, so he only ever hits with the lead paw, a foot or his
+ * head, and he waits like that between attacks too (LION_NOT_LOOKING).
+ */
+function scared(tier: 1 | 2 | 3, name: string, description: string, keys: Key[]): AttackMove {
+  return { ...combo(tier, name, description, keys.map(eyesCovered)), restPose: LION_NOT_LOOKING };
+}
+
 /** Crouched, paws up and claws out (a bit nervous about it). */
 export const LION_IDLE: SkeletonPose = buildFighterPose({ ...crouch, lean: 10, tilt: 6, frontArm: pawFront, backArm: pawBack }, TRAIL);
+
+/** Tiers 1 to 3 between attacks: crouched, one paw over his eyes, the other feeling about in front. */
+export const LION_NOT_LOOKING: SkeletonPose = buildFighterPose(eyesCovered({ ...crouch, lean: 6, tilt: -8, frontArm: { upper: 30, lower: -10 }, backArm: pawBack }), TRAIL);
 
 const ready = (ms: number): Key => ({ ms, ...crouch, lean: 10, tilt: 6, frontArm: pawFront, backArm: pawBack });
 /** Cowering: shrunk back, paws over his face, head turned away. */
@@ -79,45 +108,45 @@ const flex = (ms: number): Key => ({ ms, pelvis: { x: 0, y: 10 }, lean: -4, tilt
 const roar = (ms: number): Key => ({ ms, pelvis: { x: 0, y: 10 }, lean: -8, tilt: -14, frontArm: { upper: -40, lower: -70 }, backArm: { upper: -140, lower: -110 }, frontLeg: { x: 16, y: F }, backLeg: { x: -16, y: F } });
 
 export const LION_MOVES: AttackMove[] = [
-  // ======================= Tier 1: scaredy-cat =======================
-  combo(1, 'Panic Swipe', 'A wild claw swipe, then he cowers behind his paws', [swipe(), cower(150)]),
-  combo(1, 'Eyes-Shut Slap', 'Slaps out with his eyes shut and his head turned away', [swipe({ tilt: -24, frontArm: straight(-6), trail: { from: 'frontHand', reach: CLAW, curve: -20 } }), cower(150)]),
-  combo(1, 'Scared Kick', 'A frightened kick, then he shrinks back', [
+  // ======================= Tier 1: scaredy-cat (one paw over his eyes until tier 4) =======================
+  scared(1, 'Panic Swipe', 'A wild claw swipe without looking, then he cowers behind both paws', [swipe(), cower(150)]),
+  scared(1, 'Eyes-Shut Slap', 'Slaps out with his eyes shut and his head turned away', [swipe({ tilt: -24, frontArm: straight(-6), trail: { from: 'frontHand', reach: CLAW, curve: -20 } }), cower(150)]),
+  scared(1, 'Scared Kick', 'A frightened kick, then he shrinks back', [
     { pelvis: { x: -4, y: 12 }, lean: -14, tilt: -10, frontArm: pawFront, backArm: pawBack, frontLeg: kick(-6), backLeg: { x: -8, y: F }, trail: { from: 'frontFoot', reach: 14 } },
     cower(150),
   ]),
-  combo(1, 'Flinch Jab', 'A quick jab, flinching as it lands', [swipe({ frontArm: straight(-2), trail: { from: 'frontHand', reach: CLAW } }), ready(150)]),
-  combo(1, 'Duck and Paw', 'Ducks down low and paws at their legs', [
+  scared(1, 'Flinch Jab', 'A quick jab, flinching as it lands', [swipe({ frontArm: straight(-2), trail: { from: 'frontHand', reach: CLAW } }), ready(150)]),
+  scared(1, 'Duck and Paw', 'Ducks down low and paws at their legs', [
     { pelvis: { x: 2, y: 34 }, lean: 26, frontArm: straight(40), backArm: pawBack, frontLeg: { x: 28, y: F }, backLeg: { x: -20, y: F }, trail: { from: 'frontHand', reach: CLAW, curve: 20 } },
     cower(150),
   ]),
 
   // ================= Tier 2: finding his nerve =================
-  combo(2, 'Double Swipe', 'Lead paw, rear paw: getting the hang of it', [swipe(), { ms: 100, ...rearSwipe() }]),
-  combo(2, 'Little Roar', 'Lunges in with a roar, then checks nobody saw', [
+  scared(2, 'Double Swipe', 'High, then low, with the same paw: getting the hang of it', [swipe({ frontArm: straight(-14) }), { ms: 100, ...swipe({ frontArm: straight(34), trail: { from: 'frontHand', reach: CLAW, curve: -22 } }) }]),
+  scared(2, 'Little Roar', 'Lunges in with a roar, then checks nobody saw', [
     { ...lunge, lean: 24, tilt: 10, frontArm: pawFront, backArm: pawBack, trail: { from: 'head', reach: 18 } },
     cower(170),
   ]),
-  combo(2, 'Uppercut Claw', 'A swipe that rakes up from low to high', [
+  scared(2, 'Uppercut Claw', 'A swipe that rakes up from low to high', [
     { ...crouch, lean: 6, tilt: -10, frontArm: { upper: -36, lower: -50 }, backArm: pawBack, trail: { from: 'frontHand', reach: CLAW, curve: -22 } },
     ready(170),
   ]),
-  combo(2, 'Short Pounce', 'A little hop forward, paws first', [leap({ pelvis: { x: 4, y: 4 } }), ready(170)]),
-  combo(2, 'Tail Spin', 'Spins round with his paws out, tail flying', [
+  scared(2, 'Short Pounce', 'A little hop forward, paws first', [leap({ pelvis: { x: 4, y: 4 } }), ready(170)]),
+  scared(2, 'Tail Spin', 'Spins round with his paws out, tail flying', [
     { pelvis: { x: 0, y: 16 }, lean: 0, frontArm: straight(4), backArm: straight(186), frontLeg: { x: 8, y: F }, backLeg: { x: -8, y: F }, spin: true, trail: { from: 'frontHand', reach: CLAW, curve: 30 } },
     ready(170),
   ]),
 
   // =================== Tier 3: braver ===================
-  combo(3, 'Pounce', 'Leaps right at them with both paws', [leap(), ready(180)]),
-  combo(3, 'Claw Flurry', 'Swipe, swipe, swipe', [swipe(), { ms: 90, ...rearSwipe() }, { ms: 90, ...swipe({ frontArm: straight(-12) }) }]),
-  combo(3, 'Mane Shake', 'Shakes his mane and swipes as he comes round', [
+  scared(3, 'Pounce', 'Leaps right at them, one paw out and the other over his eyes', [leap(), ready(180)]),
+  scared(3, 'Claw Flurry', 'Swipe, swipe, swipe, all with the one paw', [swipe(), { ms: 90, ...swipe({ frontArm: straight(36), lean: 24, trail: { from: 'frontHand', reach: CLAW, curve: -22 } }) }, { ms: 90, ...swipe({ frontArm: straight(-16), lean: 8 }) }]),
+  scared(3, 'Mane Shake', 'Shakes his mane and swipes as he comes round', [
     { pelvis: { x: 0, y: 16 }, lean: 6, tilt: 20, frontArm: straight(0), backArm: straight(170), frontLeg: { x: 10, y: F }, backLeg: { x: -10, y: F }, spin: true, trail: { from: 'frontHand', reach: CLAW, curve: 30 } },
-    { ms: 110, ...rearSwipe() },
+    { ms: 110, ...swipe({ frontArm: straight(-10), lean: 20 }) },
   ]),
-  combo(3, 'Leaping Swipe', 'Jumps and rakes a paw down through them', [leap({ frontArm: straight(30), trail: { from: 'frontHand', reach: CLAW, curve: 24 } }), ready(180)]),
+  scared(3, 'Leaping Swipe', 'Jumps and rakes a paw down through them', [leap({ frontArm: straight(30), trail: { from: 'frontHand', reach: CLAW, curve: 24 } }), ready(180)]),
 
-  // ================= Tier 4: the king of the forest =================
+  // ================= Tier 4: the paw comes down, and he fights properly =================
   combo(4, 'Big Pounce', 'A huge leap, landing with both paws', [leap({ pelvis: { x: 6, y: -8 } }), { ms: 110, ...swipe({ frontArm: straight(30) }) }]),
   combo(4, 'Double Claw', 'Both paws rake down at once', [
     { ...lunge, lean: 22, frontArm: straight(28), backArm: straight(36), trail: { from: 'frontHand', reach: CLAW, curve: 24 } },

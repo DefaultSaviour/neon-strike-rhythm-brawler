@@ -181,6 +181,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Starts out cowering behind his paws, ends up pouncing, clawing and roaring',
     idlePose: LION_IDLE,
     moves: LION_MOVES,
+    holdsPose: true,
   },
 ];
 
