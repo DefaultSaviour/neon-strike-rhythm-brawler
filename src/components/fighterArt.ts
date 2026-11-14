@@ -3,6 +3,8 @@ import { FighterTier } from '../game/fighterTier';
 import type { HeroId } from '../game/heroes';
 import { BodyJoints, bodyFill, drawNeonBody, neonHead, neonLimb } from './neonBody';
 import { LIMB_WIDTH } from '../game/bodyProportions';
+import { trailingScarf } from '../game/motion';
+import { drawStrikerSpriteBody, drawStrikerSpriteScarf, helmetCentre, strikerSpritesReady } from './strikerSprites';
 
 /**
  * Draws the player's fighter: the hero's top-level form (god tier), lightning (overdrive),
@@ -107,7 +109,7 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     else if (opts.hero === 'ballerina') {
       /* nothing behind her */
     }
-    else drawAngelWings(ctx, pose, opts.time);
+    else drawAngelWings(ctx, pose, opts.time, tier.color);
   }
 
   // 1b. The Bride's ponytail swings behind her head (tucked into the helmet in her top form)
@@ -150,8 +152,18 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     ctx.restore();
   }
 
+  // The Neon Striker is drawn from Gemini's art (strikerSprites.ts) once it has loaded
+  const striker = (!opts.hero || opts.hero === 'striker') && strikerSpritesReady();
+
   // 4. Flowing scarf (behind the body), tapering from the neck to the tip
-  if (pose.scarf && pose.scarf.length > 1) {
+  if (striker) {
+    // Poses with no scarf of their own (the Pose Studio keyframes) get one hanging behind the head
+    const scarf = pose.scarf && pose.scarf.length > 1 ? pose.scarf : trailingScarf(undefined, pose.head, opts.facing, 0, 0);
+    // The helmet sits a little below the head joint, so the headband moves down with it to stay tied on
+    const helmet = helmetCentre(pose);
+    const tied = scarf.map((pt) => ({ x: pt.x + helmet.x - pose.head.x, y: pt.y + helmet.y - pose.head.y }));
+    drawStrikerSpriteScarf(ctx, { ...pose, scarf: tied }, opts.facing, opts.time);
+  } else if (pose.scarf && pose.scarf.length > 1) {
     const pts = [pose.head, ...pose.scarf];
     for (let i = 1; i < pts.length; i++) {
       neonLimb(ctx, pts[i - 1], pts[i], 5 - i * 0.8, tier.scarfColor, bodyFill(tier.scarfColor), 14);
@@ -169,7 +181,8 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   const fly = opts.hero === 'scarecrow' ? flyingArmOf(pose, opts.facing) : null;
   const nearGone = fly?.left === true;
   const farGone = fly?.left === false;
-  drawNeonBody(
+  if (striker) drawStrikerSpriteBody(ctx, pose, tier.color, tier.visorColor, opts.facing, Math.min(1, (opts.corePulse ?? 0) + Math.min(0.5, combo * 0.015)));
+  else drawNeonBody(
     ctx,
     {
       head: pose.head,
@@ -190,7 +203,7 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     },
     { color: tier.color, glow: tier.glow, ...bodyBulk(opts.hero, tier.ascended) }
   );
-  neonHead(ctx, pose.head, 9, { color: tier.color, glow: tier.glow });
+  if (!striker) neonHead(ctx, pose.head, 9, { color: tier.color, glow: tier.glow });
 
   // 5b. Hero outfit details on top of the body
   if (opts.hero === 'dragon') drawLittleDragonOutfit(ctx, pose, tier);
@@ -227,7 +240,9 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     drawHandWeapons(ctx, pose, opts.facing, tier.ascended && opts.hero === 'babaYaga');
   }
 
-  // 6. Visor (The One wears small dark sunglasses instead) and pulsing chest core
+  // 6. Visor (The One wears small dark sunglasses instead) and pulsing chest core.
+  // The Neon Striker's visor and core gem are part of his art.
+  if (striker) return;
   ctx.save();
   if (opts.hero === 'theOne') {
     drawSunglasses(ctx, pose, opts.facing);
@@ -253,28 +268,60 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
   ctx.restore();
 }
 
-/** Neon Striker's top-level form: radiant angel wings, gently flapping. */
-function drawAngelWings(ctx: Ctx, pose: SkeletonPose, time: number) {
+/**
+ * The wings never reach further than this to either side of his chest (world units).
+ * The timing circles sit at 78 either side with a radius of 22, and he lunges 16 toward
+ * them, so wide wings would cover the circle you are trying to hit.
+ */
+export const WING_REACH = 36;
+
+/**
+ * One side of his X-wing (side 1 = right, -1 = left): a longer fin up and a
+ * shorter fin down, each a closed four-point plate rooted behind the shoulder.
+ * The tips open and close a little with the beat.
+ */
+export function wingFins(chest: Point2D, side: 1 | -1, time: number): Point2D[][] {
+  const b = Math.sin(time * 5);
+  const at = (x: number, y: number): Point2D => ({ x: chest.x + side * x, y: chest.y + y });
+  return [
+    [at(5, -2), at(11, -9), at(31 + b * 2, -32 - b * 3), at(19, -8)],
+    [at(5, 4), at(18, 6), at(27 + b * 2, 26 + b * 3), at(9, 12)],
+  ];
+}
+
+/**
+ * Neon Striker's top-level form: a small X-wing jet pack behind his shoulders,
+ * two fins a side. The fins are drawn like his armour (a dark plate with a
+ * glowing outline and one inner line) and kept tight to his body, so the
+ * fight on either side of him stays easy to read.
+ */
+function drawAngelWings(ctx: Ctx, pose: SkeletonPose, time: number, color: string) {
   ctx.save();
-  ctx.globalAlpha *= 0.55;
-  ctx.strokeStyle = '#fff1a8';
-  ctx.shadowColor = '#ffe600';
-  ctx.shadowBlur = 16;
-  ctx.lineWidth = 3;
+  ctx.globalAlpha *= 0.9;
+  ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  const spread = 38 + Math.sin(time * 8) * 6;
-  for (const side of [-1, 1]) {
-    const c = pose.chest;
-    const joint = { x: c.x + side * (45 + spread), y: c.y - 45 };
-    ctx.beginPath();
-    ctx.moveTo(c.x + side * 8, c.y);
-    ctx.lineTo(joint.x, joint.y);
-    ctx.lineTo(c.x + side * (70 + spread), c.y - 75);
-    ctx.moveTo(joint.x, joint.y);
-    ctx.lineTo(c.x + side * (65 + spread), c.y - 35);
-    ctx.moveTo(joint.x, joint.y);
-    ctx.lineTo(c.x + side * (55 + spread), c.y - 15);
-    ctx.stroke();
+  const fill = bodyFill(color);
+  for (const side of [-1, 1] as const) {
+    for (const pts of wingFins(pose.chest, side, time)) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.shadowColor = '#ffe600';
+      ctx.shadowBlur = 8;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+      // The plate's inner line, from the root toward the tip
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo((pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+      ctx.lineTo((pts[2].x * 3 + pts[3].x) / 4, (pts[2].y * 3 + pts[3].y) / 4);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
