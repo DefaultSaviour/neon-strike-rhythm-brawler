@@ -11,8 +11,9 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, handOf
  *
  * Built like The One: each move is ONE clear idea in a few big poses, every
  * hit is held for a beat (withHolds), and the hips stay near the centre even
- * when the upper body leans far over. 21 combos over the 5 tiers
- * (5, 5, 4, 4, 3); the first keyframe is the hit.
+ * when the upper body leans far over. 25 combos over the 5 tiers
+ * (5, 5, 8, 4, 3); the first keyframe is the hit. Tier 4 is his twist: he
+ * stops swinging and just falls over onto them, stiff as a plank.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -72,6 +73,31 @@ export const DRUNKEN_MASTER_IDLE: SkeletonPose = buildFighterPose(
   TRAIL
 );
 
+/**
+ * Tier 4, falling over: he keels over toward the enemy stiff as a plank,
+ * pivoting on his heels, and the fall is the hit. `tip` is how far over he
+ * goes (degrees from upright). His heels land well behind his spot so that
+ * his hips stay over it and his head stops short of the timing circle.
+ */
+function toppled(tip: number, heel = -36): Pick<FighterSpec, 'pelvis' | 'lean' | 'frontLeg' | 'backLeg'> {
+  const t = (tip * Math.PI) / 180;
+  return { pelvis: { x: heel + Math.sin(t) * 62.6, y: F - Math.cos(t) * 62.6 }, lean: tip, frontLeg: { x: heel + 1.5, y: F }, backLeg: { x: heel, y: F } };
+}
+/** An arm held stiff along the body of a man tipped over by `tip`: down by his side, or straight out past his head. */
+const bySide = (tip: number): LimbAngles => straight(90 + tip);
+const pastHead = (tip: number): LimbAngles => straight(tip - 90);
+
+/** Tier 4 between falls: bolt upright and swaying, heels together, head lolling. */
+export const DRUNK_SWAY: SkeletonPose = buildFighterPose(
+  resolve({ pelvis: { x: 0, y: 6 }, lean: -9, tilt: 16, frontArm: straight(96), backArm: straight(84), frontLeg: { x: 5, y: F }, backLeg: { x: -3, y: F } }),
+  TRAIL
+);
+
+/** One fall: no step toward the enemy (the fall covers the distance), and he sways upright between hits. */
+function fall(name: string, description: string, keys: Key[]): AttackMove {
+  return { ...combo(4, name, description, keys), restPose: DRUNK_SWAY, planted: true };
+}
+
 export const DRUNKEN_MASTER_MOVES: AttackMove[] = [
   // ======================= Tier 1: stumbling basics =======================
   combo(1, 'Stumble Jab', 'Trips forward and the jab lands on the way down, then he totters back upright', [
@@ -89,6 +115,7 @@ export const DRUNKEN_MASTER_MOVES: AttackMove[] = [
   combo(1, 'Hiccup Headbutt', 'A hiccup throws his head forward into a headbutt, and he hops back', [
     { pelvis: { x: 4, y: 14 }, lean: 40, tilt: 16, frontArm: armsBack, backArm: armsBack, ...wide, trail: { from: 'head', reach: 14 } },
     { ms: 160, pelvis: { x: 0, y: 2 }, lean: -16, tilt: -14, frontArm: flailUp, backArm: dangle, frontLeg: { upper: 100, lower: 110 }, backLeg: { upper: 80, lower: 100 } },
+    { ms: 150, pelvis: { x: -2, y: 12 }, lean: -20, tilt: -10, frontArm: cupReady, backArm: dangle, ...crossed },
   ]),
   combo(1, 'Wobble Slap', 'A floppy open-hand slap one way, and back the other', [
     { pelvis: { x: 3, y: 14 }, lean: 22, frontArm: { upper: -25, lower: 10 }, backArm: dangle, ...wide, trail: { from: 'frontHand', reach: 18, curve: 18 } },
@@ -139,24 +166,43 @@ export const DRUNKEN_MASTER_MOVES: AttackMove[] = [
     { ms: 200, pelvis: { x: 0, y: 24 }, lean: 26, tilt: 10, frontArm: cupReady, backArm: dangle, ...wide },
   ]),
 
-  // ================= Tier 4: the eight immortals =================
-  combo(4, "Lu's Stagger", 'Staggers in shoulder-first, reels back, and staggers in again with an elbow', [
+  // ============ Tier 3, continued: the eight immortals (these were tier 4 before the falls) ============
+  combo(3, "Lu's Stagger", 'Staggers in shoulder-first, reels back, and staggers in again with an elbow', [
     { pelvis: { x: 6, y: 16 }, lean: 36, tilt: 10, frontArm: dangle, backArm: straight(-4), ...wide, trail: { from: 'backHand', reach: 18, curve: 20 } },
     { ms: 130, pelvis: { x: -2, y: 10 }, lean: -30, tilt: 14, frontArm: flailUp, backArm: armsBack, ...crossed },
     { ms: 130, pelvis: { x: 6, y: 16 }, lean: 38, tilt: -10, frontArm: { upper: -5, lower: 175 }, backArm: armsBack, ...wide, trail: { from: 'frontElbow', reach: 16, curve: 10 } },
   ]),
-  combo(4, 'Iron Crutch Kick', 'Leans right back on one leg like a crutch and kicks twice, hopping', [
+  combo(3, 'Iron Crutch Kick', 'Leans right back on one leg like a crutch and kicks twice, hopping, then totters down', [
     { pelvis: { x: -2, y: 8 }, lean: -36, frontArm: armsBack, backArm: flailUp, frontLeg: straight(0), backLeg: { x: -8, y: F }, trail: { from: 'frontFoot', reach: 22 } },
     { ms: 130, pelvis: { x: -2, y: 2 }, lean: -40, frontArm: armsBack, backArm: flailUp, frontLeg: straight(-22), backLeg: { upper: 100, lower: 110 }, trail: { from: 'frontFoot', reach: 22 } },
+    { ms: 170, pelvis: { x: -2, y: 12 }, lean: -24, tilt: -10, frontArm: flailUp, backArm: dangle, ...crossed },
   ]),
-  combo(4, 'Spinning Drunk', 'Twirls round tipsily, arms flung out, cracking them with each hand', [
+  combo(3, 'Spinning Drunk', 'Twirls round tipsily, arms flung out, cracking them with each hand', [
     { pelvis: { x: 2, y: 12 }, lean: 6, tilt: 12, frontArm: straight(0), backArm: straight(190), ...wide, trail: { from: 'frontHand', reach: 20, curve: 18 } },
     { ms: 120, pelvis: { x: 0, y: 12 }, lean: -6, tilt: -12, frontArm: straight(190), backArm: straight(0), ...crossed, trail: { from: 'backHand', reach: 20, curve: 18 } },
     { ms: 120, pelvis: { x: 2, y: 12 }, lean: 8, tilt: 12, frontArm: straight(-8), backArm: straight(190), ...wide, trail: { from: 'frontHand', reach: 20, curve: 18 } },
   ]),
-  combo(4, 'Bottle-Neck Strike', 'Hops in with two fingers to the throat, then nearly falls over', [
+  combo(3, 'Bottle-Neck Strike', 'Hops in with two fingers to the throat, then nearly falls over', [
     { pelvis: { x: 6, y: 8 }, lean: 30, frontArm: straight(-14), backArm: armsBack, frontLeg: { x: 26, y: F }, backLeg: { upper: 120, lower: 150 }, trail: { from: 'frontHand', reach: 20 } },
     { ms: 180, pelvis: { x: -2, y: 14 }, lean: -32, tilt: -14, frontArm: flailUp, backArm: dangle, ...crossed },
+  ]),
+
+  // ================= Tier 4: falling over =================
+  fall('Stiff as a Board', 'Keels over rigid, arms by his sides, and lands on them head first', [
+    { ...toppled(42), frontArm: bySide(42), backArm: bySide(42), trail: { from: 'head', reach: 16 } },
+    { ms: 150, ...toppled(42), tilt: -18, frontArm: flailUp, backArm: armsBack },
+  ]),
+  fall('Falling Fist', 'Topples with one fist stuck straight out ahead of him, and sags lower', [
+    { ...toppled(42), frontArm: pastHead(42), backArm: bySide(42), trail: { from: 'frontHand', reach: 18 } },
+    { ms: 150, ...toppled(46, -40), tilt: -16, frontArm: pastHead(50), backArm: bySide(46) },
+  ]),
+  fall('Falling Elbow', 'Pitches over with his elbow out in front, then windmills for balance', [
+    { ...toppled(40), tilt: -10, frontArm: { upper: -44, lower: 150 }, backArm: bySide(40), trail: { from: 'frontElbow', reach: 16, curve: 10 } },
+    { ms: 150, ...toppled(40), tilt: -10, frontArm: armsBack, backArm: flailUp },
+  ]),
+  fall('One for the Road', 'Still drinking as he goes over: the gourd never leaves his lips', [
+    { ...toppled(42), frontArm: bySide(42), backArm: dangle, drink: true, trail: { from: 'head', reach: 16 } },
+    { ms: 150, ...toppled(45, -39), frontArm: armsBack, backArm: dangle, drink: true },
   ]),
 
   // ================= Tier 5: legendary finishers =================
@@ -166,10 +212,11 @@ export const DRUNKEN_MASTER_MOVES: AttackMove[] = [
     { ms: 130, pelvis: { x: -2, y: 48 }, lean: 30, frontArm: { upper: 80, lower: 95 }, backArm: armsBack, frontLeg: { x: 8, y: F }, backLeg: straight(4), trail: { from: 'backFoot', reach: 20, curve: 8 } },
     { ms: 140, pelvis: { x: 4, y: 16 }, lean: 28, frontArm: cupReady, backArm: { upper: -40, lower: 40 }, ...wide, trail: { from: 'backHand', reach: 18, curve: 18 } },
   ]),
-  combo(5, 'Last Call', 'Takes a swig, sprays it in their face, then a huge spinning kick', [
+  combo(5, 'Last Call', 'Takes a swig, sprays it in their face, then a huge spinning kick, and stumbles on landing', [
     { pelvis: { x: 2, y: 12 }, lean: 18, tilt: 8, frontArm: cupReady, backArm: dangle, ...wide, drink: true, trail: { from: 'head', reach: 30 } },
     { ms: 130, pelvis: { x: 0, y: 6 }, lean: -20, tilt: 12, frontArm: straight(190), backArm: dangle, ...crossed },
     { ms: 150, pelvis: { x: 0, y: -14 }, lean: -34, frontArm: armsBack, backArm: flailUp, frontLeg: tucked, backLeg: straight(-8), trail: { from: 'backFoot', reach: 28, curve: 14 } },
+    { ms: 200, pelvis: { x: 4, y: 20 }, lean: 30, tilt: 10, frontArm: armsBack, backArm: dangle, frontLeg: { x: 28, y: F }, backLeg: { x: -10, y: F } },
   ]),
   combo(5, 'Wake-Up Uppercut', 'Flops down out cold, lies there a moment, then springs up into an uppercut', [
     { pelvis: { x: 0, y: 52 }, lean: -75, frontArm: straight(30), backArm: { upper: -150, lower: -120 }, frontLeg: straight(-20), backLeg: straight(10), trail: { from: 'frontHand', reach: 18, curve: 8 } },

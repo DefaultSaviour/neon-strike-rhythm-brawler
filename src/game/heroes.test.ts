@@ -587,11 +587,11 @@ describe('Drunken Master', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(dm.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(dm.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => dm.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(dm.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(dm.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -652,7 +652,50 @@ describe('Drunken Master', () => {
     const out = dm.moves.find((m) => m.name === 'Wake-Up Uppercut')!.sequence!.find((k) => k.ms >= 250)!;
     expect(out.pose.head.y).toBeGreaterThan(40);
   });
+
+  it('in tier 4 he just falls over onto them: stiff as a plank from heels to head, heels on the floor, no step in', () => {
+    const tier4 = dm.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      expect(m.planted, m.name).toBe(true);
+      expect(m.restPose, m.name).toBeDefined();
+      for (const k of m.sequence!) {
+        const p = k.pose;
+        // Tipped a long way over toward the enemy...
+        const tip = (Math.atan2(p.chest.x - p.pelvis.x, p.pelvis.y - p.chest.y) * 180) / Math.PI;
+        expect(tip, m.name).toBeGreaterThanOrEqual(40);
+        // ...in one straight line: the back heel, hips and chest line up
+        const legTip = (Math.atan2(p.pelvis.x - p.backFoot.x, p.backFoot.y - p.pelvis.y) * 180) / Math.PI;
+        expect(Math.abs(legTip - tip), m.name).toBeLessThan(2);
+        // Both heels on the floor, behind his spot
+        expect(Math.min(p.frontFoot.y, p.backFoot.y), m.name).toBeGreaterThan(67);
+        expect(Math.max(p.frontFoot.x, p.backFoot.x), m.name).toBeLessThan(-20);
+      }
+    }
+    for (const m of dm.moves) expect(!!m.restPose, m.name).toBe(m.tier === 4);
+  });
+
+  it('falling, his head stops short of the timing circle', () => {
+    for (const m of dm.moves.filter((x) => x.tier === 4)) {
+      for (const k of m.sequence!) expect(dist(k.pose.head, { x: 78, y: -2 }), m.name).toBeGreaterThan(32);
+    }
+  });
+
+  it('between falls he stands bolt upright, and he still drinks on the way down in One for the Road', () => {
+    const rest = dm.moves.find((m) => m.tier === 4)!.restPose!;
+    expect(Math.abs(rest.chest.x - rest.pelvis.x)).toBeLessThan(8);
+    for (const k of dm.moves.find((m) => m.name === 'One for the Road')!.sequence!) expect(dist(k.pose.backHand, k.pose.head)).toBeLessThan(12);
+  });
+
+  it('holds the last pose of each move, so none ends in the air', () => {
+    expect(dm.holdsPose).toBe(true);
+    for (const m of dm.moves) {
+      const last = m.sequence!.at(-1)!.pose;
+      expect(Math.max(last.frontFoot.y, last.backFoot.y, last.pelvis.y + 10), m.name).toBeGreaterThan(64);
+    }
+  });
 });
+
 
 describe('The Pro Wrestler', () => {
   const pw = getHero('proWrestler');

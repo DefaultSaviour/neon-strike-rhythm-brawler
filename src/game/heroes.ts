@@ -92,6 +92,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Drunken boxing: he staggers, stumbles and swigs, and every wild swing lands',
     idlePose: DRUNKEN_MASTER_IDLE,
     moves: DRUNKEN_MASTER_MOVES,
+    holdsPose: true,
   },
   {
     id: 'proWrestler',
