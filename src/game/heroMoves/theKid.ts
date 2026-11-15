@@ -12,8 +12,10 @@ import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHol
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
- * centre. 21 combos over the 5 tiers (5, 5, 4, 4, 3); the first keyframe is
- * the hit.
+ * centre. 25 combos over the 5 tiers (5, 5, 8, 4, 3); the first keyframe is
+ * the hit. Tier 4 is his twist: he goes up on one leg in the crane, arms
+ * spread like wings, and stays there. Every hit is the crane kick, and he
+ * comes back down into the crane, never into his normal stance.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -71,6 +73,37 @@ const crane = (ms: number): Key => ({ ms, pelvis: { x: 0, y: 8 }, lean: 0, front
 /** A low crouch with both palms down, sanding the floor. */
 const sandLow = { pelvis: { x: 2, y: 34 }, frontLeg: { x: 28, y: F }, backLeg: { x: -20, y: F } };
 
+/** The crane kick itself: he springs off the standing leg and the raised foot snaps out, arms still spread. */
+const craneKick = (deg = -30, extra: Partial<Key> = {}): Key => ({
+  pelvis: { x: 2, y: 2 },
+  lean: -14,
+  frontArm: wingFront,
+  backArm: wingBack,
+  frontLeg: { upper: deg + 5, lower: deg - 5 },
+  backLeg: tucked,
+  trail: { from: 'frontFoot', reach: 20, curve: -14 },
+  ...extra,
+});
+/** The same foot snapping out without the jump: still standing on the back leg. */
+const craneSnap = (deg = -6, extra: Partial<Key> = {}): Key => ({
+  pelvis: { x: 0, y: 8 },
+  lean: -10,
+  frontArm: wingFront,
+  backArm: wingBack,
+  frontLeg: kick(deg),
+  backLeg: { x: -2, y: F },
+  trail: { from: 'frontFoot', reach: 18 },
+  ...extra,
+});
+
+/** Tier 4 between kicks: the crane. */
+export const KID_CRANE: SkeletonPose = buildFighterPose(crane(0), TRAIL);
+
+/** One crane kick: it always ends back in the crane, and he waits there. */
+function fromTheCrane(name: string, description: string, keys: Key[]): AttackMove {
+  return { ...combo(4, name, description, [...keys, crane(170)]), restPose: KID_CRANE };
+}
+
 export const THE_KID_MOVES: AttackMove[] = [
   // ======================= Tier 1: the basics =======================
   combo(1, 'Lunge Punch', 'Steps through and drives the lead fist straight out', [lungePunch(), ready(150)]),
@@ -113,20 +146,26 @@ export const THE_KID_MOVES: AttackMove[] = [
     ready(170),
   ]),
 
-  // ================= Tier 4: in the air =================
-  combo(4, 'Jumping Front Kick', 'Leaps up and snaps a front kick at head height', [
+  // ============ Tier 3, continued: in the air (these were tier 4 before the crane) ============
+  combo(3, 'Jumping Front Kick', 'Leaps up and snaps a front kick at head height', [
     { ...airborne, lean: -10, frontArm: openGuard, backArm: chamber, frontLeg: kick(-14), trail: { from: 'frontFoot', reach: 18 } },
     ready(180),
   ]),
-  combo(4, 'Double Kick', 'A low front kick, then the same leg whips round high', [frontKick(10), { ms: 110, ...roundhouse() }]),
-  combo(4, 'Flying Side Kick', 'Launches off the floor with the heel leading the way', [
+  combo(3, 'Double Kick', 'A low front kick, then the same leg whips round high', [frontKick(10), { ms: 110, ...roundhouse() }]),
+  combo(3, 'Flying Side Kick', 'Launches off the floor with the heel leading the way', [
     { ...airborne, ...{ pelvis: { x: 0, y: -4 } }, lean: -34, tilt: 20, frontArm: { upper: 60, lower: 20 }, backArm: { upper: 160, lower: 140 }, frontLeg: kick(-6), trail: { from: 'frontFoot', reach: 20 } },
     ready(190),
   ]),
-  combo(4, 'Drum Punches', 'Balanced on one foot, both fists beat down like drumsticks', [
+  combo(3, 'Drum Punches', 'Balanced on one foot, both fists beat down like drumsticks', [
     { ...onBackLeg, lean: 12, frontArm: { upper: 0, lower: 60 }, backArm: { upper: -60, lower: -100 }, frontLeg: { upper: -10, lower: 95 }, trail: { from: 'frontHand', reach: 16, curve: 18 } },
     { ms: 100, ...onBackLeg, lean: 12, frontArm: { upper: -60, lower: -100 }, backArm: { upper: 0, lower: 60 }, frontLeg: { upper: -10, lower: 95 }, trail: { from: 'backHand', reach: 16, curve: 18 } },
   ]),
+
+  // ================= Tier 4: the crane =================
+  fromTheCrane('The Crane', 'Springs off the standing leg and snaps the raised foot up into their face', [craneKick()]),
+  fromTheCrane('Crane Snap', 'Stays on the standing leg and flicks the raised foot straight out', [craneSnap()]),
+  fromTheCrane('High Crane', 'Jumps higher and kicks right up over their head', [craneKick(-52, { pelvis: { x: 2, y: -8 } })]),
+  fromTheCrane('Double Crane', 'A flick of the foot, then the jumping kick straight behind it', [craneSnap(4), { ms: 110, ...craneKick() }]),
 
   // ================= Tier 5: the tournament =================
   combo(5, 'Crane Kick', 'Rises onto one leg with his arms spread like wings, then the kick nobody sees coming', [
