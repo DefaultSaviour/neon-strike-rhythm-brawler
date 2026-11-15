@@ -136,6 +136,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Shield and spear: thrusts over the shield, shield bashes, and the kick into the pit',
     idlePose: SPARTAN_IDLE,
     moves: SPARTAN_MOVES,
+    holdsPose: true,
   },
   {
     id: 'discoKing',

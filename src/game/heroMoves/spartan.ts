@@ -11,9 +11,10 @@ import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHol
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
- * centre. 21 combos over the 5 tiers (5, 5, 4, 4, 3); the first keyframe is
+ * centre. 25 combos over the 5 tiers (5, 5, 8, 4, 3); the first keyframe is
  * the hit. Spear hits trail from the rear hand far out past it, to the
- * spear's tip.
+ * spear's tip. Tier 4 is his twist: spear and shield flung wide, he does
+ * nothing but the pit kick, and holds it.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -70,6 +71,39 @@ const bash = (extra: Partial<Key> = {}): Key => ({ ...stepIn, lean: 20, frontArm
 /** The push kick, straight into the chest. */
 const pushKick = (extra: Partial<Key> = {}): Key => ({ ...onBackLeg, lean: -12, frontArm: { upper: 100, lower: 120 }, backArm: { upper: -120, lower: -100 }, frontLeg: kick(-2), trail: { from: 'frontFoot', reach: 20 }, ...extra });
 
+/** Arms flung wide as he roars: the shield out low in front, the spear held up behind him, point to the sky (clear of the timing circle). */
+const roarShield: LimbAngles = { upper: 110, lower: 60 };
+const roarSpear: LimbAngles = { upper: 175, lower: -82 };
+
+/**
+ * The pit kick: standing on the back leg, leaning right back with his head
+ * thrown back, arms flung wide, and the whole flat foot driven straight out.
+ * `deg` is the height of the kick (- is higher), `back` how far he leans.
+ */
+const pitKick = (deg = -2, back = 24, extra: Partial<Key> = {}): Key => ({
+  ...onBackLeg,
+  lean: -back,
+  tilt: -14,
+  frontArm: roarShield,
+  backArm: roarSpear,
+  frontLeg: kick(deg),
+  trail: { from: 'frontFoot', reach: 24 },
+  ...extra,
+});
+/** The kicking knee pulled up to his chest, ready to drive out again. */
+const kneeUp = (ms: number): Key => ({ ms, ...onBackLeg, lean: -8, tilt: -10, frontArm: roarShield, backArm: roarSpear, frontLeg: { upper: -30, lower: 95 } });
+
+/** Tier 4 between kicks: standing tall on his spot, chest out, arms flung wide, head back, roaring. */
+export const SPARTAN_ROAR: SkeletonPose = buildFighterPose(
+  { pelvis: { x: 0, y: 10 }, lean: -8, tilt: -14, frontArm: roarShield, backArm: roarSpear, frontLeg: { x: 18, y: F }, backLeg: { x: -18, y: F } },
+  TRAIL
+);
+
+/** One pit kick: he roars between them. */
+function intoThePit(name: string, description: string, keys: Key[]): AttackMove {
+  return { ...combo(4, name, description, keys), restPose: SPARTAN_ROAR };
+}
+
 export const SPARTAN_MOVES: AttackMove[] = [
   // ======================= Tier 1: the hoplite =======================
   combo(1, 'Spear Thrust', 'Drives the spear forward over the top of his shield', [thrust(), ready(150)]),
@@ -109,13 +143,13 @@ export const SPARTAN_MOVES: AttackMove[] = [
   ]),
   combo(3, 'Bash and Kick', 'Shield bash, then a push kick to send them flying', [bash(), { ms: 110, ...pushKick() }]),
 
-  // ================= Tier 4: the battle =================
-  combo(4, 'Leaping Thrust', 'Leaps up and drives the spear down at them', [
+  // ============ Tier 3, continued: the battle (these were tier 4 before the pit kick) ============
+  combo(3, 'Leaping Thrust', 'Leaps up and drives the spear down at them', [
     { ...airborne, lean: 10, frontArm: shieldUp, backArm: { upper: -40, lower: 30 }, trail: { from: 'backHand', reach: TIP } },
     ready(190),
   ]),
   combo(
-    4,
+    3,
     'Shield Slam',
     'Brings the shield crashing down edge first',
     [
@@ -124,14 +158,20 @@ export const SPARTAN_MOVES: AttackMove[] = [
     ],
     { slam: true }
   ),
-  combo(4, 'Spinning Bash', 'Spins right round and slams the shield into them', [
+  combo(3, 'Spinning Bash', 'Spins right round and slams the shield into them', [
     { ...bash(), spin: true },
     ready(180),
   ]),
-  combo(4, 'Arrow Storm', 'Raises the shield against the arrows, then strikes back', [
+  combo(3, 'Arrow Storm', 'Raises the shield against the arrows, then strikes back', [
     { ...braced, lean: 6, frontArm: shieldHigh, backArm: overhand, trail: { from: 'backHand', reach: TIP } },
     { ms: 110, ...thrust() },
   ]),
+
+  // ================= Tier 4: nothing but the pit kick =================
+  intoThePit('Pit Kick', 'Leans right back, roaring, and drives one flat foot straight into their chest', [pitKick()]),
+  intoThePit('Low Pit Kick', 'The same kick driven in low, at the knees', [pitKick(16, 16)]),
+  intoThePit('High Pit Kick', 'Leans back further still and kicks them under the chin', [pitKick(-24, 34)]),
+  intoThePit('Kick Them Again', 'Kicks, pulls the knee back up to his chest, and kicks again', [pitKick(), kneeUp(120), pitKick(-8, 28, { ms: 120 })]),
 
   // ================= Tier 5: legendary =================
   combo(5, 'Into the Pit', 'One enormous push kick that sends them back into the pit', [pushKick({ lean: -16, trail: { from: 'frontFoot', reach: 26 } }), ready(260)], { slam: true }),
