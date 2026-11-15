@@ -170,8 +170,8 @@ function drawFighterBody(ctx: Ctx, skeleton: SkeletonPose, opts: FighterDrawOpti
     }
   }
 
-  // 4a. The White Swan's spin blur when she turns, behind the body
-  if (opts.hero === 'ballerina' && pose.spin) drawSpinBlur(ctx, pose);
+  // 4a. The spin blur when the White Swan or the Disco King turns, behind the body
+  if ((opts.hero === 'ballerina' || opts.hero === 'discoKing') && pose.spin) drawSpinBlur(ctx, pose);
 
   // 4b. The One's long coat tail, flaring out behind his legs
   if (opts.hero === 'theOne') drawCoatTail(ctx, pose, tier, opts.facing, opts.time);
@@ -1444,7 +1444,7 @@ function drawBallerinaOutfit(ctx: Ctx, pose: SkeletonPose, tier: FighterTier, fa
   ctx.restore();
 }
 
-/** Spin blur: soft pink swoosh rings round her body while she turns. */
+/** Spin blur: soft pink swoosh rings round the body during a turn (the White Swan and the Disco King). */
 function drawSpinBlur(ctx: Ctx, pose: SkeletonPose) {
   ctx.save();
   ctx.strokeStyle = 'rgba(255, 143, 209, 0.55)';

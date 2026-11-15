@@ -10,8 +10,9 @@ import { buildFighterPose, buildKey, comboMove, FighterSpec, LimbAngles, withHol
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
- * centre. 21 combos over the 5 tiers (5, 5, 4, 4, 3); the first keyframe is
- * the hit.
+ * centre. 25 combos over the 5 tiers (5, 5, 8, 4, 3); the first keyframe is
+ * the hit. Tier 4 is his twist: nothing but spins. Every hit is one spin on
+ * the spot, and each one stops dead in a different pose.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -65,6 +66,24 @@ const spinOut = (extra: Partial<Key> = {}): Key => ({ pelvis: { x: 0, y: 12 }, l
 /** A hip-swing kick: the hip swings out and the leg follows, waist high. */
 const hipKick = (extra: Partial<Key> = {}): Key => ({ ...onBackLeg, lean: -18, tilt: 10, frontArm: pointUp, backArm: handOnHip, frontLeg: kick(-6), trail: { from: 'frontFoot', reach: 18, curve: 16 }, ...extra });
 
+/** Feet together on his spot, where he spins. */
+const onTheSpot = { pelvis: { x: 0, y: 12 }, frontLeg: { x: 6, y: F }, backLeg: { x: -6, y: F } };
+/** Half-way round a spin: the same body with the arms the other way about. */
+const spinRound = (ms: number, extra: Partial<Key> = {}): Key => ({ ms, ...onTheSpot, lean: 0, tilt: -8, frontArm: straight(186), backArm: straight(-6), spin: true, ...extra });
+
+/** Tier 4 between spins: heels together, standing tall, arms flung out wide, ready to go round again. */
+export const DISCO_SPIN_READY: SkeletonPose = buildFighterPose({ ...onTheSpot, lean: -2, tilt: -6, frontArm: flungFront, backArm: flungBack }, TRAIL);
+
+/**
+ * One spin: two blurred keyframes on the spot (the first is the hit, the
+ * lead hand coming round as a backfist), then he stops dead in `finish`,
+ * out of the blur, so the held pose is clean. No step toward the enemy.
+ */
+function spin(name: string, description: string, turn: [Key, Key], finish: Key): AttackMove {
+  const keys: Key[] = [turn[0], turn[1], { ...finish, ms: 120, trail: undefined, spin: false }];
+  return { ...combo(4, name, description, keys), restPose: DISCO_SPIN_READY, planted: true };
+}
+
 export const DISCO_KING_MOVES: AttackMove[] = [
   // ======================= Tier 1: the strut =======================
   combo(1, 'Point to the Sky', 'Strikes the pose: finger to the sky, hand on the hip', [skyPoint(), ready(160)]),
@@ -111,27 +130,40 @@ export const DISCO_KING_MOVES: AttackMove[] = [
     { ms: 100, ...onBackLeg, lean: -24, tilt: 14, frontArm: straight(-30), backArm: straight(200), frontLeg: kick(-34), trail: { from: 'frontFoot', reach: 18, curve: 18 } },
   ]),
 
-  // ================= Tier 4: the spotlight =================
-  combo(4, 'Knee Slide', 'Drops onto his knees, slides in and points up at the sky', [
+  // ============ Tier 3, continued: the spotlight (these were tier 4 before the spins) ============
+  combo(3, 'Knee Slide', 'Drops onto his knees, slides in and points up at the sky', [
     { ...kneeSlide, lean: -14, tilt: -10, frontArm: pointUp, backArm: straight(160), trail: { from: 'frontHand', reach: 20 } },
     ready(190),
   ]),
-  combo(4, 'Double Spin', 'Two spins, the second faster, and a point to finish', [spinOut(), { ms: 100, ...spinOut() }, { ms: 110, ...forwardPoint() }]),
-  combo(4, 'Jumping Splits', 'Leaps into the splits in mid-air, kicking them in the chest', [
+  combo(3, 'Double Spin', 'Two spins, the second faster, and a point to finish', [spinOut(), { ms: 100, ...spinOut() }, { ms: 110, ...forwardPoint() }]),
+  combo(3, 'Jumping Splits', 'Leaps into the splits in mid-air, kicking them in the chest', [
     { ...splitsAir, lean: 0, frontArm: straight(-20), backArm: straight(200), frontLeg: kick(-4), trail: { from: 'frontFoot', reach: 20 } },
     ready(190),
   ]),
-  combo(4, 'Lightning Point', 'Points up to the sky, then drives the point down at them', [
+  combo(3, 'Lightning Point', 'Points up to the sky, then drives the point down at them', [
     skyPoint(),
     { ms: 110, ...strut, lean: 18, frontArm: straight(30), backArm: handOnHip, trail: { from: 'frontHand', reach: 20, curve: -16 } },
   ]),
 
+  // ================= Tier 4: nothing but spins =================
+  spin('Spin to the Sky', 'One spin on the spot, and he stops with his finger to the sky', [spinOut(), spinRound(100)], skyPoint()),
+  spin('Spin and Point', 'One spin, and he stops pointing straight at them', [spinOut(), spinRound(100)], forwardPoint()),
+  spin('Low Spin', 'Spins down low with his knees bent and comes up into his strut', [
+    spinOut({ pelvis: { x: 0, y: 28 }, lean: 8 }),
+    spinRound(100, { pelvis: { x: 0, y: 20 }, lean: -6 }),
+  ], ready(0)),
+  spin('Tight Spin', 'Pulls his arms in to spin faster, then flings them out wide as he stops', [
+    spinOut(),
+    spinRound(80, { frontArm: rollFront, backArm: rollBack }),
+  ], { ...onTheSpot, lean: -4, tilt: -10, frontArm: straight(-24), backArm: straight(204) }),
+
   // ================= Tier 5: king of the dance floor =================
   combo(5, 'Dance Floor King', 'Spins, kicks, then strikes the pose and holds it', [spinOut(), { ms: 110, ...hipKick() }, { ms: 140, ...skyPoint() }, ready(260, { ...skyPoint(), trail: undefined })]),
-  combo(5, 'Saturday Night', 'The whole routine: point, spin, splits', [
+  combo(5, 'Saturday Night', 'The whole routine: point, spin, splits, and back down into his strut', [
     forwardPoint(),
     { ms: 100, ...spinOut() },
     { ms: 120, ...splitsAir, lean: 0, frontArm: straight(-20), backArm: straight(200), frontLeg: kick(-4), trail: { from: 'frontFoot', reach: 20 } },
+    ready(200),
   ]),
   combo(5, 'Last Dance', 'Slides in on his knees and holds the sky point as the lights flash', [
     { ...kneeSlide, lean: -14, tilt: -10, frontArm: pointUp, backArm: straight(160), trail: { from: 'frontHand', reach: 20 } },
