@@ -1110,11 +1110,11 @@ describe('The Kid', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(kid.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(kid.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => kid.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(kid.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(kid.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -1180,7 +1180,40 @@ describe('The Kid', () => {
     expect(isHeroUnlocked('kid', after(1799))).toBe(false);
     expect(isHeroUnlocked('kid', after(1800))).toBe(true);
   });
+
+  it('in tier 4 he stays in the crane: every hit is the raised foot, arms spread like wings, and he ends back on one leg', () => {
+    const tier4 = kid.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      for (const k of m.sequence!) {
+        const p = k.pose;
+        // Arms up and out like wings in every keyframe: both hands above the shoulders, either side of him
+        expect(Math.max(p.frontHand.y, p.backHand.y), m.name).toBeLessThan(p.chest.y);
+        expect(p.frontHand.x - p.backHand.x, m.name).toBeGreaterThan(40);
+        // The front foot never touches the floor
+        expect(p.frontFoot.y, m.name).toBeLessThan(55);
+        // Every hit is that foot
+        if (k.trail) expect(dist(k.trail.end, p.frontFoot), m.name).toBeLessThan(26);
+      }
+      // He ends in the crane, standing on the back leg, which is also where he waits
+      const last = keyToPlayerPose(m.sequence!.at(-1)!);
+      expect(m.sequence!.at(-1)!.pose.backFoot.y, m.name).toBeGreaterThan(67);
+      expect(last.leftFoot).toEqual(m.restPose!.leftFoot);
+      expect(last.rightFoot).toEqual(m.restPose!.rightFoot);
+      expect(last.leftHand).toEqual(m.restPose!.leftHand);
+    }
+    for (const m of kid.moves) expect(!!m.restPose, m.name).toBe(m.tier === 4);
+  });
+
+  it('holds the last pose of each move, so none ends in the air', () => {
+    expect(kid.holdsPose).toBe(true);
+    for (const m of kid.moves) {
+      const last = m.sequence!.at(-1)!.pose;
+      expect(Math.max(last.frontFoot.y, last.backFoot.y), m.name).toBeGreaterThan(67);
+    }
+  });
 });
+
 
 describe('The Spartan', () => {
   const sp = getHero('spartan');

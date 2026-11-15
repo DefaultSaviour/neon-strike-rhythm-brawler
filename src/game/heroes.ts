@@ -127,6 +127,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Karate: crisp punches and kicks, chores that turn into blocks, and the crane kick',
     idlePose: THE_KID_IDLE,
     moves: THE_KID_MOVES,
+    holdsPose: true,
   },
   {
     id: 'spartan',
