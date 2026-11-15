@@ -831,11 +831,11 @@ describe('The White Swan', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(pb.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(pb.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => pb.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(pb.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(pb.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -893,6 +893,8 @@ describe('The White Swan', () => {
         // Every hit is a kick, never a punch
         if (k.trail) expect(dist(k.trail.end, p.head), m.name).toBeGreaterThan(20);
       }
+      // (in tier 4 the turn itself is the hit: see the pirouettes below)
+      if (m.tier === 4) continue;
       for (const k of m.sequence!.filter((x) => x.trail)) {
         const p = keyToPlayerPose(k);
         const footEnd = Math.min(dist(k.trail!.end, p.leftFoot), dist(k.trail!.end, p.rightFoot));
@@ -931,7 +933,43 @@ describe('The White Swan', () => {
   it('dances bare-handed', () => {
     expect(pb.moves.every((m) => m.sequence!.every((k) => !k.prop))).toBe(true);
   });
+
+  it('in tier 4 she does nothing but pirouettes: up on one pointe, turning on the spot, and ending balanced out of the turn', () => {
+    const tier4 = pb.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      expect(m.planted, m.name).toBe(true);
+      const real = realPoses(m);
+      expect(real).toHaveLength(3);
+      // The turn: two keyframes with the spin blur, the working leg swapping sides between them
+      expect(real[0].spin && real[1].spin, m.name).toBe(true);
+      expect(real[0].pose.frontKnee.x, m.name).toBeGreaterThan(real[0].pose.pelvis.x);
+      expect(real[1].pose.frontKnee.x, m.name).toBeLessThan(real[1].pose.pelvis.x);
+      for (const k of m.sequence!) {
+        // One foot on the floor under her, the other well off it
+        expect(k.pose.backFoot.y, m.name).toBeGreaterThan(67);
+        expect(Math.abs(k.pose.backFoot.x), m.name).toBeLessThan(6);
+        expect(k.pose.frontFoot.y, m.name).toBeLessThan(50);
+      }
+      // She finishes in the waiting pose: passé on pointe, no blur
+      const last = m.sequence!.at(-1)!;
+      expect(last.spin, m.name).toBeFalsy();
+      expect(keyToPlayerPose(last).leftFoot).toEqual(m.restPose!.leftFoot);
+      expect(keyToPlayerPose(last).rightFoot).toEqual(m.restPose!.rightFoot);
+    }
+    for (const m of pb.moves) expect(!!m.restPose, m.name).toBe(m.tier === 4);
+  });
+
+  it('holds the last pose of each move, so none ends in a spin blur or in the air', () => {
+    expect(pb.holdsPose).toBe(true);
+    for (const m of pb.moves) {
+      const last = m.sequence!.at(-1)!;
+      expect(!!last.spin, m.name).toBe(false);
+      expect(Math.max(last.pose.frontFoot.y, last.pose.backFoot.y), m.name).toBeGreaterThan(67);
+    }
+  });
 });
+
 
 describe('The Stallion', () => {
   const st = getHero('stallion');
