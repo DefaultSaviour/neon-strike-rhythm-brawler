@@ -1220,11 +1220,11 @@ describe('The Spartan', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(sp.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(sp.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => sp.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(sp.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(sp.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -1278,7 +1278,46 @@ describe('The Spartan', () => {
     expect(isHeroUnlocked('spartan', after(299))).toBe(false);
     expect(isHeroUnlocked('spartan', after(300))).toBe(true);
   });
+
+  it('in tier 4 he does nothing but the pit kick: on the back leg, leaning right back, every hit the flat of the front foot, and he ends on the kick', () => {
+    const tier4 = sp.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      for (const k of m.sequence!) {
+        const p = k.pose;
+        // Standing on the back leg, the front foot off the floor, leaning back away from the enemy
+        expect(p.backFoot.y, m.name).toBeGreaterThan(67);
+        expect(p.frontFoot.y, m.name).toBeLessThan(50);
+        expect(p.chest.x, m.name).toBeLessThan(p.pelvis.x);
+        if (k.trail) {
+          // The hit is the front foot, with the leg driven out straight
+          expect(dist(k.trail.end, p.frontFoot), m.name).toBeLessThan(26);
+          expect(dist(p.frontFoot, p.pelvis), m.name).toBeGreaterThan(60);
+        }
+      }
+      expect(m.sequence!.at(-1)!.trail, m.name).toBeDefined();
+    }
+    for (const m of sp.moves) expect(!!m.restPose, m.name).toBe(m.tier === 4);
+  });
+
+  it('between pit kicks he stands tall on both feet, shield out and spear held up', () => {
+    const rest = sp.moves.find((m) => m.tier === 4)!.restPose!;
+    expect(Math.min(rest.leftFoot.y, rest.rightFoot.y)).toBeGreaterThan(67);
+    expect(Math.abs(rest.leftHand.x - rest.rightHand.x)).toBeGreaterThan(25);
+    // The spear hand is up by his head, so the spear points at the sky and stays out of the rear timing circle
+    expect(Math.min(rest.leftHand.y, rest.rightHand.y)).toBeLessThan(rest.chest.y);
+  });
+
+  it('holds the last pose of each move, so none ends in the air or in a spin', () => {
+    expect(sp.holdsPose).toBe(true);
+    for (const m of sp.moves) {
+      const last = m.sequence!.at(-1)!;
+      expect(!!last.spin, m.name).toBe(false);
+      expect(Math.max(last.pose.frontFoot.y, last.pose.backFoot.y), m.name).toBeGreaterThan(67);
+    }
+  });
 });
+
 
 describe('The Disco King', () => {
   const dk = getHero('discoKing');
