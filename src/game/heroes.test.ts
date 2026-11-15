@@ -702,11 +702,11 @@ describe('The Pro Wrestler', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(pw.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(pw.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => pw.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(pw.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(pw.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -791,7 +791,40 @@ describe('The Pro Wrestler', () => {
       expect(Math.max(k.pose.frontFoot.y, k.pose.backFoot.y), name).toBeLessThan(64);
     }
   });
+
+  it('in tier 4 he does nothing but elbow drops: every hit comes off the lead elbow, and he ends down on the mat on it', () => {
+    const tier4 = pw.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      expect(m.slam, m.name).toBe(true);
+      // Every hit effect starts from the lead elbow's arm
+      for (const k of m.sequence!.filter((x) => x.trail)) {
+        expect(dist(k.trail!.end, k.pose.frontElbow), m.name).toBeLessThan(22);
+      }
+      // He ends flat on the mat: elbow near the floor under his chest, head well below standing height
+      const last = m.sequence!.at(-1)!.pose;
+      expect(last.frontElbow.y, m.name).toBeGreaterThan(54);
+      expect(last.pelvis.y, m.name).toBeGreaterThan(44);
+      expect(last.head.y, m.name).toBeGreaterThan(10);
+    }
+    for (const m of pw.moves) expect(!!m.restPose, m.name).toBe(m.tier === 4);
+  });
+
+  it('between elbow drops he stands tall with the elbow cocked up above his shoulder', () => {
+    const rest = pw.moves.find((m) => m.tier === 4)!.restPose!;
+    expect(rest.pelvis.y).toBeLessThan(15);
+    expect(Math.min(rest.leftElbow.y, rest.rightElbow.y)).toBeLessThan(rest.chest.y);
+  });
+
+  it('holds the last pose of each move, so none ends in the air', () => {
+    expect(pw.holdsPose).toBe(true);
+    for (const m of pw.moves) {
+      const last = m.sequence!.at(-1)!.pose;
+      expect(Math.max(last.frontFoot.y, last.backFoot.y, last.pelvis.y + 14, last.frontElbow.y + 8), m.name).toBeGreaterThan(58);
+    }
+  });
 });
+
 
 describe('The White Swan', () => {
   const pb = getHero('ballerina');

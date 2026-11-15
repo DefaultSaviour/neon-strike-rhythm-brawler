@@ -12,8 +12,9 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, handOf
  * Built like the other combo heroes: each move is ONE clear idea in a few
  * big poses, every hit is held for a beat (withHolds), and the hips stay
  * near the centre. Moves marked as slams shake the screen harder and get a
- * crowd-pop flash (see gameEngine). 21 combos over the 5 tiers
- * (5, 5, 4, 4, 3); the first keyframe is the hit.
+ * crowd-pop flash (see gameEngine). 25 combos over the 5 tiers
+ * (5, 5, 8, 4, 3); the first keyframe is the hit. Tier 4 is his twist: he
+ * does nothing but elbow drops, and stays down on the mat after each one.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -71,6 +72,26 @@ export const PRO_WRESTLER_IDLE: SkeletonPose = buildFighterPose(
   { pelvis: { x: 0, y: 12 }, lean: 4, frontArm: flexFront, backArm: flexBack, frontLeg: { x: 20, y: F }, backLeg: { x: -20, y: F } },
   TRAIL
 );
+
+/**
+ * Tier 4, nothing but elbow drops. Down on the mat: his whole weight on the
+ * lead elbow, body flat, legs out behind. He stays down after each drop.
+ */
+const onTheElbow = { pelvis: { x: -8, y: 52 }, lean: 70, frontArm: { upper: 95, lower: -60 }, frontLeg: straight(167), backLeg: straight(172) };
+/** The free arm trailing behind him along the mat. */
+const armTrailing: LimbAngles = { upper: 160, lower: 140 };
+const elbowHit = { from: 'frontElbow', reach: 16 } as const;
+
+/** Tier 4 between drops: standing tall, lead elbow cocked up high and the other arm pointing at the sky. */
+export const ELBOW_READY: SkeletonPose = buildFighterPose(
+  { pelvis: { x: 0, y: 10 }, lean: -4, tilt: -8, frontArm: { upper: -62, lower: -160 }, backArm: armsUpBack, frontLeg: { x: 20, y: F }, backLeg: { x: -20, y: F } },
+  TRAIL
+);
+
+/** One elbow drop: a slam, and between drops he stands with the elbow cocked. */
+function elbowDrop(name: string, description: string, keys: Key[]): AttackMove {
+  return { ...combo(4, name, description, keys, { slam: true }), restPose: ELBOW_READY };
+}
 
 export const PRO_WRESTLER_MOVES: AttackMove[] = [
   // ======================= Tier 1: the basics, with attitude =======================
@@ -181,9 +202,9 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
     { slam: true }
   ),
 
-  // ================= Tier 4: main-event moves =================
+  // ========= Tier 3, continued: main-event moves (these were tier 4 before the elbow drops) =========
   combo(
-    4,
+    3,
     'Powerbomb',
     'Hoists them up onto his shoulders and drives them down into the mat',
     [
@@ -194,7 +215,7 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
     { slam: true }
   ),
   combo(
-    4,
+    3,
     'Moonsault',
     'Springs off the ropes with a kick, backflips right over, and lands chest-first',
     [
@@ -204,13 +225,13 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
     ],
     { slam: true }
   ),
-  combo(4, 'Lariat Spin', 'Spins round with his arm out like a club: three huge lariats', [
+  combo(3, 'Lariat Spin', 'Spins round with his arm out like a club: three huge lariats', [
     { pelvis: { x: 2, y: 14 }, lean: 8, tilt: 10, frontArm: straight(0), backArm: straight(190), ...wide, trail: { from: 'frontHand', reach: 24, curve: 18 } },
     { ms: 110, pelvis: { x: 0, y: 14 }, lean: -6, tilt: -10, frontArm: straight(190), backArm: straight(0), ...wide, trail: { from: 'backHand', reach: 24, curve: 18 } },
     { ms: 110, pelvis: { x: 2, y: 14 }, lean: 8, tilt: 10, frontArm: straight(-6), backArm: straight(190), ...wide, trail: { from: 'frontHand', reach: 24, curve: 18 } },
   ]),
   combo(
-    4,
+    3,
     'Piledriver Drop',
     'Turns them upside down, jumps, and sits out hard',
     [
@@ -220,6 +241,25 @@ export const PRO_WRESTLER_MOVES: AttackMove[] = [
     ],
     { slam: true }
   ),
+
+  // ================= Tier 4: nothing but elbow drops =================
+  elbowDrop('The Elbow', 'Drops straight down onto his elbow, then punches the air from the mat', [
+    { ...onTheElbow, backArm: armTrailing, trail: elbowHit },
+    { ms: 170, ...onTheElbow, tilt: -30, backArm: straight(-100) },
+  ]),
+  elbowDrop('Diving Elbow', 'Dives flat out through the air, elbow first, and crashes down on it', [
+    { pelvis: { x: -12, y: -4 }, lean: 52, frontArm: { upper: 60, lower: -90 }, backArm: straight(176), frontLeg: straight(174), backLeg: straight(184), trail: { from: 'frontElbow', reach: 20 } },
+    { ms: 170, ...onTheElbow, backArm: armTrailing, trail: elbowHit },
+  ]),
+  elbowDrop('Elbow from the Sky', 'Leaps high, knees tucked and the elbow cocked right back, and falls on them', [
+    { pelvis: { x: 0, y: -30 }, lean: 14, frontArm: { upper: -62, lower: -160 }, backArm: straight(-110), frontLeg: tucked, backLeg: { upper: 100, lower: 150 }, trail: { from: 'frontElbow', reach: 18 } },
+    { ms: 190, ...onTheElbow, backArm: armTrailing, trail: elbowHit },
+  ]),
+  elbowDrop('Elbow, Elbow', 'Drops the elbow, bounces up off the mat, and drops it again', [
+    { ...onTheElbow, backArm: armTrailing, trail: elbowHit },
+    { ms: 130, pelvis: { x: -8, y: 30 }, lean: 52, frontArm: { upper: 20, lower: -110 }, backArm: armsBack, frontLeg: straight(150), backLeg: straight(160) },
+    { ms: 130, ...onTheElbow, backArm: armTrailing, trail: elbowHit },
+  ]),
 
   // ================= Tier 5: legendary finishers =================
   combo(

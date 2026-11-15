@@ -101,6 +101,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Championship wrestling: chops, a steel chair and earth-shaking slams',
     idlePose: PRO_WRESTLER_IDLE,
     moves: PRO_WRESTLER_MOVES,
+    holdsPose: true,
   },
   {
     id: 'ballerina',
