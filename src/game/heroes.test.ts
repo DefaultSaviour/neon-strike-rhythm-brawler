@@ -1324,11 +1324,11 @@ describe('The Disco King', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(dk.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(dk.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => dk.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(dk.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(dk.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -1381,7 +1381,44 @@ describe('The Disco King', () => {
     expect(isHeroUnlocked('discoKing', after(2499))).toBe(false);
     expect(isHeroUnlocked('discoKing', after(2500))).toBe(true);
   });
+
+  it('in tier 4 he does nothing but spins: two blurred keyframes on the spot, then he stops dead in a clean pose', () => {
+    const tier4 = dk.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      expect(m.planted, m.name).toBe(true);
+      const real = m.sequence!.filter((k) => !k.hold);
+      expect(real).toHaveLength(3);
+      // The spin: both blurred, hips on his spot, the arms swapping sides as he goes round
+      for (const k of real.slice(0, 2)) {
+        expect(k.spin, m.name).toBe(true);
+        expect(k.pose.pelvis.x, m.name).toBe(0);
+        expect(Math.min(k.pose.frontFoot.y, k.pose.backFoot.y), m.name).toBeGreaterThan(67);
+      }
+      expect(real[0].trail, m.name).toBeDefined();
+      expect(real[0].pose.frontHand.x, m.name).toBeGreaterThan(real[0].pose.chest.x);
+      // The finish: no blur, no hit effect, both feet down
+      const last = real[2];
+      expect(!!last.spin, m.name).toBe(false);
+      expect(last.trail, m.name).toBeUndefined();
+      expect(Math.min(last.pose.frontFoot.y, last.pose.backFoot.y), m.name).toBeGreaterThan(67);
+    }
+    // Every spin stops in a different pose
+    const finishes = tier4.map((m) => JSON.stringify(m.sequence!.at(-1)!.pose));
+    expect(new Set(finishes).size).toBe(4);
+    for (const m of dk.moves) expect(!!m.restPose, m.name).toBe(m.tier === 4);
+  });
+
+  it('holds the last pose of each move, so none ends in a spin blur or in the air', () => {
+    expect(dk.holdsPose).toBe(true);
+    for (const m of dk.moves) {
+      const last = m.sequence!.at(-1)!;
+      expect(!!last.spin, m.name).toBe(false);
+      expect(Math.max(last.pose.frontFoot.y, last.pose.backFoot.y), m.name).toBeGreaterThan(67);
+    }
+  });
 });
+
 
 describe('The Bride', () => {
   const GRIP_GAP = 9;

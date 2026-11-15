@@ -145,6 +145,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Fights like he dances: the point to the sky, hip-swing kicks, spins and knee slides',
     idlePose: DISCO_KING_IDLE,
     moves: DISCO_KING_MOVES,
+    holdsPose: true,
   },
   {
     id: 'bride',
