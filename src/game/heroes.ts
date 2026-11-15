@@ -110,6 +110,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'Ballet as a weapon: kicks to the ceiling, and a swan tutu for her finishers',
     idlePose: PRIMA_BALLERINA_IDLE,
     moves: PRIMA_BALLERINA_MOVES,
+    holdsPose: true,
   },
   {
     id: 'stallion',

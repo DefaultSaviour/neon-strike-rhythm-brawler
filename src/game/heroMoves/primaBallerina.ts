@@ -11,15 +11,17 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, headOf
  *
  * Her look is one exact pose, drawn by the player: both hands joined in a
  * crown above her head, and the legs in a diamond (knees turned out wide,
- * feet together). In her normal form (tiers 1-4) she never breaks it: she
- * only kicks, out to the side at the enemy and back to the other side, and
- * every kick returns to the diamond. The tier 5 finishers, which arrive
- * with her swan tutu, are the full ballet: leaps, turns and the bow.
+ * feet together). In tiers 1-3 she never breaks it: she only kicks, out to
+ * the side at the enemy and back to the other side, and every kick returns
+ * to the diamond. Tier 4 is her twist: nothing but pirouettes. She goes up
+ * on one pointe, the other foot at her knee, hands still in the crown, and
+ * every hit is one whipping turn on the spot. The tier 5 finishers, which
+ * arrive with her swan tutu, are the full ballet: leaps, turns and the bow.
  *
  * Built like the other combo heroes: a few big poses per move, every hit
  * held for a beat (withHolds), hips near the centre. Turning steps are
- * marked `spin` for a spin blur. 21 combos over the 5 tiers
- * (5, 5, 4, 4, 3); the first keyframe is the hit.
+ * marked `spin` for a spin blur. 25 combos over the 5 tiers
+ * (5, 5, 8, 4, 3); the first keyframe is the hit.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -108,8 +110,32 @@ function combo(tier: AttackMove['tier'], name: string, description: string, keys
 /** Her pose: hands joined in a crown above her head, legs in the diamond. */
 export const PRIMA_BALLERINA_IDLE: SkeletonPose = buildFighterPose(withCrown(kick()), TRAIL);
 
+/** Hip height when she is right up on one pointe, the standing leg dead straight. */
+const POINTE_Y = 6;
+/** The working leg in passé seen from the other side, half-way round the turn. */
+const passeTurned: LimbAngles = { upper: 155, lower: 30 };
+
+/** Up on one pointe, hands in the crown, the working leg as given (passé unless told otherwise). */
+function onPointe(leg: LimbAngles = passe, extra: Partial<Key> = {}): Key {
+  return { pelvis: { x: 0, y: POINTE_Y }, lean: 0, frontArm: { upper: 0, lower: 0 }, backArm: { upper: 0, lower: 0 }, frontLeg: leg, backLeg: standing, crown: true, ...extra };
+}
+
+/** Tier 4 between turns, and the end of every pirouette: balanced on one pointe in passé. */
+export const ON_POINTE: SkeletonPose = buildFighterPose(withCrown(onPointe()), TRAIL);
+
+/**
+ * One pirouette: she whips round on the spot (no step toward the enemy) and
+ * finishes balanced in passé, out of the turn, so the held pose is clean.
+ * `turn` is the two keyframes of the turn itself; the first is the hit.
+ */
+function pirouette(name: string, description: string, turn: [Key, Key]): AttackMove {
+  const keys: Key[] = [{ ...turn[0], spin: true }, { ...turn[1], spin: true }, onPointe(passe, { ms: 120 })];
+  return { ...combo(4, name, description, keys), restPose: ON_POINTE, planted: true };
+}
+const kneeWhip = { from: 'frontKnee', reach: 22, curve: 18 } as const;
+
 export const PRIMA_BALLERINA_MOVES: AttackMove[] = [
-  // ============ Tiers 1-4: her pose, kicking out to each side ============
+  // ============ Tiers 1-3: her pose, kicking out to each side ============
   // ======================= Tier 1: single kicks =======================
   combo(1, 'Battement Kick', 'A sharp straight-legged kick out to the side, and back to her pose', [
     kick(straight(0)),
@@ -178,26 +204,44 @@ export const PRIMA_BALLERINA_MOVES: AttackMove[] = [
     diamond(180),
   ]),
 
-  // ================= Tier 4: fury =================
-  combo(4, 'Grand Battement Fury', 'Three huge kicks: to the enemy, out the other side, and to the enemy again', [
+  // ============ Tier 3, continued: fury (these were tier 4 before the pirouettes) ============
+  combo(3, 'Grand Battement Fury', 'Three huge kicks: to the enemy, out the other side, and to the enemy again', [
     kick(straight(-70), undefined, { trail: { from: 'frontFoot', reach: 22, curve: -16 } }),
     kick(undefined, straight(250), { ms: 110, trail: { from: 'backFoot', reach: 22, curve: 16 } }),
     kick(straight(-78), undefined, { ms: 110, trail: { from: 'frontFoot', reach: 22, curve: -16 } }),
   ]),
-  combo(4, 'Développé Axe', 'The leg unfolds right up high, hangs there, and chops down', [
+  combo(3, 'Développé Axe', 'The leg unfolds right up high, hangs there, and chops down', [
     kick(straight(-82), undefined, { trail: { from: 'frontFoot', reach: 18, curve: -20 } }),
     kick(straight(-86), undefined, { ms: 220, trail: undefined }),
     kick(straight(36), undefined, { ms: 120, trail: { from: 'frontFoot', reach: 20, curve: -16 } }),
   ]),
-  combo(4, 'Battement Storm', 'Low to the enemy, middle out the other side, high to the enemy', [
+  combo(3, 'Battement Storm', 'Low to the enemy, middle out the other side, high to the enemy', [
     kick(straight(24)),
     kick(undefined, straight(180), { ms: 100 }),
     kick(straight(-40), undefined, { ms: 100 }),
   ]),
-  combo(4, 'Fouetté Kick', 'Whips round on the standing leg, lashing out a kick on each turn', [
+  combo(3, 'Fouetté Kick', 'Whips round on the standing leg, lashing out a kick on each turn, and settles back into her pose', [
     kick(straight(0), undefined, { spin: true, trail: { from: 'frontFoot', reach: 24, curve: 18 } }),
-    kick(undefined, undefined, { ms: 100, spin: true }),
     kick(straight(-16), undefined, { ms: 100, spin: true, trail: { from: 'frontFoot', reach: 24, curve: 18 } }),
+    diamond(150),
+  ]),
+
+  // ================= Tier 4: nothing but pirouettes =================
+  pirouette('Pirouette', 'Up on one pointe, foot at her knee, and one whipping turn on the spot', [
+    onPointe(passe, { trail: kneeWhip }),
+    onPointe(passeTurned, { ms: 100 }),
+  ]),
+  pirouette('Pirouette from Fondu', 'Starts sunk low on the standing leg and spirals up onto pointe as she turns', [
+    onPointe(passe, { pelvis: { x: 0, y: 20 }, trail: kneeWhip }),
+    onPointe(passeTurned, { ms: 100, pelvis: { x: 0, y: 12 } }),
+  ]),
+  pirouette('Attitude Turn', 'Turns with the working leg lifted high and bent in front of her', [
+    onPointe({ upper: -20, lower: 60 }, { lean: -6, trail: { from: 'frontKnee', reach: 22, curve: -18 } }),
+    onPointe({ upper: 200, lower: 120 }, { ms: 100, lean: 6 }),
+  ]),
+  pirouette('Grande Pirouette', 'Turns with the leg held straight out to the side, and snaps it in to her knee', [
+    onPointe(straight(-2), { lean: -6, trail: { from: 'frontFoot', reach: 24, curve: 18 } }),
+    onPointe(straight(182), { ms: 100, lean: 6 }),
   ]),
 
   // ================= Tier 5: legendary finishers =================
