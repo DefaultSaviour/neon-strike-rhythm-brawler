@@ -7,7 +7,7 @@ import { EMPTY_STATS, isHeroUnlocked } from './heroUnlocks';
 import { keyToPlayerPose, safeFold } from './heroMoves/poseBuilder';
 import { SAW_FACE_POSE_EDITS } from './heroMoves/sawFacePoses';
 import { COMBO_SNAP_SEC, comboDuration, comboFrame, STILL_DRIFT } from './combo';
-import { muzzlePoint, postEnds } from '../components/fighterArt';
+import { katanaTip, muzzlePoint, postEnds } from '../components/fighterArt';
 
 const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 const dragon = getHero('dragon');
@@ -1426,11 +1426,11 @@ describe('The Bride', () => {
   const realPoses = (m: AttackMove) =>
     m.sequence!.filter((k, i) => i === 0 || JSON.stringify(k.pose) !== JSON.stringify(m.sequence![i - 1].pose));
 
-  it('has 21 moves spread over the 5 combo tiers (5, 5, 4, 4, 3), all with different names', () => {
-    expect(br.moves).toHaveLength(21);
+  it('has 25 moves spread over the 5 combo tiers (5, 5, 8, 4, 3), all with different names', () => {
+    expect(br.moves).toHaveLength(25);
     const perTier = [1, 2, 3, 4, 5].map((t) => br.moves.filter((m) => m.tier === t).length);
-    expect(perTier).toEqual([5, 5, 4, 4, 3]);
-    expect(new Set(br.moves.map((m) => m.name)).size).toBe(21);
+    expect(perTier).toEqual([5, 5, 8, 4, 3]);
+    expect(new Set(br.moves.map((m) => m.name)).size).toBe(25);
   });
 
   it('every pose keeps its limbs solid and stays above the floor, in every keyframe of every combo', () => {
@@ -1472,8 +1472,9 @@ describe('The Bride', () => {
     expect(idle.leftHand.x).toBeGreaterThan(idle.chest.x + 10);
   });
 
-  it('holds the sword in both hands in every attack: the rear hand on the hilt behind the lead hand', () => {
-    for (const m of br.moves) {
+  it('holds the sword in both hands in every attack outside the quick draws: the rear hand on the hilt behind the lead hand', () => {
+    // (the tier 4 quick draws are one-handed: see below)
+    for (const m of br.moves.filter((x) => x.tier !== 4)) {
       for (const k of m.sequence!) {
         if (!k.trail) continue;
         expect(dist(k.pose.frontHand, k.pose.backHand), m.name).toBeLessThan(GRIP_GAP);
@@ -1495,7 +1496,43 @@ describe('The Bride', () => {
     // Watching ads for enemy stances doesn't count toward her
     expect(isHeroUnlocked('bride', { ...after(0), adUnlocks: 5 })).toBe(false);
   });
+
+  it('in tier 4 she does nothing but the quick draw: one cut with one hand, and the sword goes straight back to her hip', () => {
+    const tier4 = br.moves.filter((m) => m.tier === 4);
+    expect(tier4).toHaveLength(4);
+    for (const m of tier4) {
+      const real = m.sequence!.filter((k) => !k.hold);
+      expect(real).toHaveLength(2);
+      const [cut, away] = real;
+      // The cut: the lead hand out in front with the hit, the rear hand left behind at her hip (not on the hilt)
+      expect(cut.trail, m.name).toBeDefined();
+      expect(cut.pose.frontHand.x, m.name).toBeGreaterThan(cut.pose.chest.x + 15);
+      expect(dist(cut.pose.frontHand, cut.pose.backHand), m.name).toBeGreaterThan(25);
+      // Sheathed: no hit, the lead hand back at her hip, the blade pointing down and back behind her
+      expect(away.trail, m.name).toBeUndefined();
+      expect(dist(away.pose.frontHand, away.pose.pelvis), m.name).toBeLessThan(22);
+      const tip = katanaTip(keyToPlayerPose(away), 1);
+      expect(tip.x, m.name).toBeLessThan(away.pose.pelvis.x - 20);
+      expect(tip.y, m.name).toBeGreaterThan(away.pose.pelvis.y);
+      // ...clear of the rear timing circle
+      expect(dist(tip, { x: -78, y: -2 }), m.name).toBeGreaterThan(40);
+      // And that is the pose she waits in
+      expect(keyToPlayerPose(away).leftHand).toEqual(m.restPose!.leftHand);
+      expect(keyToPlayerPose(away).rightHand).toEqual(m.restPose!.rightHand);
+    }
+    for (const m of br.moves) expect(!!m.restPose, m.name).toBe(m.tier === 4);
+  });
+
+  it('holds the last pose of each move, so none ends in a spin or in the air', () => {
+    expect(br.holdsPose).toBe(true);
+    for (const m of br.moves) {
+      const last = m.sequence!.at(-1)!;
+      expect(!!last.spin, m.name).toBe(false);
+      expect(Math.max(last.pose.frontFoot.y, last.pose.backFoot.y), m.name).toBeGreaterThan(67);
+    }
+  });
 });
+
 
 describe('Saw Face', () => {
   const GRIP_GAP = 14;

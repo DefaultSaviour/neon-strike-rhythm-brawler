@@ -11,8 +11,11 @@ import { armReaching, buildFighterPose, buildKey, comboMove, FighterSpec, handOf
  *
  * Built the round-one way: each move is ONE clear idea in a few big poses,
  * every hit is held for a beat (withHolds), and the hips stay near the
- * centre. 21 combos over the 5 tiers (5, 5, 4, 4, 3); the first keyframe is
+ * centre. 25 combos over the 5 tiers (5, 5, 8, 4, 3); the first keyframe is
  * the hit. Sword hits trail from the lead hand out to the blade's tip.
+ * Tier 4 is her twist: nothing but the quick draw. The sword stays at her
+ * hip, every hit is one cut drawn out of it with one hand, and it goes
+ * straight back.
  *
  * Angles: 0 deg = toward the enemy, 90 = down, -90 = up, 180 = back. Feet
  * planted on the floor are at y = 68.
@@ -94,6 +97,24 @@ const thrust = (extra: Partial<Key> = {}): Key => ({ ...lunge, lean: 22, frontAr
 /** A spin with the blade held out: the cut comes round as she turns. */
 const spinCut = (extra: Partial<Key> = {}): Key => ({ pelvis: { x: 0, y: 14 }, lean: 0, frontArm: straight(4), backArm: straight(186), frontLeg: { x: 8, y: F }, backLeg: { x: -8, y: F }, spin: true, trail: { from: 'frontHand', reach: TIP, curve: 30 }, ...extra });
 
+/**
+ * The sword at her hip, as if sheathed: crouched a little, the lead hand
+ * across her body on the hilt with the blade pointing down and back behind
+ * her (well below the rear timing circle), the rear hand at the same hip
+ * where the scabbard would be.
+ */
+const sheathed = (ms: number): Key => ({ ms, pelvis: { x: 0, y: 20 }, lean: 10, tilt: -6, frontArm: { upper: 100, lower: 130 }, backArm: { upper: 96, lower: 150 }, frontLeg: { x: 24, y: F }, backLeg: { x: -22, y: F }, oneHand: true });
+/** The rear hand stays back at her hip while the lead hand cuts alone. */
+const atHip: LimbAngles = { upper: 110, lower: 150 };
+
+/** Tier 4 between draws: the sword at her hip. */
+export const BRIDE_SHEATHED: SkeletonPose = buildFighterPose(twoHanded(standBack(sheathed(0))), TRAIL);
+
+/** One quick draw: a single one-handed cut out of the sheath, and the blade goes straight back. */
+function quickDraw(name: string, description: string, cut: Key): AttackMove {
+  return { ...combo(4, name, description, [{ ...cut, backArm: atHip, oneHand: true }, sheathed(170)]), restPose: BRIDE_SHEATHED };
+}
+
 export const BRIDE_MOVES: AttackMove[] = [
   // ======================= Tier 1: the blade =======================
   combo(1, 'Quick Draw', 'The blade comes out of nowhere in one flat cut', [flatCut(), guard(150)]),
@@ -133,23 +154,29 @@ export const BRIDE_MOVES: AttackMove[] = [
   ]),
   combo(3, 'Blade Flourish', 'Spins the sword round, then thrusts', [spinCut(), { ms: 100, ...thrust() }]),
 
-  // ================= Tier 4: the showdown =================
-  combo(4, 'Lightning Draw', 'Draws and thrusts in a single flash', [
+  // ============ Tier 3, continued: the showdown (these were tier 4 before the quick draw) ============
+  combo(3, 'Lightning Draw', 'Draws and thrusts in a single flash', [
     thrust({ pelvis: { x: 10, y: 24 }, frontLeg: { x: 38, y: F } }),
     { ms: 160, ...stance, lean: 0, frontArm: { upper: 100, lower: 150 }, backArm: { upper: 80, lower: 160 }, oneHand: true },
   ]),
-  combo(4, 'Flying Cut', 'Leaps through the air with the blade held out flat', [
+  combo(3, 'Flying Cut', 'Leaps through the air with the blade held out flat', [
     { ...airborne, lean: 10, frontArm: straight(0), backArm: freeBack, trail: { from: 'frontHand', reach: TIP, curve: 26 } },
     guard(190),
   ]),
-  combo(4, 'Kneeling Cut', 'Drops to one knee, cuts low, then rises cutting high', [
+  combo(3, 'Kneeling Cut', 'Drops to one knee, cuts low, then rises cutting high', [
     { pelvis: { x: 2, y: 36 }, lean: 18, frontArm: straight(30), backArm: freeBack, frontLeg: { x: 26, y: F }, backLeg: { upper: 100, lower: 180 }, trail: { from: 'frontHand', reach: TIP, curve: 22 } },
     { ms: 110, ...risingCut() },
   ]),
-  combo(4, 'High Guard Strike', 'Sword raised high in both hands, then the cut falls', [
+  combo(3, 'High Guard Strike', 'Sword raised high in both hands, then the cut falls', [
     downCut(),
     { ms: 160, ...stance, lean: 0, frontArm: swordHigh, backArm: { upper: -70, lower: -110 } },
   ]),
+
+  // ================= Tier 4: nothing but the quick draw =================
+  quickDraw('Draw Cut', 'The blade leaves her hip in one flat cut across them and is back before they fall', flatCut()),
+  quickDraw('Rising Draw', 'Draws upward, the cut going from her hip to over her shoulder', risingCut()),
+  quickDraw('Low Draw', 'Drops low and draws the blade across their legs', { ...low, lean: 26, frontArm: straight(36), backArm: freeBack, trail: { from: 'frontHand', reach: TIP, curve: 22 } }),
+  quickDraw('Falling Draw', 'Draws up and over and lets the cut fall straight down', downCut()),
 
   // ================= Tier 5: revenge =================
   combo(5, 'Whirlwind', 'Spins twice with the blade out, a storm of steel, then holds the guard', [spinCut(), { ms: 100, ...spinCut() }, { ms: 110, ...flatCut() }]),

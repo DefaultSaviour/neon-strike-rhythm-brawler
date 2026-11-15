@@ -154,6 +154,7 @@ export const HEROES: HeroDefinition[] = [
     description: 'A katana and a list: quick draws, clean cuts and thrusts, and a whirlwind finisher',
     idlePose: BRIDE_IDLE,
     moves: BRIDE_MOVES,
+    holdsPose: true,
   },
   {
     id: 'sawFace',
